@@ -1,0 +1,8 @@
+# repo:managed
+version: 2
+updates:
+  # Adjust the ecosystems list as you add language manifests to this repo.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

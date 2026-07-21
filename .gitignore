@@ -1,0 +1,40 @@
+# repo:managed
+# Editor & OS junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.iml
+
+# Logs and temp
+*.log
+tmp/
+*.bak
+*.orig
+
+# Common build artifacts
+node_modules/
+dist/
+build/
+target/
+.venv/
+__pycache__/
+*.pyc
+.coverage
+coverage/
+
+# Local git worktrees (isolated workspaces; never tracked)
+.worktrees/
+
+# Claude Code (ignore scratch; keep shareable config/skills committable)
+.claude/tmp/
+.claude/worktrees/
+.claude/settings.local.json
+.claude/*.local.json
+
+# Secrets
+.env
+.env.*
+!.env.example
