@@ -5,10 +5,11 @@
 > This document specifies `okfctl`, a command-line tool for managing Open
 > Knowledge Format (OKF) bundles. It is a planning artifact: it defines the
 > problem, the product thesis, the command surface, the architecture, and the
-> open decisions that gate implementation. The language and library-stack
-> section is deliberately deferred to an evidence-backed decision (see
-> [§9, Open Decisions](#9-open-decisions)) and will be filled by a revision to
-> this PRD before any code is written.
+> open decisions that gate implementation. v1 is the full lifecycle CLI plus
+> three shipped-on-launch capabilities—managed `type` conformance (§7), local
+> vector search (§8), and a versioned type-template system (§9)—that together
+> make the curation loop real. The implementation language is settled (Go; see
+> [§11.1](#111-implementation-language-and-library-stackdecided-go)).
 
 ## 1. Summary
 
@@ -26,15 +27,33 @@ contradictions between nodes, stale claims, orphaned nodes, and missing
 cross-references. This is the maintenance process the OKF specification omits, and
 it is the reason `okfctl` earns a place next to the tools that already exist.
 
+Three v1 capabilities make that loop concrete rather than aspirational, and each
+is fully specified below:
+
+- **Managed `type` (§7).** `type` is the one field OKF requires on every node.
+  `okfctl` treats its presence as a first-class managed concept: `validate`
+  hard-fails a node with no `type`, `node new` requires one, and `node show`/`list`
+  surface it—while never enforcing a fixed taxonomy of type *values*, which the
+  spec forbids.
+- **Local vector search (§8).** A semantic `search` plugin backed by a local
+  embedding model and an on-disk `sqlite-vec` index, adopting the exact `Embedder`
+  protocol already in production in `cwest/knowledge-base`. It powers "similar but
+  unlinked" and "orphan with no semantic neighbors" findings in `lint`, fully
+  offline.
+- **Type templates (§9).** A template system shipped *as its own OKF bundle*—each
+  template is a node whose `type` is `Type Template`. It scaffolds new nodes and
+  drives an opt-in, stricter validation overlay, keeping team conventions portable
+  and versioned without putting a schema registry inside the tool.
+
 ## 2. Problem Statement
 
-The Open Knowledge Format (OKF v0.1, Google Cloud) standardizes how knowledge is
-packaged for humans and agents: a directory of Markdown files with YAML
-frontmatter, where the file path is the concept's identity, links form a
-traversable graph, and two reserved files—`index.md` for progressive disclosure
-and `log.md` for change history—anchor navigation and provenance. It is
-deliberately minimal. The only required frontmatter field is `type`; consumers are
-required to forgive almost everything else.
+The Open Knowledge Format (OKF v0.1) standardizes how knowledge is packaged for
+humans and agents: a directory of Markdown files with YAML frontmatter, where the
+file path is the concept's identity, links form a traversable graph, and two
+reserved files—`index.md` for progressive disclosure and `log.md` for change
+history—anchor navigation and provenance. It is deliberately minimal. The only
+required frontmatter field is `type`; consumers are required to forgive almost
+everything else.
 
 That minimalism is a strength for portability and a gap for operation. Three
 problems follow.
@@ -69,6 +88,17 @@ graph visible. Understanding a bundle's shape, spotting orphans, and navigating 
 reader-goal all benefit from a rendered, interactive view that the raw files do
 not provide.
 
+### 2.4 Conventions live in people's heads, and search is lexical
+
+Two smaller gaps compound the first three. First, a team settles on what a good
+`Playbook` or `Reference` node looks like—which sections, which fields—but that
+convention is unwritten and unenforced, so nodes drift apart over time. Second,
+finding "the node about X" or "nodes near this one" is only as good as a
+substring match; two nodes can say the same thing in different words, and nothing
+notices. Both are curation problems: the first is *drift*, the second is
+*duplication and missing links*. Detecting them needs a written convention and a
+semantic view of the corpus—neither of which the raw files supply.
+
 ## 3. Product Thesis
 
 `okfctl` is not another bundle scaffolder. It is the tool that ships **the verb
@@ -88,6 +118,11 @@ Three pillars, in priority order:
 Wrapped around all three: a `git`/`kubectl`-style **extension model** so the tool
 grows through community plugins rather than a monolith.
 
+The three v1 capabilities in §§7–9 exist to serve pillar 2. Managed `type` gives
+curation a reliable field to reason over; the vector index gives it a semantic
+view of the corpus; type templates give it a written definition of what a good
+node looks like. §10 shows how they interlock into the full maintenance loop.
+
 ## 4. Prior Art
 
 A small in-the-wild OKF-CLI ecosystem already defines the baseline, and it is
@@ -103,13 +138,15 @@ extension model together.
 
 | Capability | `openknowledge` (community, reference) | `okfcli/okf` (community) | `scrinium` (community) | `okfctl` (this) |
 |---|---|---|---|---|
-| Language | Go | Go | Rust | Go (see §9.1) |
+| Language | Go | Go | Rust | Go (see §11.1) |
 | Scaffold / create bundle | Yes | Yes | Yes | Yes |
 | Validate structure | Yes | Yes | Yes | Yes |
 | Node create / edit | Partial | Yes | Yes (+ TUI editor) | Yes |
 | `index.md` / `log.md` maintenance | Yes | Yes | Yes (auto) | Yes |
 | Graph export | No | Yes | Yes (JSON/YAML/SVG/PNG) | Yes |
 | Lint / index / search | Partial | Yes | Partial | Yes |
+| Semantic (vector) search | No | No | No | **Yes** |
+| Type-template / convention system | No | No | No | **Yes** |
 | Interactive **web** visualizer | No | No | No | **Yes** |
 | **Curation / lint loop** | No | Partial | No | **Yes** |
 | Extension / plugin model | No | No | No | **Yes** |
@@ -127,8 +164,12 @@ of the format itself, not a guess about what users might want.
 
 - Manage the full OKF bundle lifecycle from one tool, correctly and repeatably.
 - Implement the curation loop the format omits, as a first-class `lint` verb.
+- Make `type` a managed concept: enforce its presence, never its values (§7).
+- Ship local semantic search over the corpus, offline and reproducible (§8).
+- Ship a versioned, portable type-template system as an OKF bundle (§9).
 - Provide an interactive, built-in web visualization of the knowledge graph.
-- Ship as a single, self-contained binary with no runtime dependencies.
+- Ship the core as a single, self-contained binary with no runtime dependencies;
+  heavy optional capabilities ride the plugin model, not the core.
 - Support a `git`/`kubectl`-style plugin model for community extension.
 - Remain strictly conformant to, and permissive per, the OKF specification.
 - Be a well-behaved open-source project: Apache-2.0, clear contribution path,
@@ -139,17 +180,22 @@ of the format itself, not a guess about what users might want.
 - **Not** a hosted service, registry backend, or account system. OKF is a format,
   not a platform; `okfctl` operates on local bundles and git remotes.
 - **Not** a general Markdown wiki engine or a replacement for an editor.
-- **Not** a vector database or a RAG pipeline. The graph is traversed
-  deterministically; embeddings, if used at all, serve curation checks only.
+- **Not** a general RAG serving platform. The vector index in §8 is scoped to
+  curation and CLI query over a single bundle; it is not a hosted retrieval API.
+- **Not** a taxonomy authority. `okfctl` manages the *presence* of `type` and,
+  opt-in, a team's own template overlay; it never ships or enforces a fixed set of
+  `type` values, per the spec (§7.4).
 - **Not** a spec-authoring tool. `okfctl` consumes the OKF spec; it does not
   define it.
 
 ## 6. Command Surface
 
 The command tree follows the noun-verb convention. Nouns are the OKF objects
-(`bundle`, `node`, `index`, `log`); verbs are lifecycle and query operations.
-Cross-cutting commands (`validate`, `lint`, `graph`, `serve`, `search`) act on the
-whole bundle.
+(`bundle`, `node`, `index`, `log`, `template`); verbs are lifecycle and query
+operations. Cross-cutting commands (`validate`, `lint`, `graph`, `serve`,
+`search`) act on the whole bundle. The semantic side of `search` ships as a
+PATH-dispatch plugin (`okfctl-search`), keeping its heavy embedding dependency out
+of the core binary (§8.4).
 
 ```mermaid
 graph TD
@@ -159,17 +205,20 @@ graph TD
     okfctl --> node["node<br/>new · edit · show · mv · rm · list"]
     okfctl --> index["index<br/>build · check"]
     okfctl --> log["log<br/>append · show"]
-    okfctl --> validate["validate<br/>(whole-bundle conformance)"]
+    okfctl --> template["template<br/>list · show"]
+    okfctl --> validate["validate<br/>conformance (+ --templates overlay)"]
     okfctl --> lint["lint ★<br/>orphans · contradictions · stale · missing-links"]
-    okfctl --> graph["graph<br/>export (json/svg/dot)"]
+    okfctl --> graphcmd["graph<br/>export (json/svg/dot)"]
     okfctl --> serve["serve<br/>(web visualizer)"]
-    okfctl --> search["search<br/>(query the graph)"]
+    okfctl --> search["search<br/>lexical/graph (core)"]
+    okfctl --> searchplugin["okfctl-search ★<br/>--semantic · index build · related (plugin)"]
     okfctl --> registry["registry / connect<br/>(remotes & git sources)"]
     okfctl --> config["config<br/>get · set · list"]
     okfctl --> completion["completion<br/>(shell completions)"]
     okfctl --> plugin["plugin<br/>list · install · dispatch"]
 
     style lint fill:#2d5a2d,stroke:#7bc47b,color:#fff
+    style searchplugin fill:#2d5a2d,stroke:#7bc47b,color:#fff
 ```
 
 ### 6.1 Lifecycle commands
@@ -178,15 +227,18 @@ graph TD
   `log.md`, spec pin, directory shape. **`bundle info`**—summary of the bundle
   (node count, neighborhoods, graph stats). **`bundle validate`**—alias for
   whole-bundle `validate`.
-- **`node new`**—create a conformant node with required frontmatter and a stable
-  path. **`node edit`**—open a node for editing with frontmatter assistance.
-  **`node show`**—print a node (exact read). **`node mv`**—rename/move a node
-  and fix inbound links (path is identity, so a move is a graph operation, not a
-  file operation). **`node rm`**—remove a node and report resulting orphans.
-  **`node list`**—print the bundle tree.
+- **`node new`**—create a conformant node with required frontmatter (including a
+  non-empty `type`; see §7.2) and a stable path. **`node edit`**—open a node for
+  editing with frontmatter assistance. **`node show`**—print a node (exact read),
+  surfacing `type` (§7.3). **`node mv`**—rename/move a node and fix inbound links
+  (path is identity, so a move is a graph operation, not a file operation).
+  **`node rm`**—remove a node and report resulting orphans. **`node list`**—print
+  the bundle tree with each node's `type` (§7.3).
 - **`index build`**—regenerate `index.md` from the current bundle for progressive
   disclosure. **`index check`**—verify `index.md` matches the bundle.
 - **`log append`**—add a conformant change entry. **`log show`**—print history.
+- **`template list`** / **`template show`**—read the linked type-template bundle
+  (§9.3). Read-only; templates are authored as ordinary OKF nodes.
 
 ### 6.2 Validation vs. curation—two distinct verbs
 
@@ -195,23 +247,29 @@ This distinction is central to the product and must not blur.
 - **`validate`** answers *"is this a well-formed OKF bundle?"*—structural
   conformance against the spec. Permissive by design: the spec requires consumers
   to forgive almost everything, so `validate` enforces the floor, not a quality
-  bar. Pass/fail, machine-checkable.
+  bar. The floor is small and non-negotiable: parseable frontmatter, a non-empty
+  `type` on every node (§7.1), and well-formed reserved files. Pass/fail,
+  machine-checkable. An optional `--templates` overlay (§9.4) adds a stricter,
+  team-chosen pass on top—never part of the spec floor.
 - **`lint`** answers *"is this bundle still healthy and true?"*—the curation
   loop. It surfaces judgment-worthy findings, not just format violations:
   - **Orphans**—nodes with no inbound links (unreachable by traversal).
   - **Missing cross-references**—nodes that mention a concept that has its own
-    node but do not link to it.
+    node but do not link to it, and (via §8) nodes semantically similar to another
+    node with no edge between them.
   - **Stale claims**—nodes whose `modified` date and provenance suggest a source
     may have been superseded and should be re-verified.
   - **Contradictions**—nodes making claims that conflict with other nodes.
   - **Coverage gaps**—concepts referenced repeatedly but lacking their own node.
+  - **Template drift**—nodes whose `type` has a governing template but whose
+    fields or sections do not satisfy it (§9.4). A warning, not a validate failure.
 
   `lint` is the direct implementation of the LLM-Wiki lint paragraph OKF dropped.
   Some checks are purely structural (orphans, missing links) and deterministic;
-  others (contradictions, stale claims) may optionally call an embedding or LLM
-  backend, which is why that capability is a configurable, opt-in backend rather
-  than a hard dependency. `lint` never mutates the bundle; it reports. Fixing is a
-  separate, explicit action.
+  others (contradictions, stale claims, semantic near-duplicates) call the vector
+  index (§8) or an LLM backend, which is why those capabilities are configurable,
+  opt-in backends rather than hard dependencies. `lint` never mutates the bundle;
+  it reports. Fixing is a separate, explicit action.
 
 ### 6.3 Visualization and query
 
@@ -221,7 +279,10 @@ This distinction is central to the product and must not blur.
   in the binary; no separate install. This is the gap neither existing tool fills.
 - **`graph`**—export the graph in machine formats (`json`, `dot`, `svg`) for use
   in other tools and CI.
-- **`search`**—query the graph from the CLI (by title, tag, type, or content).
+- **`search`**—query the graph from the CLI. Core `search` is lexical and
+  graph-structural (by title, tag, type, or content substring, plus neighborhood
+  traversal), stdlib-only. Semantic (vector) search is the `okfctl-search` plugin
+  (§8), which adds `--semantic`, `index build`, and `related`.
 
 ### 6.4 Extension model—`git`/`kubectl`-style
 
@@ -231,50 +292,317 @@ on `PATH`, exactly as `git` finds `git-<name>` and `kubectl` finds
 `bar` and passes through flags and environment. **`plugin list`** discovers
 installed extensions; **`plugin install`** is a convenience installer. This keeps
 the core small and lets the community ship capabilities—exporters, importers,
-domain-specific linters—without touching the core or waiting on a release.
+domain-specific linters, and the semantic-search plugin (§8)—without touching the
+core or waiting on a release.
 
 ```mermaid
 flowchart LR
-    user([user runs<br/>okfctl foo bar]) --> core{core has<br/>subcommand<br/>foo?}
-    core -->|yes| builtin[run built-in foo]
-    core -->|no| path{okfctl-foo<br/>on PATH?}
-    path -->|yes| plugin[exec okfctl-foo bar<br/>pass through args + env]
-    path -->|no| err[helpful error +<br/>did-you-mean suggestion]
+    user(["user runs<br/>okfctl foo bar"]) --> core{"core has<br/>subcommand<br/>foo?"}
+    core -->|yes| builtin["run built-in foo"]
+    core -->|no| onpath{"okfctl-foo<br/>on PATH?"}
+    onpath -->|yes| runplugin["exec okfctl-foo bar<br/>pass through args + env"]
+    onpath -->|no| err["helpful error +<br/>did-you-mean suggestion"]
 ```
 
-## 7. Architecture
+## 7. Managed `type`—the one required field
+
+### 7.1 Why `type` is managed, not merely validated
+
+OKF requires exactly one frontmatter field on every concept node: `type`
+(spec §4.1). Conformance rule 2 states it plainly: *"Every frontmatter block
+contains a non-empty `type` field."* A node with no `type`, or an empty one, is
+non-conformant—full stop. Because `type` is the single field the whole format
+guarantees, it is the field every downstream consumer routes, filters, and
+presents on. `okfctl` therefore treats it as a first-class managed concept rather
+than one validation check among many: it is enforced on the way in, prompted at
+creation, and surfaced on the way out.
+
+### 7.2 Creation—`node new` requires a `type`
+
+`node new` MUST NOT create a node without a non-empty `type`. When invoked without
+one it prompts for it (or, in non-interactive use, fails with a clear message and
+a non-zero exit). When a governing template exists for the chosen `type`, `node
+new` scaffolds from it (§9.3): it stubs the template's required fields and body
+sections so the new node starts conformant to the team's convention as well as to
+the spec.
+
+### 7.3 Read—`node show` and `node list` surface `type`
+
+`type` is what consumers route on, so `okfctl` never hides it. `node show`
+includes it in the rendered frontmatter; `node list` prints it as a column so a
+reader can see the shape of a bundle at a glance and filter by it. `serve` and
+`search` filter by `type` for the same reason.
+
+### 7.4 The hard boundary—presence, not a value allowlist
+
+This is the line `okfctl` must not cross. The spec is explicit: type values are
+*"not registered centrally"* and consumers *"MUST tolerate unknown types
+gracefully"* (spec §4.1); defining a fixed taxonomy of concept types is an
+explicit OKF non-goal. `okfctl` manages the **presence and non-emptiness** of
+`type` and nothing more. It ships no built-in list of allowed values, and
+`validate` never rejects a node because its `type` is unfamiliar. A bundle full
+of types `okfctl` has never seen still passes `validate`.
+
+Soft value-hygiene—flagging, say, fourteen near-duplicate spellings of one
+conceptual type (`Playbook`, `playbook`, `Play Book`)—belongs in `lint` as a
+**warning**, never in `validate` as a rejection. Normalization is a suggestion the
+author may take or ignore; conformance is not at stake. Teams that want a stricter
+value discipline express it through the opt-in template overlay (§9.4), which they
+own and version, not through a taxonomy baked into the tool.
+
+## 8. Semantic search—local vector RAG
+
+### 8.1 Why
+
+Core `search` is lexical and graph-structural: it finds nodes by substring and by
+traversal. That misses the two curation problems in §2.4—two nodes saying the same
+thing in different words, and a node that *should* link to a semantically adjacent
+node but does not. Catching those needs vector similarity over the corpus. `okfctl`
+ships it locally: no hosted API, no key, no network at query time.
+
+### 8.2 Adopt the existing embedder protocol—do not reinvent it
+
+`cwest/knowledge-base` already runs the OKF embedding architecture in production
+at `tools/okf/embed.py`. `okfctl` MUST adopt that exact protocol; it MUST NOT
+invent a parallel one. The seam is a single `Embedder` interface, and the model
+behind it is a deployment choice, not a fork:
+
+- **Interface.** An embedder is anything with `name` (string), `dim` (int), and
+  `encode(texts) -> vectors`. That is the whole contract. Everything downstream
+  (indexing, query, `related`) depends only on this interface.
+- **Backends, with distinct roles:**
+  - **Model2Vec**—`minishlab/potion-base-8M`, 256-dim, local CPU-only static
+    embeddings. No API key, no GPU, no network at serve time. This is what the
+    office already bakes into `search.json` for zero-runtime-dependency browser
+    search; it is the default for a portable, offline index.
+  - **MLX**—a local OpenAI-compatible embedding server (Qwen3-Embedding-0.6B,
+    1024-dim, at `127.0.0.1:8080`), stdlib/urllib client only. A stronger
+    retriever when the server is reachable.
+  - **Hash**—deterministic, dependency-free, *not* semantic. Exists so
+    artifact-shape tests and offline CI run without downloading a model. Same text
+    yields the same vector.
+
+Reproducibility is part of the contract: the office records the `model` field
+alongside the baked vectors, and `okfctl` does the same in its index (§8.3) so a
+rebuild is reproducible and a query made with a mismatched model is rejected
+rather than silently wrong.
+
+### 8.3 Store—`sqlite-vec`, keyed on content hash
+
+- **Store.** A single-file SQLite database with the `sqlite-vec` extension
+  (`asg017/sqlite-vec`): no server, a loadable extension, and embeddable from Go.
+  One `.okfctl/index.db` per bundle. The database records the embedder's `model`
+  and `dim` so a rebuild is reproducible and a query issued against a
+  mismatched-model index is rejected—exactly the discipline `search.json` already
+  applies.
+- **Freshness.** Each row is keyed on the node's **content hash**, the same
+  primitive `lint` uses. `search index build` re-embeds only the nodes whose
+  content changed; unchanged nodes keep their vectors. The index therefore cannot
+  silently go stale—the "a field is not a process" discipline (§2.2) applied to the
+  index itself. This is also the spike's explicit architectural recommendation:
+  cache embedding results by content hash, because the loop is I/O-bound, not
+  CPU-bound.
+
+### 8.4 Architecture fit—a PATH-dispatch plugin, not core
+
+Per the language spike, the core binary stays stdlib-only and statically linked
+(§11.1). A local embedding model plus the `sqlite-vec` extension is a heavy
+optional dependency, so the semantic side of `search` ships as a **PATH-dispatch
+plugin** (`okfctl-search`, the §6.4 model), not baked into core. Core keeps
+lexical and graph `search`; the plugin adds `--semantic`. This keeps the promise
+in §5.1: the core is dependency-free, and weight rides the plugin model.
+
+The plugin MUST reconcile with the existing Python embedder rather than duplicate
+it. Two implementation paths are on the table, to be decided in the build
+(§11.2):
+
+1. **Shell out** to the existing `tools/okf` Python embedder—reuse the exact
+   in-production code, at the cost of a Python runtime dependency for the plugin.
+2. **Re-implement** the Model2Vec and MLX clients natively in Go against the same
+   `Embedder` contract and the same models—no Python at runtime, at the cost of a
+   faithful port that must track the protocol.
+
+Either way, the protocol, the models, and the `model`-field reproducibility
+discipline are shared with `cwest/knowledge-base`; only the language of the client
+differs. Duplicating the *protocol* is not an option.
+
+### 8.5 Command surface
+
+```mermaid
+flowchart TD
+    q["okfctl search &quot;q&quot;"] --> lex["lexical / graph<br/>(core, stdlib)"]
+    qs["okfctl-search --semantic &quot;q&quot;"] --> vec["vector similarity<br/>(plugin)"]
+    build["okfctl-search index build"] --> embed["embed changed nodes<br/>(content-hash keyed)"]
+    embed --> db[("sqlite-vec<br/>.okfctl/index.db<br/>records model + dim")]
+    vec --> db
+    rel["okfctl-search related [node]"] --> db
+    rel --> lintuse["feeds lint:<br/>similar-but-unlinked · orphan-no-neighbors"]
+
+    style qs fill:#2d5a2d,stroke:#7bc47b,color:#fff
+    style rel fill:#2d5a2d,stroke:#7bc47b,color:#fff
+```
+
+- `okfctl search "q"`—lexical/graph query (core).
+- `okfctl-search --semantic "q"`—vector-similarity query (plugin).
+- `okfctl-search index build`—embed changed nodes into the `sqlite-vec` store.
+- `okfctl-search related [node]`—nearest neighbors of a node; the primitive `lint`
+  consumes for its semantic checks.
+
+### 8.6 Payoff for curation
+
+`lint` calls `search related` to turn similarity into findings: *"0.91 similar to
+an existing node, no edge between them—missing link?"* and *"orphan with no
+semantic neighbors—dead concept?"* The differentiating curation verb becomes
+semantic, and it stays fully offline.
+
+## 9. Type templates—a versioned convention bundle
+
+### 9.1 The template system is an OKF bundle, not tool config
+
+A team converges on what a good `Playbook` or `Reference` looks like—which fields
+are required, which sections belong in the body. `okfctl` makes that convention
+**writable, portable, and versioned** by shipping it as an ordinary OKF bundle
+that `okfctl` consumes like any other. It is deliberately *not* core config and
+*not* a schema registry inside the tool—either of those would violate the spec's
+anti-taxonomy stance (§7.4). The convention lives in git, owned by the team, not
+in the binary.
+
+### 9.2 A template is a node whose `type` is `Type Template`
+
+Each template is a normal OKF concept node. Its `type` is `Type Template`, and its
+frontmatter declares the convention it governs:
+
+```yaml
+---
+type: Type Template
+target_type: Playbook            # the node.type this governs
+required_fields: [title, description, owner]
+recommended_fields: [tags, timestamp]
+body_sections: [Trigger, Steps, Rollback, Verification]
+---
+```
+
+Because a template is just a node, the template bundle is just a bundle: it
+`validate`s, `lint`s, `index`es, and version-graphs with the same `okfctl`
+commands as any knowledge bundle. It has its own `index.md`, its own `log.md`, its
+own git history, and its own `okf_version`. A team publishes it once—say
+`cwest/okf-type-templates`—and every knowledge bundle references it. Forking a
+convention is forking a git repo, not patching the tool.
+
+### 9.3 Scaffolding—`node new --type` reads the template
+
+When a governing template exists for a `type`, `node new --type Playbook` scaffolds
+from it: it prompts for the template's `required_fields`, stubs the
+`recommended_fields`, and lays down the `body_sections` as empty headings. The new
+node starts life conformant to both the spec floor and the team's convention. The
+template bundle is read via `template list`/`template show` (§6.1).
+
+### 9.4 Two-tier validation—spec floor vs. team overlay
+
+`okfctl` keeps two validation tiers strictly separate, and the PRD states the
+boundary so it cannot blur:
+
+```mermaid
+flowchart TD
+    node["a node claims<br/>type: Playbook"] --> floor{"spec floor<br/>(core, always on)"}
+    floor -->|"type present + non-empty<br/>(spec §7 rule 2)"| floorpass["conformant to OKF"]
+    floor -->|"missing/empty type"| floorfail["validate FAILS<br/>non-negotiable"]
+    floorpass --> overlay{"template overlay<br/>(opt-in: --templates)"}
+    overlay -->|"satisfies team's<br/>Playbook template"| overlaypass["conformant to convention"]
+    overlay -->|"missing Rollback section,<br/>missing owner field"| overlaywarn["reported: template drift<br/>a choice, not the floor"]
+
+    style floorfail fill:#5a2d2d,stroke:#c47b7b,color:#fff
+    style overlaywarn fill:#5a5a2d,stroke:#c4c47b,color:#fff
+```
+
+- **Spec conformance (core, always on).** `type` present and non-empty
+  (spec §7, rule 2). Never negotiable, never opt-out. A bundle whose nodes carry
+  types `okfctl` has never seen still passes—unknown types are fine (§7.4).
+- **Template conformance (opt-in, via `validate --templates`).** Does a
+  `Playbook` node satisfy the team's `Playbook` template—its `required_fields` and
+  `body_sections`? This is a stricter overlay a team *chooses*, not the spec floor.
+  A node that fails the overlay is reported as template drift (a `lint`
+  warning-class finding in §6.2), not as a spec violation.
+
+The overlay never leaks into the floor. `validate` without `--templates` is pure
+spec conformance; `--templates` is the team's own, versioned discipline layered on
+top.
+
+### 9.5 Why this design
+
+Three properties follow from making templates a bundle rather than tool config.
+It keeps `okfctl` spec-pure: no taxonomy of values lives in the tool (§7.4). It
+makes conventions portable and versioned: a git-shareable, forkable bundle with
+its own history, not a config buried in a dotfile. And it dogfoods the format:
+the tool's own convention system is expressed in the very format the tool
+manages.
+
+## 10. Interlock—the maintenance loop, made concrete
+
+The three v1 capabilities are not three features stapled together; they are three
+sides of the curation loop OKF omits, and `lint` sits in the middle consuming all
+three.
+
+```mermaid
+flowchart TD
+    tmpl["type templates (§9)<br/>what a good node LOOKS like"] --> lint
+    idx["vector index (§8)<br/>drift + duplication detection"] --> lint
+    typ["managed type (§7)<br/>the field lint reasons over"] --> lint
+    lint["lint ★<br/>the curation verb"] --> finding["'claims type: Playbook but missing<br/>Rollback (template), and 0.9 similar to<br/>an existing Playbook (index)—merge?'"]
+
+    style lint fill:#2d5a2d,stroke:#7bc47b,color:#fff
+```
+
+The template bundle defines what a good node *looks like*. The vector index
+detects *drift and duplication*—a node that has wandered from its template, or one
+that restates a neighbor. `lint` reads both, against a `type` field it can rely on
+being present, and produces the finding no static format can: *"this node claims
+`type: Playbook` but is missing the `Rollback` section its template requires, and
+it is 0.9 similar to an existing `Playbook`—merge, link, or keep?"* That is the
+full maintenance loop OKF drops, made concrete. All three capabilities exist to
+make the differentiating `lint`/curation verb real.
+
+## 11. Architecture
 
 `okfctl` is a layered, single-binary application. The core parses and models the
-bundle once; every command operates on that in-memory model.
+bundle once; every command operates on that in-memory model. Heavy optional
+capabilities (semantic search) ride the plugin boundary, not the core.
 
 ```mermaid
 flowchart TD
     subgraph CLI["CLI layer"]
-        parse[command parser<br/>noun-verb tree, flags, config]
-        dispatch[plugin dispatch<br/>PATH-based extensions]
+        parse["command parser<br/>noun-verb tree, flags, config"]
+        dispatch["plugin dispatch<br/>PATH-based extensions"]
     end
 
-    subgraph CORE["Core: bundle model"]
-        loader[bundle loader<br/>walk dir · parse frontmatter · parse markdown]
-        model[(in-memory graph<br/>nodes + typed edges)]
-        recon[reserved-file engine<br/>index.md / log.md]
+    subgraph CORE["Core: bundle model (stdlib-only)"]
+        loader["bundle loader<br/>walk dir · parse frontmatter · parse markdown"]
+        model[("in-memory graph<br/>nodes + typed edges")]
+        recon["reserved-file engine<br/>index.md / log.md"]
     end
 
-    subgraph CAP["Capabilities"]
-        val[validate<br/>conformance]
-        lint[lint ★<br/>curation loop]
-        gexp[graph export]
-        web[web server<br/>embedded assets]
-        srch[search]
+    subgraph CAP["Core capabilities"]
+        val["validate<br/>conformance + type floor"]
+        lint["lint ★<br/>curation loop"]
+        gexp["graph export"]
+        web["web server<br/>embedded assets"]
+        srch["search<br/>lexical / graph"]
+        tmpl["template overlay<br/>opt-in validation"]
+    end
+
+    subgraph PLUGIN["Plugins (PATH-dispatch)"]
+        sem["okfctl-search ★<br/>semantic RAG"]
     end
 
     subgraph BACK["Optional backends"]
-        emb[embedding / LLM<br/>opt-in, for lint only]
-        git[git remotes<br/>registry / connect]
+        vecdb[("sqlite-vec index<br/>content-hash keyed")]
+        emb["embedder<br/>Model2Vec / MLX / Hash"]
+        llm["LLM<br/>opt-in, contradiction checks"]
+        git["git remotes<br/>registry / connect"]
     end
 
     parse --> loader
-    dispatch -.-> CLI
+    dispatch --> sem
     loader --> model
     model --> recon
     model --> val
@@ -282,10 +610,15 @@ flowchart TD
     model --> gexp
     model --> web
     model --> srch
-    lint -.opt-in.-> emb
+    model --> tmpl
+    sem --> emb
+    sem --> vecdb
+    lint -.opt-in.-> sem
+    lint -.opt-in.-> llm
     loader --> git
 
     style lint fill:#2d5a2d,stroke:#7bc47b,color:#fff
+    style sem fill:#2d5a2d,stroke:#7bc47b,color:#fff
 ```
 
 Design principles:
@@ -296,32 +629,40 @@ Design principles:
   `search`.
 - **Permissive load, strict where the spec is strict.** The loader forgives
   unknown keys and missing optional fields (per spec) but treats the reserved
-  files and required fields as load-bearing.
-- **Curation backends are opt-in.** Structural checks require nothing external.
-  Semantic checks (contradiction, staleness) call a configurable backend only when
-  enabled, so the default tool is fully offline and dependency-free.
+  files and the required `type` field as load-bearing (§7).
+- **Core is stdlib-only; weight rides plugins.** Structural checks, lexical
+  search, and the embedded visualizer require nothing external. The semantic
+  search plugin and any LLM contradiction backend are opt-in and out-of-core, so
+  the default tool is fully offline and dependency-free.
 - **Single binary, embedded assets.** The web visualizer's static assets ship
-  inside the binary. One artifact, no runtime install.
+  inside the binary via `go:embed`. One artifact, no runtime install.
+- **Reproducible indexes.** The vector index records its `model` and `dim` and is
+  keyed on content hash, so a rebuild is deterministic and a stale or
+  mismatched-model query is refused, not silently wrong (§8.3).
 
-## 8. Cross-Cutting Requirements
+## 12. Cross-Cutting Requirements
 
 - **Conformance.** Strictly conformant to OKF v0.1; permissive per the spec's
-  forgiveness requirement. The spec version is pinned and surfaced in
-  `bundle info`.
+  forgiveness requirement. The required `type` floor (§7.1) and the reserved-file
+  rules are enforced; everything else is soft. The spec version is pinned and
+  surfaced in `bundle info`.
 - **Configuration.** Layered config (flags > environment > file > defaults) in the
   `git`/`gcloud` idiom, via `config get/set/list`.
 - **Completions.** Generated shell completions for bash, zsh, and fish.
-- **Distribution.** Single static binary; cross-compiled for macOS, Linux, and
-  Windows; reproducible builds.
-- **Testing.** A conformance test suite against known-good and known-bad bundles;
-  golden-file tests for `index`/`log` generation; unit tests for each `lint`
-  check.
+- **Distribution.** Core: single static binary; cross-compiled for macOS, Linux,
+  and Windows; reproducible builds. The `okfctl-search` plugin is distributed
+  separately (§8.4), so the core's zero-dependency guarantee holds.
+- **Testing.** A conformance test suite against known-good and known-bad bundles
+  (including missing/empty `type`); golden-file tests for `index`/`log`
+  generation; unit tests for each `lint` check; the Hash embedder (§8.2) for
+  deterministic, model-free vector-index and `related` tests in CI; template-overlay
+  tests over a fixture template bundle (§9).
 - **Open source.** Apache-2.0, Contributor License Agreement, generated
   release artifacts, semantic versioning.
 
-## 9. Open Decisions
+## 13. Open Decisions
 
-### 9.1 Implementation language and library stack—*decided: Go*
+### 13.1 Implementation language and library stack—*decided: Go*
 
 The language and core library stack are a foundational, costly-to-redo decision
 that gates implementation. An evidence-backed prove-or-kill spike settled it:
@@ -354,7 +695,7 @@ Rust's one clear win—a ~4x smaller binary (2.1 MB vs 8.6 MB)—is minor for a
 developer/agent CLI shipped as a release artifact. The differentiating lint loop
 is I/O- and LLM-latency-bound rather than CPU-bound, so it does not favor either
 language; it should be architected around caching embedding/LLM results by
-content hash.
+content hash (realized as the §8.3 content-hash-keyed index).
 
 **Named stack.** Command framework: `spf13/cobra` (Apache-2.0), with `spf13/viper`
 (MIT) adopted only if config files are needed beyond flags. Extension model:
@@ -365,35 +706,55 @@ Graph structure and DOT/JSON export: `dominikbraun/graph` (Apache-2.0), or
 `gonum/graph` (BSD-3) if the lint loop grows heavier analytics; confirm
 `dominikbraun/graph` still meets the health bar at adoption. Embedded server:
 `net/http` + `go:embed` (stdlib), deferring `go-chi/chi` until routing complexity
-justifies it. Distribution: `CGO_ENABLED=0` static builds across `GOOS`/`GOARCH`,
-with GoReleaser for the release matrix. All named libraries are permissive-licensed
-(Apache-2.0/MIT/BSD) and non-archived.
+justifies it. Vector store for the `okfctl-search` plugin: SQLite with the
+`sqlite-vec` extension (`asg017/sqlite-vec`, Apache-2.0/MIT), via a
+CGO-free or extension-loading Go SQLite driver—confirmed against the §8.4
+build-path decision at adoption. Distribution: `CGO_ENABLED=0` static builds
+across `GOOS`/`GOARCH` for the core, with GoReleaser for the release matrix. All
+named libraries are permissive-licensed (Apache-2.0/MIT/BSD) and non-archived.
 
-### 9.2 Curation backend interface
+### 13.2 Semantic-search build path—shell out vs. native Go embedder
 
-The interface for the optional semantic-curation backend (contradiction and
-staleness detection)—pluggable local embedding model, hosted API, or both—remains
-open as a design task, now scoped to the Go ecosystem. The spike found the lint
-loop I/O-bound, so the interface should center on caching embedding/LLM results
-by content hash.
+The `okfctl-search` plugin must reconcile with the in-production Python embedder
+rather than duplicate the protocol (§8.4). Which of the two build paths to take—
+shell out to the existing `tools/okf` Python code, or re-implement the Model2Vec
+and MLX clients natively in Go against the same `Embedder` contract—remains a
+build decision. It affects the plugin's runtime dependency (Python present vs. a
+pure-Go binary) but not the protocol, the models, or the reproducibility
+discipline, all of which are fixed and shared with `cwest/knowledge-base`.
 
-### 9.3 Web visualizer front-end approach
+### 13.3 Curation backend interface
+
+The interface for the optional LLM-backed semantic checks (contradiction
+detection beyond vector similarity) remains open as a design task, now scoped to
+the Go ecosystem. It sits behind the same opt-in boundary as the vector index and,
+like it, should cache results by content hash.
+
+### 13.4 Web visualizer front-end approach
 
 Whether the visualizer ships a minimal vanilla front-end or a small framework
 build remains open, now a front-end design task for the `serve` command. Either
 way the assets are baked in via `go:embed`, so the choice is orthogonal to the
 settled Go backend.
 
-## 10. Success Criteria
+## 14. Success Criteria
 
 `okfctl` succeeds if:
 
 1. A user can take a directory of notes to a conformant, well-maintained OKF
    bundle—and keep it that way—using only this tool.
-2. `lint` catches real staleness, orphans, contradictions, and missing links that
-   `validate` alone cannot, closing the maintenance gap the format leaves open.
-3. `serve` makes a bundle's graph genuinely navigable and its problems visible.
-4. The extension model attracts at least one community plugin the core did not
+2. `validate` enforces the `type` floor exactly (missing/empty `type` fails;
+   unknown `type` values pass), and never enforces a taxonomy (§7).
+3. `lint` catches real staleness, orphans, contradictions, missing links, and
+   semantic near-duplicates that `validate` alone cannot, closing the maintenance
+   gap the format leaves open.
+4. `okfctl-search` builds a reproducible, content-hash-keyed vector index and
+   answers semantic and `related` queries fully offline, using the shared
+   `Embedder` protocol.
+5. A team can publish a type-template bundle, scaffold nodes from it, and run the
+   opt-in overlay—without any taxonomy living in the tool.
+6. `serve` makes a bundle's graph genuinely navigable and its problems visible.
+7. The extension model attracts at least one community plugin the core did not
    ship.
-5. It is a healthy open-source project: contributors can build, test, and extend
+8. It is a healthy open-source project: contributors can build, test, and extend
    it from a clean checkout without friction.
