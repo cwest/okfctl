@@ -15,6 +15,7 @@
 package okf
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -48,6 +49,56 @@ func TestLoad_ExtractsEdgesFromLinks(t *testing.T) {
 	if !found {
 		t.Errorf("expected edge tannin -> acidity, got %v", edges)
 	}
+}
+
+func TestBuildEdges_TitledLinkStillResolves(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "index.md", "---\ntype: Index\n---\n# KB\n")
+	writeFile(t, dir, "log.md", "# Log\n")
+	writeFile(t, dir, "a.md", "---\ntype: Reference\n---\n# A\n\nSee [b](b.md \"The B Node\").\n")
+	writeFile(t, dir, "b.md", "---\ntype: Reference\n---\n# B\n")
+	b, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !linksTo(b, "a.md", "b.md") {
+		t.Errorf("titled link a.md -> b.md was dropped; edges=%v", b.OutboundLinks("a.md"))
+	}
+}
+
+func TestBuildEdges_ImageIsNotAnEdge(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "index.md", "---\ntype: Index\n---\n# KB\n")
+	writeFile(t, dir, "log.md", "# Log\n")
+	writeFile(t, dir, "a.md", "---\ntype: Reference\n---\n# A\n\n![diagram](b.md)\n")
+	writeFile(t, dir, "b.md", "---\ntype: Reference\n---\n# B\n")
+	b, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if linksTo(b, "a.md", "b.md") {
+		t.Errorf("image ![](b.md) must NOT be an edge; edges=%v", b.OutboundLinks("a.md"))
+	}
+}
+
+func writeFile(t *testing.T, dir, rel, content string) {
+	t.Helper()
+	p := filepath.Join(dir, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func linksTo(b *Bundle, from, to string) bool {
+	for _, e := range b.OutboundLinks(from) {
+		if e == to {
+			return true
+		}
+	}
+	return false
 }
 
 func keys(m map[string]*Node) []string {

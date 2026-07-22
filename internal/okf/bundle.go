@@ -86,11 +86,34 @@ func (b *Bundle) place(rel string, n *Node) {
 	b.Nodes[rel] = n
 }
 
+// buildEdges derives the in-bundle link graph from each concept node's body.
+//
+// For every CommonMark inline link [text](target) it resolves target to a node
+// two ways, in order: first root-relative via filepath.Clean(target), then
+// dir-relative via filepath.Clean(join(dir, target)) where dir is the linking
+// node's directory. Only in-bundle .md targets that resolve to a known node
+// become edges. External links (http/https), in-page anchors (#...), and any
+// target that does not resolve to a node are ignored. Image syntax
+// (![alt](src), a '!' immediately preceding '[') is not a link and is skipped.
+// An optional CommonMark title (e.g. `path.md "Title"`) is stripped before
+// resolution, keeping only the leading whitespace-delimited URL.
 func (b *Bundle) buildEdges() {
 	for path, n := range b.Nodes {
 		dir := filepath.Dir(path)
-		for _, m := range mdLinkRe.FindAllStringSubmatch(n.Body, -1) {
-			target := m[1]
+		for _, loc := range mdLinkRe.FindAllStringSubmatchIndex(n.Body, -1) {
+			// loc[0] is the start index of the whole match (the '['). Skip
+			// images: a '!' immediately before '[' marks ![alt](src).
+			if loc[0] > 0 && n.Body[loc[0]-1] == '!' {
+				continue
+			}
+			target := n.Body[loc[2]:loc[3]]
+			// Strip an optional CommonMark title: keep only the URL, the first
+			// whitespace-delimited field. Guard empty/whitespace-only captures.
+			fields := strings.Fields(target)
+			if len(fields) == 0 {
+				continue
+			}
+			target = fields[0]
 			if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") || strings.HasPrefix(target, "#") {
 				continue
 			}
