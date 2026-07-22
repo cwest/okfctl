@@ -1,33 +1,23 @@
 <!-- repo:managed -->
-# How to Contribute
+# Contributing
 
-We would love to accept your patches and contributions to this project.
+Thanks for your interest in contributing.
 
-## Before you begin
+## Workflow
 
-### Sign our Contributor License Agreement
+1. Open an issue to discuss substantial changes before coding.
+2. Fork and create a topic branch (`topic/<short-name>`).
+3. Write tests for your change.
+4. Run `pre-commit run --all-files` and ensure everything passes.
+5. Open a pull request that explains the *why* of the change.
 
-Contributions to this project must be accompanied by a
-[Contributor License Agreement](https://cla.developers.google.com/about) (CLA).
-You (or your employer) retain the copyright to your contribution; this simply
-gives us permission to use and redistribute your contributions as part of the
-project.
+## Style
 
-If you or your current employer have already signed the Google CLA (even if it
-was for a different project), you probably don't need to do it again.
+- Follow the conventions visible in the existing codebase.
+- Keep commits focused and use [Conventional Commits](https://www.conventionalcommits.org/).
+- Sign your commits.
 
-Visit <https://cla.developers.google.com/> to see your current agreements or to
-sign a new one.
+## License
 
-### Review our Community Guidelines
-
-This project follows [Google's Open Source Community
-Guidelines](https://opensource.google/conduct/).
-
-## Contribution process
-
-### Code Reviews
-
-All submissions, including submissions by project members, require review. We
-use [GitHub pull requests](https://docs.github.com/articles/about-pull-requests)
-for this purpose.
+By contributing, you agree that your contributions will be licensed under the
+project's [Apache-2.0 License](LICENSE).
