@@ -81,6 +81,36 @@ func TestBuildEdges_ImageIsNotAnEdge(t *testing.T) {
 	}
 }
 
+func TestLoad_ReadsBundleOkfVersion(t *testing.T) {
+	dir := t.TempDir()
+	// A bundle authored under a different spec version must report THAT version,
+	// not the compiled-in constant.
+	writeFile(t, dir, ".okf", "okf_version: 0.9\n")
+	writeFile(t, dir, "index.md", "---\ntype: Index\n---\n# KB\n")
+	writeFile(t, dir, "log.md", "# Log\n")
+	b, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if b.OkfVersion != "0.9" {
+		t.Errorf("OkfVersion = %q, want 0.9 (the bundle's own .okf)", b.OkfVersion)
+	}
+}
+
+func TestLoad_MissingDotOkfFallsBackToSpecVersion(t *testing.T) {
+	dir := t.TempDir()
+	// No .okf file at all: fall back to the build's SpecVersion rather than "".
+	writeFile(t, dir, "index.md", "---\ntype: Index\n---\n# KB\n")
+	writeFile(t, dir, "log.md", "# Log\n")
+	b, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if b.OkfVersion != SpecVersion {
+		t.Errorf("OkfVersion = %q, want fallback %q", b.OkfVersion, SpecVersion)
+	}
+}
+
 func writeFile(t *testing.T, dir, rel, content string) {
 	t.Helper()
 	p := filepath.Join(dir, filepath.FromSlash(rel))

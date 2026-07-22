@@ -28,10 +28,11 @@ var ReservedFiles = map[string]bool{"index.md": true, "log.md": true}
 // Bundle is a loaded OKF bundle: concept nodes keyed by bundle-relative path,
 // plus the reserved files, plus the derived link graph.
 type Bundle struct {
-	Root     string
-	Nodes    map[string]*Node // concept nodes only (excludes reserved)
-	Reserved map[string]*Node // index.md, log.md
-	edges    map[string][]string
+	Root       string
+	Nodes      map[string]*Node // concept nodes only (excludes reserved)
+	Reserved   map[string]*Node // index.md, log.md
+	OkfVersion string           // okf_version from the bundle's .okf, or SpecVersion if absent
+	edges      map[string][]string
 }
 
 var mdLinkRe = regexp.MustCompile(`\[[^\]]*\]\(([^)]+)\)`)
@@ -74,8 +75,30 @@ func Load(root string) (*Bundle, error) {
 	if err != nil {
 		return nil, err
 	}
+	b.OkfVersion = readOkfVersion(root)
 	b.buildEdges()
 	return b, nil
+}
+
+// readOkfVersion returns the okf_version declared in the bundle's .okf file, or
+// SpecVersion if the file is absent or carries no okf_version key. The .okf is a
+// small YAML document (e.g. "okf_version: 0.1"); a missing or unreadable file is
+// not an error here — Load stays lenient and falls back to the build's version.
+func readOkfVersion(root string) string {
+	data, err := os.ReadFile(filepath.Join(root, ".okf"))
+	if err != nil {
+		return SpecVersion
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		key, val, ok := strings.Cut(line, ":")
+		if !ok || strings.TrimSpace(key) != "okf_version" {
+			continue
+		}
+		if v := strings.TrimSpace(val); v != "" {
+			return v
+		}
+	}
+	return SpecVersion
 }
 
 func (b *Bundle) place(rel string, n *Node) {

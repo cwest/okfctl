@@ -53,7 +53,7 @@ func newBundleCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "nodes: %d\nreserved: %d\nokf_version: %s\n",
-				len(b.Nodes), len(b.Reserved), okf.SpecVersion)
+				len(b.Nodes), len(b.Reserved), b.OkfVersion)
 			return nil
 		},
 	})
