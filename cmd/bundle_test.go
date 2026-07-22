@@ -17,6 +17,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -30,5 +31,22 @@ func TestBundleInit_CreatesValidatableBundle(t *testing.T) {
 	}
 	if _, err := runOKF(t, "validate", dir); err != nil {
 		t.Fatalf("freshly-init bundle failed validate: %v", err)
+	}
+}
+
+func TestBundleInfo_ReportsCounts(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := runOKF(t, "bundle", "init", dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runOKF(t, "node", "new", "a.md", "--type", "Reference", "--bundle", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runOKF(t, "bundle", "info", dir)
+	if err != nil {
+		t.Fatalf("bundle info: %v", err)
+	}
+	if !strings.Contains(out, "1") {
+		t.Errorf("bundle info should report 1 node; got:\n%s", out)
 	}
 }

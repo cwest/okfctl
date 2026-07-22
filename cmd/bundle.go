@@ -39,5 +39,23 @@ func newBundleCmd() *cobra.Command {
 			return nil
 		},
 	})
+	bundle.AddCommand(&cobra.Command{
+		Use:   "info [dir]",
+		Short: "Summarize a bundle (node count, spec version)",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dir := "."
+			if len(args) == 1 {
+				dir = args[0]
+			}
+			b, err := okf.Load(dir)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "nodes: %d\nreserved: %d\nokf_version: %s\n",
+				len(b.Nodes), len(b.Reserved), okf.SpecVersion)
+			return nil
+		},
+	})
 	return bundle
 }
