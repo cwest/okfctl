@@ -36,6 +36,22 @@ func NewNode(root, relPath, typ, title string) (string, error) {
 		relPath += ".md"
 	}
 	abs := filepath.Join(root, filepath.FromSlash(relPath))
+	// Containment check: the resolved target must stay within root. filepath.Join
+	// already applies Clean, so a "../" escape or an absolute relPath surfaces
+	// here as a Rel result that starts with "..". Refuse it — writing outside the
+	// bundle root produces a file Load can never see, breaking the node contract.
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return "", err
+	}
+	absAbs, err := filepath.Abs(abs)
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(rootAbs, absAbs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("node path escapes the bundle root: %s", relPath)
+	}
 	if _, err := os.Stat(abs); err == nil {
 		return "", fmt.Errorf("node already exists: %s", relPath)
 	}

@@ -16,6 +16,7 @@ package okf
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -61,6 +62,37 @@ func TestNewNode_RefusesOverwrite(t *testing.T) {
 	}
 	if _, err := NewNode(dir, "a.md", "Reference", "A2"); err == nil {
 		t.Fatal("NewNode must refuse to overwrite an existing node")
+	}
+}
+
+func TestNewNode_RejectsPathEscape(t *testing.T) {
+	dir := t.TempDir()
+	if err := Scaffold(dir); err != nil {
+		t.Fatal(err)
+	}
+	// A relPath that escapes the bundle root via ".." must be refused, and no
+	// file may be written outside root.
+	for _, rel := range []string{"../escape", "../../escape", "sub/../../escape"} {
+		if _, err := NewNode(dir, rel, "Concept", "X"); err == nil {
+			t.Errorf("NewNode(%q) must refuse to escape the bundle root", rel)
+		}
+	}
+	// Nothing may have been written into the parent of the bundle root.
+	parent := filepath.Dir(dir)
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := filepath.Base(dir)
+	for _, e := range entries {
+		if e.Name() != base && strings.Contains(e.Name(), "escape") {
+			t.Errorf("NewNode wrote outside the bundle root: %s", filepath.Join(parent, e.Name()))
+		}
+	}
+	// A leading-slash relPath is NOT an escape: filepath.Join treats it as
+	// bundle-relative and it lands inside root. The guard must not over-block it.
+	if _, err := NewNode(dir, "/deep/inbundle.md", "Concept", "X"); err != nil {
+		t.Errorf("leading-slash path should resolve inside root, got error: %v", err)
 	}
 }
 
