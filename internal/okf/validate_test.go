@@ -62,6 +62,30 @@ func TestValidate_UnparseableFrontmatterFails(t *testing.T) {
 	}
 }
 
+func TestValidate_FindingsAreDeterministicallyOrdered(t *testing.T) {
+	// A conformance tool whose output is diffed must emit findings in a stable
+	// order. Build a bundle with several broken nodes and assert the findings
+	// come back sorted by Path, identically on every call.
+	b := &Bundle{Nodes: map[string]*Node{
+		"zeta.md":      {Path: "zeta.md", Frontmatter: map[string]any{}},
+		"alpha.md":     {Path: "alpha.md", Frontmatter: map[string]any{}},
+		"mid/mnode.md": {Path: "mid/mnode.md", Frontmatter: nil},
+		"beta.md":      {Path: "beta.md", Frontmatter: map[string]any{}},
+	}}
+	want := []string{"alpha.md", "beta.md", "mid/mnode.md", "zeta.md"}
+	for i := 0; i < 5; i++ {
+		f := Validate(b)
+		if len(f) != len(want) {
+			t.Fatalf("run %d: got %d findings, want %d: %v", i, len(f), len(want), f)
+		}
+		for j, p := range want {
+			if f[j].Path != p {
+				t.Fatalf("run %d: findings not sorted by Path: got %v, want order %v", i, f, want)
+			}
+		}
+	}
+}
+
 func hasFindingFor(fs []Finding, path string) bool {
 	for _, f := range fs {
 		if f.Path == path {

@@ -14,7 +14,10 @@
 
 package okf
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // Finding is a single spec-floor violation. Path is bundle-relative.
 type Finding struct {
@@ -30,7 +33,16 @@ type Finding struct {
 // It returns findings; an empty slice means the bundle passes the floor.
 func Validate(b *Bundle) []Finding {
 	var out []Finding
-	for path, n := range b.Nodes {
+	// Iterate node paths in sorted order so findings are deterministic: this is a
+	// conformance tool whose output is diffed, and Go map iteration order is
+	// randomized. (The node list already sorts at cmd/node.go.)
+	paths := make([]string, 0, len(b.Nodes))
+	for path := range b.Nodes {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		n := b.Nodes[path]
 		if n.Frontmatter == nil {
 			out = append(out, Finding{Path: path, Message: "unparseable frontmatter"})
 			continue
