@@ -63,3 +63,40 @@ func TestNewNode_RefusesOverwrite(t *testing.T) {
 		t.Fatal("NewNode must refuse to overwrite an existing node")
 	}
 }
+
+func TestNewNode_TitleCannotInjectFrontmatterKeys(t *testing.T) {
+	dir := t.TempDir()
+	if err := Scaffold(dir); err != nil {
+		t.Fatal(err)
+	}
+	// A malicious/multiline title must NOT inject a second frontmatter key.
+	evil := "Innocent\ntype: Evil\nmalicious: true"
+	path, err := NewNode(dir, "x.md", "Reference", evil)
+	if err != nil {
+		t.Fatalf("NewNode: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Load it back and assert the frontmatter is intact: exactly one type,
+	// still "Reference", and NO injected key.
+	b, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	n, ok := b.Nodes["x.md"]
+	if !ok {
+		t.Fatalf("node x.md not loaded; nodes=%v", data)
+	}
+	if got := n.Type(); got != "Reference" {
+		t.Errorf("type was overwritten by injection: got %q, want Reference\nfile:\n%s", got, data)
+	}
+	if _, injected := n.Frontmatter["malicious"]; injected {
+		t.Errorf("title injected a 'malicious' frontmatter key:\n%s", data)
+	}
+	// The title round-trips as a single scalar value (newlines preserved as data, not structure).
+	if tv, _ := n.Frontmatter["title"].(string); tv != evil {
+		t.Errorf("title not preserved as a single scalar: got %q, want %q", tv, evil)
+	}
+}

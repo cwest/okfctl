@@ -19,11 +19,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // NewNode creates a conformant concept node at relPath (bundle-relative) with a
 // required non-empty type (§7.2). It refuses an empty type and refuses to
-// overwrite an existing file. Returns the absolute path written.
+// overwrite an existing file. Frontmatter is YAML-marshaled (never concatenated)
+// so a type/title containing newlines or YAML metacharacters is safely quoted
+// and cannot inject additional frontmatter keys. Returns the absolute path written.
 func NewNode(root, relPath, typ, title string) (string, error) {
 	if strings.TrimSpace(typ) == "" {
 		return "", fmt.Errorf("type is required and must be non-empty (OKF §7)")
@@ -38,17 +42,41 @@ func NewNode(root, relPath, typ, title string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return "", err
 	}
-	var sb strings.Builder
-	sb.WriteString("---\n")
-	sb.WriteString("type: " + typ + "\n")
-	if strings.TrimSpace(title) != "" {
-		sb.WriteString("title: " + title + "\n")
+
+	// Build frontmatter as an ordered YAML mapping (type first, then optional
+	// title), marshaled — NOT string-concatenated — so any value is safely quoted.
+	// yaml.v3 has no MapSlice/MapItem (that is yaml.v2); an explicit MappingNode
+	// preserves key order deterministically while still escaping every scalar.
+	fm := &yaml.Node{Kind: yaml.MappingNode}
+	appendKV := func(key, val string) {
+		fm.Content = append(fm.Content,
+			&yaml.Node{Kind: yaml.ScalarNode, Value: key},
+			&yaml.Node{Kind: yaml.ScalarNode, Value: val},
+		)
 	}
-	sb.WriteString("---\n\n")
+	appendKV("type", typ)
+	if strings.TrimSpace(title) != "" {
+		appendKV("title", title)
+	}
+	fmBytes, err := yaml.Marshal(fm)
+	if err != nil {
+		return "", fmt.Errorf("marshal frontmatter: %w", err)
+	}
+
 	heading := title
-	if heading == "" {
+	if strings.TrimSpace(heading) == "" {
 		heading = strings.TrimSuffix(filepath.Base(relPath), ".md")
 	}
+	// If the heading spans multiple lines (e.g. a multiline title), keep only the
+	// first line for the H1 so the body stays well-formed.
+	if i := strings.IndexByte(heading, '\n'); i >= 0 {
+		heading = heading[:i]
+	}
+
+	var sb strings.Builder
+	sb.WriteString("---\n")
+	sb.Write(fmBytes)
+	sb.WriteString("---\n\n")
 	sb.WriteString("# " + heading + "\n")
 	if err := os.WriteFile(abs, []byte(sb.String()), 0o644); err != nil {
 		return "", err
