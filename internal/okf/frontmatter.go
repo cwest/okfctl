@@ -17,9 +17,7 @@ package okf
 import (
 	"bytes"
 
-	"github.com/yuin/goldmark"
 	gmmeta "github.com/yuin/goldmark-meta"
-	"github.com/yuin/goldmark/parser"
 	"gopkg.in/yaml.v3"
 )
 
@@ -43,7 +41,10 @@ type split struct {
 	body      []byte
 }
 
-// splitFrontmatter detects a leading `---\n ... \n---\n` block.
+// splitFrontmatter detects a leading `---\n ... \n---\n` block. The closing
+// delimiter must be a line that is exactly `---` (optionally with a trailing
+// \r); a body line merely starting with `---` (e.g. a horizontal rule) is not
+// mistaken for the fence.
 func splitFrontmatter(src []byte) (split, bool) {
 	const delim = "---"
 	if !bytes.HasPrefix(src, []byte(delim+"\n")) && !bytes.HasPrefix(src, []byte(delim+"\r\n")) {
@@ -51,18 +52,32 @@ func splitFrontmatter(src []byte) (split, bool) {
 	}
 	nl := bytes.IndexByte(src, '\n')
 	rest := src[nl+1:]
-	end := bytes.Index(rest, []byte("\n"+delim))
-	if end < 0 {
+
+	lines := bytes.SplitAfter(rest, []byte("\n"))
+	var yamlBuf bytes.Buffer
+	consumed := 0
+	found := false
+	for _, line := range lines {
+		consumed += len(line)
+		// Compare the line without its trailing newline / carriage return.
+		trimmed := bytes.TrimSuffix(line, []byte("\n"))
+		trimmed = bytes.TrimSuffix(trimmed, []byte("\r"))
+		if bytes.Equal(trimmed, []byte(delim)) {
+			found = true
+			break
+		}
+		// Strip a trailing \r so CRLF sources parse cleanly.
+		yamlBuf.Write(bytes.TrimSuffix(bytes.TrimSuffix(line, []byte("\n")), []byte("\r")))
+		yamlBuf.WriteByte('\n')
+	}
+	if !found {
 		return split{}, false
 	}
-	yamlBlock := rest[:end]
-	after := rest[end+1+len(delim):]
-	after = bytes.TrimPrefix(after, []byte("\n"))
+	after := rest[consumed:]
 	after = bytes.TrimPrefix(after, []byte("\r\n"))
-	return split{yamlBlock: yamlBlock, body: after}, true
+	after = bytes.TrimPrefix(after, []byte("\n"))
+	return split{yamlBlock: yamlBuf.Bytes(), body: after}, true
 }
 
-// ensure goldmark-meta is a real dependency for downstream body rendering.
-var _ = func() goldmark.Markdown {
-	return goldmark.New(goldmark.WithParserOptions(parser.WithAutoHeadingID()), goldmark.WithExtensions(gmmeta.Meta))
-}
+// ensure goldmark-meta stays pinned as a dependency for downstream rendering.
+var _ = gmmeta.Meta

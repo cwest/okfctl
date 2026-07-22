@@ -14,7 +14,10 @@
 
 package okf
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseFrontmatter_ExtractsTypeAndBody(t *testing.T) {
 	src := []byte("---\ntype: Reference\ntitle: Widgets\n---\n\n# Body\n\nText here.\n")
@@ -28,7 +31,7 @@ func TestParseFrontmatter_ExtractsTypeAndBody(t *testing.T) {
 	if fm["title"] != "Widgets" {
 		t.Errorf("title = %v, want Widgets", fm["title"])
 	}
-	if want := "# Body"; !contains(body, want) {
+	if want := "# Body"; !strings.Contains(body, want) {
 		t.Errorf("body missing %q; got %q", want, body)
 	}
 }
@@ -50,14 +53,17 @@ func TestParseFrontmatter_Malformed(t *testing.T) {
 	}
 }
 
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || indexOf(s, sub) >= 0)
-}
-func indexOf(s, sub string) int {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
+func TestParseFrontmatter_BodyLineStartingWithDashes(t *testing.T) {
+	// A body line that starts with --- must NOT be treated as the closing fence.
+	src := []byte("---\ntype: Reference\n---\n\nText.\n\n---\n\nMore text after a horizontal rule.\n")
+	fm, body, err := ParseFrontmatter(src)
+	if err != nil {
+		t.Fatalf("ParseFrontmatter error: %v", err)
 	}
-	return -1
+	if fm["type"] != "Reference" {
+		t.Errorf("type = %v, want Reference", fm["type"])
+	}
+	if !strings.Contains(body, "More text after a horizontal rule.") {
+		t.Errorf("body lost content after an in-body --- rule; got %q", body)
+	}
 }
