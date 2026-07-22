@@ -12,25 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package cmd implements the okfctl command tree.
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
-// NewRootCmd builds the okfctl root command with its subcommand tree.
-func NewRootCmd() *cobra.Command {
-	root := &cobra.Command{
-		Use:           "okfctl",
-		Short:         "Manage Open Knowledge Format (OKF) bundles",
-		SilenceUsage:  true,
-		SilenceErrors: true,
+func TestBundleInit_CreatesValidatableBundle(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := runOKF(t, "bundle", "init", dir); err != nil {
+		t.Fatalf("bundle init: %v", err)
 	}
-	root.AddCommand(newValidateCmd())
-	root.AddCommand(newBundleCmd())
-	return root
-}
-
-// Execute runs the root command; main() calls this.
-func Execute() error {
-	return NewRootCmd().Execute()
+	if _, err := os.Stat(filepath.Join(dir, "index.md")); err != nil {
+		t.Fatalf("index.md not created: %v", err)
+	}
+	if _, err := runOKF(t, "validate", dir); err != nil {
+		t.Fatalf("freshly-init bundle failed validate: %v", err)
+	}
 }
