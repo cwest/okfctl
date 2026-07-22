@@ -14,7 +14,10 @@
 
 package cmd
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestNodeNew_RequiresType(t *testing.T) {
 	dir := t.TempDir()
@@ -27,5 +30,39 @@ func TestNodeNew_CreatesNode(t *testing.T) {
 	dir := t.TempDir()
 	if _, err := runOKF(t, "node", "new", "a.md", "--type", "Reference", "--bundle", dir); err != nil {
 		t.Fatalf("node new: %v", err)
+	}
+}
+
+func TestNodeList_SurfacesType(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := runOKF(t, "bundle", "init", dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runOKF(t, "node", "new", "wine/tannin.md", "--type", "Reference", "--title", "Tannin", "--bundle", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runOKF(t, "node", "list", "--bundle", dir)
+	if err != nil {
+		t.Fatalf("node list: %v", err)
+	}
+	if !strings.Contains(out, "wine/tannin.md") || !strings.Contains(out, "Reference") {
+		t.Errorf("node list must surface path and type; got:\n%s", out)
+	}
+}
+
+func TestNodeShow_SurfacesType(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := runOKF(t, "bundle", "init", dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runOKF(t, "node", "new", "a.md", "--type", "Playbook", "--bundle", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runOKF(t, "node", "show", "a.md", "--bundle", dir)
+	if err != nil {
+		t.Fatalf("node show: %v", err)
+	}
+	if !strings.Contains(out, "Playbook") {
+		t.Errorf("node show must surface type; got:\n%s", out)
 	}
 }

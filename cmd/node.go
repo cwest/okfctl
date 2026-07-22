@@ -16,6 +16,8 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/cwest/okfctl/internal/okf"
 	"github.com/spf13/cobra"
@@ -45,5 +47,54 @@ func newNodeCmd() *cobra.Command {
 	newC.Flags().StringVar(&title, "title", "", "node title")
 	newC.Flags().StringVar(&dir, "bundle", ".", "bundle directory")
 	node.AddCommand(newC)
+
+	var showBundle string
+	showC := &cobra.Command{
+		Use:   "show <path>",
+		Short: "Print a node, surfacing its type (§7.3)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			b, err := okf.Load(showBundle)
+			if err != nil {
+				return err
+			}
+			key := args[0]
+			if !strings.HasSuffix(key, ".md") {
+				key += ".md"
+			}
+			n, ok := b.Nodes[key]
+			if !ok {
+				return fmt.Errorf("node not found: %s", key)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "path: %s\ntype: %s\n\n%s\n", n.Path, n.Type(), n.Body)
+			return nil
+		},
+	}
+	showC.Flags().StringVar(&showBundle, "bundle", ".", "bundle directory")
+	node.AddCommand(showC)
+
+	var listBundle string
+	listC := &cobra.Command{
+		Use:   "list",
+		Short: "List nodes with their type (§7.3)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			b, err := okf.Load(listBundle)
+			if err != nil {
+				return err
+			}
+			paths := make([]string, 0, len(b.Nodes))
+			for p := range b.Nodes {
+				paths = append(paths, p)
+			}
+			sort.Strings(paths)
+			for _, p := range paths {
+				fmt.Fprintf(cmd.OutOrStdout(), "%-40s %s\n", p, b.Nodes[p].Type())
+			}
+			return nil
+		},
+	}
+	listC.Flags().StringVar(&listBundle, "bundle", ".", "bundle directory")
+	node.AddCommand(listC)
 	return node
 }
