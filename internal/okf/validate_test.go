@@ -55,6 +55,13 @@ func TestValidate_UnknownTypePasses(t *testing.T) {
 	}
 }
 
+func TestValidate_UnparseableFrontmatterFails(t *testing.T) {
+	f := Validate(loadOrFail(t, "bad-frontmatter"))
+	if !hasFindingFor(f, "broken.md") {
+		t.Errorf("expected an unparseable-frontmatter finding for broken.md, got %v", f)
+	}
+}
+
 func hasFindingFor(fs []Finding, path string) bool {
 	for _, f := range fs {
 		if f.Path == path {

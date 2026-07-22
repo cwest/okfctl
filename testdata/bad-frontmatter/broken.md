@@ -1,0 +1,4 @@
+---
+type: [unterminated
+---
+# broken yaml

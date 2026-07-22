@@ -25,6 +25,7 @@ func NewRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	root.AddCommand(newValidateCmd())
 	return root
 }
 
