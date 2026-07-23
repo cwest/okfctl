@@ -79,3 +79,54 @@ func TestRenderIndex_Deterministic(t *testing.T) {
 		t.Fatal("RenderIndex is not deterministic across calls")
 	}
 }
+
+func TestIndexInSync_TrueAfterBuildFalseAfterChange(t *testing.T) {
+	dir := t.TempDir()
+	_ = Scaffold(dir)
+	writeNode(t, dir, "wine/tannin.md", "Reference", "Tannin")
+	b, _ := Load(dir)
+	if err := os.WriteFile(filepath.Join(dir, "index.md"), []byte(RenderIndex(b)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	b2, _ := Load(dir)
+	if ok, diff := IndexInSync(b2); !ok {
+		t.Errorf("index should be in sync right after build; diff:\n%s", diff)
+	}
+	writeNode(t, dir, "wine/acidity.md", "Reference", "Acidity")
+	b3, _ := Load(dir)
+	if ok, _ := IndexInSync(b3); ok {
+		t.Error("index should be STALE after adding a node")
+	}
+}
+
+func TestAppendLog_CreatesAndAccumulates(t *testing.T) {
+	dir := t.TempDir()
+	_ = Scaffold(dir)
+	if err := AppendLog(dir, "first change"); err != nil {
+		t.Fatal(err)
+	}
+	if err := AppendLog(dir, "second change"); err != nil {
+		t.Fatal(err)
+	}
+	body, err := ReadLog(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, "first change") || !strings.Contains(body, "second change") {
+		t.Errorf("log lost an entry; got:\n%s", body)
+	}
+	if strings.Index(body, "second change") > strings.Index(body, "first change") {
+		t.Errorf("log not newest-first; got:\n%s", body)
+	}
+	if !strings.Contains(body, "20") {
+		t.Errorf("log entry missing a timestamp; got:\n%s", body)
+	}
+}
+
+func TestAppendLog_RejectsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	_ = Scaffold(dir)
+	if err := AppendLog(dir, "   "); err == nil {
+		t.Fatal("AppendLog must reject an empty/whitespace message")
+	}
+}

@@ -16,9 +16,12 @@ package okf
 
 import (
 	"fmt"
+	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 // neighborhood returns the top-level directory of a bundle-relative slash path,
@@ -77,4 +80,55 @@ func RenderIndex(b *Bundle) string {
 		}
 	}
 	return sb.String()
+}
+
+// IndexInSync reports whether the on-disk index.md matches what RenderIndex would
+// generate for the current bundle. When stale, it returns a short human-readable
+// report. A missing index.md counts as out of sync.
+func IndexInSync(b *Bundle) (bool, string) {
+	want := RenderIndex(b)
+	onDisk, err := os.ReadFile(filepath.Join(b.Root, "index.md"))
+	if err != nil {
+		return false, "index.md is missing or unreadable; run `okfctl index build`"
+	}
+	if string(onDisk) == want {
+		return true, ""
+	}
+	return false, "index.md is out of date; run `okfctl index build` to regenerate"
+}
+
+// AppendLog prepends a timestamped entry to log.md (newest-first), creating the
+// file with a heading when absent. A multi-line message is flattened to its first
+// line to keep the log well-formed; an empty message is rejected.
+func AppendLog(root, message string) error {
+	message = strings.TrimSpace(message)
+	if i := strings.IndexByte(message, '\n'); i >= 0 {
+		message = message[:i]
+	}
+	if message == "" {
+		return fmt.Errorf("log message must not be empty")
+	}
+	entry := fmt.Sprintf("- %s — %s\n", time.Now().UTC().Format("2006-01-02"), message)
+
+	p := filepath.Join(root, "log.md")
+	const header = "# Change Log\n\n"
+	existing, err := os.ReadFile(p)
+	if err != nil {
+		return os.WriteFile(p, []byte(header+entry), 0o644)
+	}
+	body := string(existing)
+	rest := strings.TrimPrefix(body, header)
+	return os.WriteFile(p, []byte(header+entry+rest), 0o644)
+}
+
+// ReadLog returns the log.md body (empty string if the file is absent).
+func ReadLog(root string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(root, "log.md"))
+	if os.IsNotExist(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
