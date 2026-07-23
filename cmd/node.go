@@ -16,6 +16,8 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -96,5 +98,85 @@ func newNodeCmd() *cobra.Command {
 	}
 	listC.Flags().StringVar(&listBundle, "bundle", ".", "bundle directory")
 	node.AddCommand(listC)
+
+	var mvBundle string
+	var mvDry bool
+	mvC := &cobra.Command{
+		Use:   "mv <old> <new>",
+		Short: "Move/rename a node, rewriting inbound links (path is identity)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			b, err := okf.Load(mvBundle)
+			if err != nil {
+				return err
+			}
+			old, newP := withMD(args[0]), withMD(args[1])
+			rewrites, err := okf.PlanMove(b, old, newP)
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			if mvDry {
+				fmt.Fprintf(out, "move %s -> %s\n", old, newP)
+				for _, rw := range rewrites {
+					fmt.Fprintf(out, "  rewrite %s: %s -> %s\n", rw.NodePath, rw.Old, rw.New)
+				}
+				return nil
+			}
+			if err := okf.ApplyMove(mvBundle, b, old, newP, rewrites); err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "Moved %s -> %s (%d inbound link(s) rewritten)\n", old, newP, len(rewrites))
+			return nil
+		},
+	}
+	mvC.Flags().StringVar(&mvBundle, "bundle", ".", "bundle directory")
+	mvC.Flags().BoolVar(&mvDry, "dry-run", false, "print the plan without touching disk")
+	node.AddCommand(mvC)
+
+	var rmBundle string
+	var rmDry bool
+	rmC := &cobra.Command{
+		Use:   "rm <path>",
+		Short: "Remove a node and report resulting orphans",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			b, err := okf.Load(rmBundle)
+			if err != nil {
+				return err
+			}
+			p := withMD(args[0])
+			orphans, err := okf.PlanRemoveOrphans(b, p)
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			if rmDry {
+				fmt.Fprintf(out, "remove %s\n", p)
+			} else {
+				abs := filepath.Join(rmBundle, filepath.FromSlash(p))
+				if err := os.Remove(abs); err != nil {
+					return fmt.Errorf("remove %s: %w", p, err)
+				}
+				fmt.Fprintf(out, "Removed %s\n", p)
+			}
+			for _, o := range orphans {
+				fmt.Fprintf(out, "  orphaned: %s\n", o)
+			}
+			return nil
+		},
+	}
+	rmC.Flags().StringVar(&rmBundle, "bundle", ".", "bundle directory")
+	rmC.Flags().BoolVar(&rmDry, "dry-run", false, "print the plan without touching disk")
+	node.AddCommand(rmC)
 	return node
+}
+
+// withMD appends the .md extension when the caller omitted it, matching the
+// other node subcommands' path handling.
+func withMD(p string) string {
+	if !strings.HasSuffix(p, ".md") {
+		return p + ".md"
+	}
+	return p
 }
