@@ -205,8 +205,152 @@ func isWordByte(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 }
 
-// lintCoverageGaps is implemented in Task 2.
-func lintCoverageGaps(b *Bundle, threshold int) []LintFinding { return nil }
+// lintCoverageGaps reports terms mentioned as plain text by `threshold` or more
+// DISTINCT nodes that have no node of their own. Candidate terms are the
+// Title-Case multi-word phrases appearing in node bodies; a term that resolves
+// to an existing node title is covered (not a gap).
+func lintCoverageGaps(b *Bundle, threshold int) []LintFinding {
+	// Existing node titles (lowercased) are "covered".
+	covered := map[string]bool{}
+	for _, n := range b.Nodes {
+		if t := strings.ToLower(strings.TrimSpace(nodeTitle(n))); t != "" {
+			covered[t] = true
+		}
+	}
 
-// lintTypeHygiene is implemented in Task 2.
-func lintTypeHygiene(b *Bundle) []LintFinding { return nil }
+	// term (lowercased) -> set of distinct node paths that mention it;
+	// display (lowercased term) -> canonical display form (first seen).
+	mentions := map[string]map[string]bool{}
+	display := map[string]string{}
+	for path, n := range b.Nodes {
+		for _, term := range candidateTerms(n.Body) {
+			key := strings.ToLower(term)
+			if covered[key] {
+				continue // already has a node
+			}
+			if mentions[key] == nil {
+				mentions[key] = map[string]bool{}
+				display[key] = term
+			}
+			mentions[key][path] = true
+		}
+	}
+
+	var out []LintFinding
+	keys := make([]string, 0, len(mentions))
+	for k := range mentions {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if len(mentions[k]) >= threshold {
+			out = append(out, LintFinding{
+				Check:   "coverage-gap",
+				Path:    "",
+				Message: fmt.Sprintf("coverage-gap: %q is mentioned by %d nodes but has no node of its own", display[k], len(mentions[k])),
+			})
+		}
+	}
+	return out
+}
+
+// candidateTerms extracts Title-Case multi-word phrases from a body (e.g.
+// "Malolactic Fermentation", "Terroir"). A phrase is a run of consecutive
+// capitalized words. Single capitalized words are included (e.g. "Terroir").
+func candidateTerms(body string) []string {
+	var terms []string
+	seen := map[string]bool{}
+	var cur []string
+	flush := func() {
+		if len(cur) > 0 {
+			term := strings.Join(cur, " ")
+			if !seen[term] {
+				seen[term] = true
+				terms = append(terms, term)
+			}
+			cur = nil
+		}
+	}
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue // skip headings (a node's own title heading is noise)
+		}
+		for _, w := range strings.Fields(line) {
+			trimmed := strings.Trim(w, ".,;:!?()[]\"'`*_")
+			if isCapitalizedWord(trimmed) {
+				cur = append(cur, trimmed)
+			} else {
+				flush()
+			}
+		}
+		flush()
+	}
+	return terms
+}
+
+func isCapitalizedWord(w string) bool {
+	if w == "" {
+		return false
+	}
+	if w[0] < 'A' || w[0] > 'Z' {
+		return false
+	}
+	for i := 1; i < len(w); i++ {
+		c := w[i]
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+			return false
+		}
+	}
+	return true
+}
+
+// lintTypeHygiene warns when two or more distinct `type` values fold to the same
+// canonical form (case + trailing-'s' plural), which usually signals accidental
+// drift. Anti-taxonomy stands: genuinely distinct types are never flagged.
+func lintTypeHygiene(b *Bundle) []LintFinding {
+	// canonical -> set of raw type values.
+	groups := map[string]map[string]bool{}
+	for _, n := range b.Nodes {
+		raw := strings.TrimSpace(n.Type())
+		if raw == "" {
+			continue
+		}
+		c := canonType(raw)
+		if groups[c] == nil {
+			groups[c] = map[string]bool{}
+		}
+		groups[c][raw] = true
+	}
+
+	var out []LintFinding
+	canons := make([]string, 0, len(groups))
+	for c := range groups {
+		canons = append(canons, c)
+	}
+	sort.Strings(canons)
+	for _, c := range canons {
+		if len(groups[c]) > 1 {
+			variants := make([]string, 0, len(groups[c]))
+			for v := range groups[c] {
+				variants = append(variants, v)
+			}
+			sort.Strings(variants)
+			out = append(out, LintFinding{
+				Check:   "type-hygiene",
+				Path:    "",
+				Message: fmt.Sprintf("type-hygiene: near-duplicate type values likely refer to one type: %s", strings.Join(variants, ", ")),
+			})
+		}
+	}
+	return out
+}
+
+// canonType folds a type value to case-insensitive + singular (drop a single
+// trailing 's') for near-duplicate grouping.
+func canonType(s string) string {
+	c := strings.ToLower(strings.TrimSpace(s))
+	if len(c) > 1 && strings.HasSuffix(c, "s") {
+		c = c[:len(c)-1]
+	}
+	return c
+}
