@@ -17,6 +17,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -169,7 +170,58 @@ func newNodeCmd() *cobra.Command {
 	rmC.Flags().StringVar(&rmBundle, "bundle", ".", "bundle directory")
 	rmC.Flags().BoolVar(&rmDry, "dry-run", false, "print the plan without touching disk")
 	node.AddCommand(rmC)
+
+	var editBundle string
+	editC := &cobra.Command{
+		Use:   "edit <path>",
+		Short: "Open a node in $EDITOR, then re-validate on return",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			p := withMD(args[0])
+			if okf.ReservedFiles[p] {
+				return fmt.Errorf("cannot edit reserved file: %s", p)
+			}
+			abs := filepath.Join(editBundle, filepath.FromSlash(p))
+			if _, err := os.Stat(abs); err != nil {
+				return fmt.Errorf("node not found: %s", p)
+			}
+			editor := resolveEditor()
+			ed := exec.Command(editor, abs)
+			ed.Stdin, ed.Stdout, ed.Stderr = os.Stdin, cmd.OutOrStdout(), cmd.ErrOrStderr()
+			if err := ed.Run(); err != nil {
+				return fmt.Errorf("editor %q exited: %w", editor, err)
+			}
+			// Re-validate the whole bundle after the edit.
+			b, err := okf.Load(editBundle)
+			if err != nil {
+				return err
+			}
+			findings := okf.Validate(b)
+			out := cmd.OutOrStdout()
+			if len(findings) == 0 {
+				fmt.Fprintf(out, "%s edited; bundle valid\n", p)
+				return nil
+			}
+			for _, f := range findings {
+				fmt.Fprintf(out, "%s: %s\n", f.Path, f.Message)
+			}
+			return fmt.Errorf("%d validation finding(s) after edit", len(findings))
+		},
+	}
+	editC.Flags().StringVar(&editBundle, "bundle", ".", "bundle directory")
+	node.AddCommand(editC)
 	return node
+}
+
+// resolveEditor picks the editor command: $OKFCTL_EDITOR, then $VISUAL, then
+// $EDITOR, then a sensible default (vi).
+func resolveEditor() string {
+	for _, env := range []string{"OKFCTL_EDITOR", "VISUAL", "EDITOR"} {
+		if v := os.Getenv(env); v != "" {
+			return v
+		}
+	}
+	return "vi"
 }
 
 // withMD appends the .md extension when the caller omitted it, matching the

@@ -17,6 +17,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -118,5 +119,89 @@ func TestNodeRm_DryRun(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "a.md")); err != nil {
 		t.Fatal("dry-run removed the file")
+	}
+}
+
+// fakeEditor writes a shell script to dir that, when run as the editor, appends
+// the given text to its file argument (and touches a marker so tests can prove
+// it ran), then exits with the given code. Returns the script path.
+func fakeEditor(t *testing.T, dir, appendText string, exitCode int, marker string) string {
+	t.Helper()
+	script := filepath.Join(dir, "fake-editor.sh")
+	body := "#!/bin/sh\n"
+	if marker != "" {
+		body += "touch " + marker + "\n"
+	}
+	if appendText != "" {
+		// $1 is the file path passed by `node edit`.
+		body += "printf '%s' " + shQuote(appendText) + " >> \"$1\"\n"
+	}
+	body += "exit " + strconv.Itoa(exitCode) + "\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatalf("write fake editor: %v", err)
+	}
+	return script
+}
+
+func shQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+
+func TestNodeEdit_RunsEditorThenValidates(t *testing.T) {
+	dir := t.TempDir()
+	writeRaw(t, dir, "a.md", nodeDoc("A")+"body\n")
+	marker := filepath.Join(dir, "ran.marker")
+	ed := fakeEditor(t, dir, "\nappended line\n", 0, marker)
+	t.Setenv("OKFCTL_EDITOR", ed)
+
+	if _, err := runOKF(t, "node", "edit", "a.md", "--bundle", dir); err != nil {
+		t.Fatalf("node edit: %v", err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatal("editor did not run")
+	}
+	body, _ := os.ReadFile(filepath.Join(dir, "a.md"))
+	if !strings.Contains(string(body), "appended line") {
+		t.Fatalf("edit not saved: %q", body)
+	}
+}
+
+func TestNodeEdit_ReportsValidationFailure(t *testing.T) {
+	dir := t.TempDir()
+	writeRaw(t, dir, "a.md", nodeDoc("A")+"body\n")
+	// Editor overwrites the type with an empty value (spec-floor violation).
+	ed := fakeEditor(t, dir, "", 0, "")
+	// Rewrite the script to CLOBBER the file with an invalid node.
+	bad := "#!/bin/sh\nprintf '%s' '---\\ntype:\\ntitle: A\\n---\\nbody\\n' > \"$1\"\nexit 0\n"
+	if err := os.WriteFile(ed, []byte(bad), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OKFCTL_EDITOR", ed)
+
+	_, err := runOKF(t, "node", "edit", "a.md", "--bundle", dir)
+	if err == nil {
+		t.Fatal("expected non-zero exit for spec-floor violation")
+	}
+}
+
+func TestNodeEdit_EditorNonZeroAborts(t *testing.T) {
+	dir := t.TempDir()
+	writeRaw(t, dir, "a.md", nodeDoc("A")+"body\n")
+	ed := fakeEditor(t, dir, "SHOULD NOT PERSIST", 1, "")
+	t.Setenv("OKFCTL_EDITOR", ed)
+
+	if _, err := runOKF(t, "node", "edit", "a.md", "--bundle", dir); err == nil {
+		t.Fatal("expected error: editor exited non-zero")
+	}
+}
+
+func TestNodeEdit_ErrReservedOrMissing(t *testing.T) {
+	dir := t.TempDir()
+	writeRaw(t, dir, "a.md", nodeDoc("A"))
+	ed := fakeEditor(t, dir, "", 0, "")
+	t.Setenv("OKFCTL_EDITOR", ed)
+	if _, err := runOKF(t, "node", "edit", "index.md", "--bundle", dir); err == nil {
+		t.Fatal("expected error editing reserved file")
+	}
+	if _, err := runOKF(t, "node", "edit", "nope.md", "--bundle", dir); err == nil {
+		t.Fatal("expected error editing missing node")
 	}
 }
