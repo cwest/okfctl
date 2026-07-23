@@ -123,32 +123,8 @@ func (b *Bundle) place(rel string, n *Node) {
 func (b *Bundle) buildEdges() {
 	for path, n := range b.Nodes {
 		dir := filepath.Dir(path)
-		for _, loc := range mdLinkRe.FindAllStringSubmatchIndex(n.Body, -1) {
-			// loc[0] is the start index of the whole match (the '['). Skip
-			// images: a '!' immediately before '[' marks ![alt](src).
-			if loc[0] > 0 && n.Body[loc[0]-1] == '!' {
-				continue
-			}
-			target := n.Body[loc[2]:loc[3]]
-			// Strip an optional CommonMark title: keep only the URL, the first
-			// whitespace-delimited field. Guard empty/whitespace-only captures.
-			fields := strings.Fields(target)
-			if len(fields) == 0 {
-				continue
-			}
-			target = fields[0]
-			if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") || strings.HasPrefix(target, "#") {
-				continue
-			}
-			norm := filepath.ToSlash(filepath.Clean(target))
-			if _, ok := b.Nodes[norm]; ok {
-				b.edges[path] = append(b.edges[path], norm)
-				continue
-			}
-			rel := filepath.ToSlash(filepath.Clean(filepath.Join(dir, target)))
-			if _, ok := b.Nodes[rel]; ok {
-				b.edges[path] = append(b.edges[path], rel)
-			}
+		for _, l := range scanNodeLinks(b, dir, n.Body) {
+			b.edges[path] = append(b.edges[path], l.resolved)
 		}
 	}
 }

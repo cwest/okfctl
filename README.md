@@ -41,6 +41,9 @@ okfctl bundle info mykb
 - `node new <path> --type <type> [--title <title>] --bundle <dir>` — create a new concept node
 - `node show <path> --bundle <dir>` — print a node's front matter and body
 - `node list --bundle <dir>` — list the concept nodes in a bundle
+- `node edit <path> --bundle <dir>` — open a node in `$EDITOR` (or `$OKFCTL_EDITOR`/`$VISUAL`), then re-validate the bundle on return
+- `node mv <old> <new> --bundle <dir> [--dry-run]` — move/rename a node and rewrite every inbound link, preserving each author's relative link form (path is identity, so a move is a graph operation)
+- `node rm <path> --bundle <dir> [--dry-run]` — remove a node and report any nodes orphaned as a result
 - `index build [dir]` — regenerate `index.md` from the current bundle
 - `index check [dir]` — verify `index.md` is current; nonzero exit if stale
 - `log append [dir] --message <text>` — append a dated entry to `log.md`
