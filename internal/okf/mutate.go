@@ -16,6 +16,7 @@ package okf
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -150,4 +151,107 @@ func PlanMove(b *Bundle, old, new string) ([]LinkRewrite, error) {
 		return rewrites[i].Old < rewrites[j].Old
 	})
 	return rewrites, nil
+}
+
+// ApplyMove performs the file move old->new on disk and applies the planned
+// inbound-link rewrites. It is the single writer for a move. root is the bundle
+// root; b is the loaded bundle the plan was computed against.
+func ApplyMove(root string, b *Bundle, old, new string, rewrites []LinkRewrite) error {
+	old = filepath.ToSlash(filepath.Clean(old))
+	new = filepath.ToSlash(filepath.Clean(new))
+	if ReservedFiles[old] || ReservedFiles[new] {
+		return fmt.Errorf("cannot move reserved file (%s -> %s)", old, new)
+	}
+	oldAbs := filepath.Join(root, filepath.FromSlash(old))
+	newAbs := filepath.Join(root, filepath.FromSlash(new))
+	if _, err := os.Stat(newAbs); err == nil {
+		return fmt.Errorf("destination already exists: %s", new)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("stat %s: %w", new, err)
+	}
+
+	// Apply body rewrites first (so a failure leaves the file un-moved and the
+	// bodies restorable from the plan). Rewrite only the exact link position
+	// using the scanner's byte offsets, never a coincidental substring.
+	edited := map[string]string{}
+	for _, rw := range rewrites {
+		n := b.Nodes[rw.NodePath]
+		if n == nil {
+			return fmt.Errorf("rewrite target not found: %s", rw.NodePath)
+		}
+		body, ok := edited[rw.NodePath]
+		if !ok {
+			body = n.Body
+		}
+		dir := filepath.Dir(rw.NodePath)
+		var replaced bool
+		for _, l := range scanNodeLinks(b, dir, body) {
+			if l.rawTarget == rw.Old && l.resolved == old {
+				body = body[:l.capStart] + rw.New + body[l.capEnd:]
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			return fmt.Errorf("could not locate link %q in %s", rw.Old, rw.NodePath)
+		}
+		edited[rw.NodePath] = body
+	}
+	for path, body := range edited {
+		abs := filepath.Join(root, filepath.FromSlash(path))
+		if err := os.WriteFile(abs, []byte(body), 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", path, err)
+		}
+	}
+
+	if err := os.MkdirAll(filepath.Dir(newAbs), 0o755); err != nil {
+		return fmt.Errorf("mkdir for %s: %w", new, err)
+	}
+	if err := os.Rename(oldAbs, newAbs); err != nil {
+		return fmt.Errorf("move %s -> %s: %w", old, new, err)
+	}
+	return nil
+}
+
+// PlanRemoveOrphans returns the bundle-relative nodes that become orphaned
+// (zero inbound links) as a direct consequence of removing path. It is pure.
+func PlanRemoveOrphans(b *Bundle, path string) ([]string, error) {
+	path = filepath.ToSlash(filepath.Clean(path))
+	if ReservedFiles[path] {
+		return nil, fmt.Errorf("cannot remove reserved file: %s", path)
+	}
+	if b.Nodes[path] == nil {
+		return nil, fmt.Errorf("node not found: %s", path)
+	}
+	// inbound[target] = count of distinct nodes linking to target (excluding
+	// the node being removed).
+	inbound := map[string]int{}
+	for src := range b.Nodes {
+		if src == path {
+			continue
+		}
+		for _, dst := range b.OutboundLinks(src) {
+			inbound[dst]++
+		}
+	}
+	var orphaned []string
+	for _, dst := range b.OutboundLinks(path) {
+		if dst == path {
+			continue
+		}
+		if inbound[dst] == 0 {
+			orphaned = append(orphaned, dst)
+		}
+	}
+	sort.Strings(orphaned)
+	// De-dup (a node linked twice from the removed node).
+	out := orphaned[:0]
+	var prev string
+	for i, o := range orphaned {
+		if i == 0 || o != prev {
+			out = append(out, o)
+		}
+		prev = o
+	}
+	return out, nil
 }
