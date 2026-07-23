@@ -111,14 +111,16 @@ func AppendLog(root, message string) error {
 	entry := fmt.Sprintf("- %s — %s\n", time.Now().UTC().Format("2006-01-02"), message)
 
 	p := filepath.Join(root, "log.md")
-	const header = "# Change Log\n\n"
 	existing, err := os.ReadFile(p)
 	if err != nil {
-		return os.WriteFile(p, []byte(header+entry), 0o644)
+		return os.WriteFile(p, []byte(logHeader+entry), 0o644)
 	}
-	body := string(existing)
-	rest := strings.TrimPrefix(body, header)
-	return os.WriteFile(p, []byte(header+entry+rest), 0o644)
+	// Strip the header, then drop the scaffold placeholder when it is the only
+	// content — otherwise the fresh-scaffold "no entries yet" hint stays pinned
+	// below every real entry.
+	rest := strings.TrimPrefix(string(existing), logHeader)
+	rest = strings.TrimPrefix(rest, logPlaceholder)
+	return os.WriteFile(p, []byte(logHeader+entry+rest), 0o644)
 }
 
 // ReadLog returns the log.md body (empty string if the file is absent).
