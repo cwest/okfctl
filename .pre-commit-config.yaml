@@ -22,7 +22,7 @@ repos:
     hooks:
       - id: addlicense
         name: Add license header
-        entry: bash -c 'addlicense -l apache -c "Casey West" -y $(date +%Y) "$@"' --
+        entry: bash -c 'addlicense -l apache -c "Google LLC" -y $(date +%Y) "$@"' --
         language: system
         pass_filenames: true
         # Only run on source-code files. Manifest/doc/config files

@@ -10,7 +10,7 @@
 
 **Ground truth (existing API this builds on):** `okf.Load(root)(*Bundle,error)`; `Bundle{Nodes map[string]*Node, Reserved map[string]*Node, OkfVersion string}` with `OutboundLinks`; `Node{Path, Frontmatter, Body}` + `Type() string`; `okf.Validate(b)[]Finding`; `okf.ReservedFiles` map; `okf.SpecVersion`. Nodes are keyed by bundle-relative slash-path. The cmd test helper `runOKF(t, args...)(string,error)` exists in `cmd/validate_test.go` — REUSE it.
 
-**Constraints for the implementer:** commits signed (`-S`), repo-local identity is already `Casey West <casey@geeknest.com>` (never change; never @google); NO AI attribution anywhere; the pre-commit addlicense hook stamps `Copyright 2026 Casey West` on .go files (expected — if a commit is blocked "files were modified by this hook", run `addlicense -l apache -c "Casey West" -y 2026 <files>` then re-add + commit). Verify by ground truth; never fabricate output.
+**Constraints for the implementer:** commits signed (`-S`), repo-local identity is already `Casey West <casey@geeknest.com>` (never change; never @google); NO AI attribution anywhere; the pre-commit addlicense hook stamps `Copyright <year> Google LLC` on .go files (expected — if a commit is blocked "files were modified by this hook", run `addlicense -l apache -c "Google LLC" -y $(date +%Y) <files>` then re-add + commit). Verify by ground truth; never fabricate output.
 
 ---
 
