@@ -2,10 +2,11 @@
 
 A CLI for managing Open Knowledge Format (OKF) bundles.
 
-This is increment 1 (the walking skeleton) of the tool specified in
-[docs/PRD.md](docs/PRD.md); see
+See [docs/PRD.md](docs/PRD.md) for the tool spec and
 [docs/plans/2026-07-22-roadmap.md](docs/plans/2026-07-22-roadmap.md)
-for the full plan.
+for the full plan. The walking skeleton (increment 1) covered bundle,
+node, validate, and config; this increment adds lifecycle management for
+the reserved `index.md` and `log.md` files.
 
 ## Build
 
@@ -25,6 +26,10 @@ CGO_ENABLED=0 go build -o okfctl .
 okfctl bundle init mykb
 okfctl node new concepts/tannin.md --type Reference --title "Tannin" --bundle mykb
 okfctl node list --bundle mykb
+okfctl index build mykb
+okfctl index check mykb
+okfctl log append mykb --message "added tannin node"
+okfctl log show mykb
 okfctl validate mykb
 okfctl bundle info mykb
 ```
@@ -36,6 +41,10 @@ okfctl bundle info mykb
 - `node new <path> --type <type> [--title <title>] --bundle <dir>` — create a new concept node
 - `node show <path> --bundle <dir>` — print a node's front matter and body
 - `node list --bundle <dir>` — list the concept nodes in a bundle
+- `index build [dir]` — regenerate `index.md` from the current bundle
+- `index check [dir]` — verify `index.md` is current; nonzero exit if stale
+- `log append [dir] --message <text>` — append a dated entry to `log.md`
+- `log show [dir]` — print the change history
 - `validate <dir>` — validate a bundle against the OKF spec floor
 - `config set <key> <value>` — set a config value
 - `config get <key>` — read a config value

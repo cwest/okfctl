@@ -22,6 +22,15 @@ import (
 // SpecVersion is the OKF spec version this build targets.
 const SpecVersion = "0.1"
 
+// logHeader is the leading header of a reserved log.md; logPlaceholder is the
+// empty-log hint the scaffold writes beneath it. AppendLog reconciles against
+// both so the first real entry replaces the placeholder rather than pinning it
+// below every entry. Keep the scaffold body and AppendLog in sync via these.
+const (
+	logHeader      = "# Change Log\n\n"
+	logPlaceholder = "_No entries yet. Record changes with `okfctl log append`._\n"
+)
+
 // Scaffold writes a minimal conformant bundle into dir: a reserved index.md and
 // log.md and an .okf spec pin. The result passes Validate with zero findings
 // (it has no concept nodes yet, so the type floor is vacuously satisfied).
@@ -31,7 +40,7 @@ func Scaffold(dir string) error {
 	}
 	files := map[string]string{
 		"index.md": "---\ntype: Index\n---\n\n# Knowledge Base\n\n_Progressive-disclosure entry point. Add \"start here\" links as nodes land._\n",
-		"log.md":   "# Change Log\n\n_Append entries with `okfctl log append` (coming soon)._\n",
+		"log.md":   logHeader + logPlaceholder,
 		".okf":     "okf_version: " + SpecVersion + "\n",
 	}
 	for name, body := range files {
