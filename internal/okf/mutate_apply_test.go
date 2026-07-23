@@ -64,6 +64,19 @@ func TestApplyMove_MovesFileAndRewritesBodies(t *testing.T) {
 	if !strings.Contains(readBody(t, root, "wine/b.md"), "[y](../cellar/foo.md)") {
 		t.Fatalf("wine/b.md not rewritten dir-rel: %q", readBody(t, root, "wine/b.md"))
 	}
+	// Frontmatter of every rewritten node MUST survive the move (regression:
+	// ApplyMove must not write the parsed body over the whole file, dropping
+	// the YAML frontmatter block).
+	for _, rel := range []string{"a.md", "wine/b.md"} {
+		full := readBody(t, root, rel)
+		if !strings.HasPrefix(full, "---\n") || !strings.Contains(full, "type: Concept") {
+			t.Fatalf("%s lost its frontmatter after move: %q", rel, full)
+		}
+	}
+	// And the moved node revalidates clean (frontmatter intact bundle-wide).
+	if fs := Validate(nb); len(fs) != 0 {
+		t.Fatalf("bundle invalid after move: %v", fs)
+	}
 }
 
 func TestApplyMove_CreatesIntermediateDirs(t *testing.T) {

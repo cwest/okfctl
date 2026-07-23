@@ -170,24 +170,30 @@ func ApplyMove(root string, b *Bundle, old, new string, rewrites []LinkRewrite) 
 		return fmt.Errorf("stat %s: %w", new, err)
 	}
 
-	// Apply body rewrites first (so a failure leaves the file un-moved and the
-	// bodies restorable from the plan). Rewrite only the exact link position
-	// using the scanner's byte offsets, never a coincidental substring.
+	// Apply link rewrites to the FULL on-disk file content (not the parsed
+	// body) so the YAML frontmatter block is preserved by construction. The
+	// scanner's byte offsets are relative to whatever text it scanned; scanning
+	// the full file keeps offsets and content in the same coordinate space.
+	// (A frontmatter block contains no node-resolving markdown link, so
+	// scanning the whole file cannot introduce a spurious match.)
 	edited := map[string]string{}
 	for _, rw := range rewrites {
-		n := b.Nodes[rw.NodePath]
-		if n == nil {
+		if b.Nodes[rw.NodePath] == nil {
 			return fmt.Errorf("rewrite target not found: %s", rw.NodePath)
 		}
-		body, ok := edited[rw.NodePath]
+		content, ok := edited[rw.NodePath]
 		if !ok {
-			body = n.Body
+			raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rw.NodePath)))
+			if err != nil {
+				return fmt.Errorf("read %s: %w", rw.NodePath, err)
+			}
+			content = string(raw)
 		}
 		dir := filepath.Dir(rw.NodePath)
 		var replaced bool
-		for _, l := range scanNodeLinks(b, dir, body) {
+		for _, l := range scanNodeLinks(b, dir, content) {
 			if l.rawTarget == rw.Old && l.resolved == old {
-				body = body[:l.capStart] + rw.New + body[l.capEnd:]
+				content = content[:l.capStart] + rw.New + content[l.capEnd:]
 				replaced = true
 				break
 			}
@@ -195,11 +201,11 @@ func ApplyMove(root string, b *Bundle, old, new string, rewrites []LinkRewrite) 
 		if !replaced {
 			return fmt.Errorf("could not locate link %q in %s", rw.Old, rw.NodePath)
 		}
-		edited[rw.NodePath] = body
+		edited[rw.NodePath] = content
 	}
-	for path, body := range edited {
+	for path, content := range edited {
 		abs := filepath.Join(root, filepath.FromSlash(path))
-		if err := os.WriteFile(abs, []byte(body), 0o644); err != nil {
+		if err := os.WriteFile(abs, []byte(content), 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 	}
