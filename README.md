@@ -49,6 +49,7 @@ okfctl bundle info mykb
 - `log append [dir] --message <text>` — append a dated entry to `log.md`
 - `log show [dir]` — print the change history
 - `validate <dir>` — validate a bundle against the OKF spec floor
+- `lint <dir>` — report curation health findings (orphans, missing cross-references, coverage gaps, type-value hygiene). Advisory by default (exits 0 even with findings); `--strict` exits non-zero on any finding, `--coverage-threshold N` tunes the coverage-gap check (default 3). `lint` never mutates the bundle.
 - `config set <key> <value>` — set a config value
 - `config get <key>` — read a config value
 - `config list` — list all config values
