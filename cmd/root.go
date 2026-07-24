@@ -36,6 +36,7 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newGraphCmd())
 	root.AddCommand(newServeCmd())
 	root.AddCommand(newTemplateCmd())
+	root.AddCommand(newPluginCmd())
 	return root
 }
 
