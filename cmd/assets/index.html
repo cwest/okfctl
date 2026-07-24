@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>okfctl graph</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 -apple-system, system-ui, sans-serif;
+         background: #1e1e2e; color: #cdd6f4; overflow: hidden; }
+  #bar { position: fixed; top: 0; left: 0; right: 0; height: 44px; display: flex;
+         align-items: center; gap: 12px; padding: 0 14px; background: #181825;
+         border-bottom: 1px solid #313244; z-index: 10; }
+  #bar h1 { font-size: 14px; font-weight: 600; margin: 0; color: #89b4fa; }
+  #bar label { font-size: 12px; color: #a6adc8; }
+  select { background: #313244; color: #cdd6f4; border: 1px solid #45475a;
+           border-radius: 4px; padding: 3px 6px; }
+  #stats { margin-left: auto; font-size: 12px; color: #6c7086; }
+  canvas { display: block; }
+  #panel { position: fixed; right: 0; top: 44px; bottom: 0; width: 320px;
+           background: #181825; border-left: 1px solid #313244; padding: 16px;
+           overflow: auto; transform: translateX(100%); transition: transform .15s;
+           z-index: 10; }
+  #panel.open { transform: translateX(0); }
+  #panel h2 { font-size: 15px; margin: 0 0 4px; color: #f9e2af; }
+  #panel .meta { font-size: 12px; color: #a6adc8; margin-bottom: 10px; }
+  #panel .k { color: #6c7086; }
+  #panel ul { padding-left: 18px; margin: 6px 0; }
+  #panel .close { float: right; cursor: pointer; color: #6c7086; }
+  .legend { font-size: 11px; color: #6c7086; }
+  .legend .orphan { color: #f38ba8; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <h1>okfctl graph</h1>
+  <label>type <select id="fType"><option value="">all</option></select></label>
+  <label>neighborhood <select id="fHood"><option value="">all</option></select></label>
+  <span class="legend">nodes: click to inspect · <span class="orphan">dashed = orphan</span></span>
+  <span id="stats"></span>
+</div>
+<canvas id="c"></canvas>
+<div id="panel"><span class="close" id="pClose">✕</span><div id="pBody"></div></div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let G = { nodes: [], edges: [] };
+let sim = [];        // {node, x, y, vx, vy}
+let byPath = {};
+let filterType = '', filterHood = '';
+let hover = null, selected = null;
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight - 44;
+  canvas.style.marginTop = '44px';
+}
+window.addEventListener('resize', resize);
+resize();
+
+function visible(n) {
+  return (!filterType || n.type === filterType) &&
+         (!filterHood || n.neighborhood === filterHood);
+}
+
+function initSim() {
+  sim = G.nodes.map((n, i) => ({
+    node: n,
+    x: canvas.width / 2 + Math.cos(i) * 120 + (Math.random() - 0.5) * 40,
+    y: canvas.height / 2 + Math.sin(i) * 120 + (Math.random() - 0.5) * 40,
+    vx: 0, vy: 0,
+  }));
+  byPath = {};
+  sim.forEach(s => byPath[s.node.path] = s);
+}
+
+function step() {
+  const k = 0.01, rep = 2400, cx = canvas.width / 2, cy = canvas.height / 2;
+  for (let i = 0; i < sim.length; i++) {
+    const a = sim[i];
+    if (!visible(a.node)) continue;
+    a.vx += (cx - a.x) * k * 0.06;
+    a.vy += (cy - a.y) * k * 0.06;
+    for (let j = 0; j < sim.length; j++) {
+      if (i === j) continue;
+      const b = sim[j];
+      if (!visible(b.node)) continue;
+      let dx = a.x - b.x, dy = a.y - b.y;
+      let d2 = dx * dx + dy * dy || 1;
+      const f = rep / d2;
+      a.vx += dx / Math.sqrt(d2) * f;
+      a.vy += dy / Math.sqrt(d2) * f;
+    }
+  }
+  for (const e of G.edges) {
+    const a = byPath[e.from], b = byPath[e.to];
+    if (!a || !b || !visible(a.node) || !visible(b.node)) continue;
+    let dx = b.x - a.x, dy = b.y - a.y;
+    a.vx += dx * k; a.vy += dy * k;
+    b.vx -= dx * k; b.vy -= dy * k;
+  }
+  for (const s of sim) {
+    s.vx *= 0.85; s.vy *= 0.85;
+    s.x += s.vx; s.y += s.vy;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#45475a';
+  ctx.lineWidth = 1;
+  for (const e of G.edges) {
+    const a = byPath[e.from], b = byPath[e.to];
+    if (!a || !b || !visible(a.node) || !visible(b.node)) continue;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+  for (const s of sim) {
+    if (!visible(s.node)) continue;
+    const r = 7;
+    ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = s === selected ? '#f9e2af' : (s === hover ? '#89b4fa' : '#a6e3a1');
+    ctx.fill();
+    if (s.node.orphan) { ctx.strokeStyle = '#f38ba8'; ctx.setLineDash([3, 2]);
+      ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]); }
+    ctx.fillStyle = '#cdd6f4'; ctx.font = '11px sans-serif';
+    ctx.fillText(s.node.title, s.x + 10, s.y + 4);
+  }
+}
+
+function loop() { step(); draw(); requestAnimationFrame(loop); }
+
+function nodeAt(mx, my) {
+  for (const s of sim) {
+    if (!visible(s.node)) continue;
+    if ((s.x - mx) ** 2 + (s.y - my) ** 2 < 100) return s;
+  }
+  return null;
+}
+
+canvas.addEventListener('mousemove', e => {
+  hover = nodeAt(e.clientX, e.clientY - 44);
+  canvas.style.cursor = hover ? 'pointer' : 'default';
+});
+
+canvas.addEventListener('click', e => {
+  const s = nodeAt(e.clientX, e.clientY - 44);
+  if (!s) return;
+  selected = s;
+  const n = s.node;
+  const outs = G.edges.filter(x => x.from === n.path).map(x => x.to);
+  const ins = G.edges.filter(x => x.to === n.path).map(x => x.from);
+  document.getElementById('pBody').innerHTML =
+    '<h2>' + esc(n.title) + '</h2>' +
+    '<div class="meta"><span class="k">path</span> ' + esc(n.path) + '<br>' +
+    '<span class="k">type</span> ' + esc(n.type || '(none)') + ' · ' +
+    '<span class="k">neighborhood</span> ' + esc(n.neighborhood || '(root)') +
+    (n.orphan ? ' · <span style="color:#f38ba8">orphan</span>' : '') + '</div>' +
+    '<div class="k">links to (' + outs.length + ')</div><ul>' +
+      outs.map(p => '<li>' + esc(p) + '</li>').join('') + '</ul>' +
+    '<div class="k">linked from (' + ins.length + ')</div><ul>' +
+      ins.map(p => '<li>' + esc(p) + '</li>').join('') + '</ul>';
+  document.getElementById('panel').classList.add('open');
+});
+
+document.getElementById('pClose').onclick = () => {
+  document.getElementById('panel').classList.remove('open');
+  selected = null;
+};
+
+function esc(s) { return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function populateFilters() {
+  const types = [...new Set(G.nodes.map(n => n.type).filter(Boolean))].sort();
+  const hoods = [...new Set(G.nodes.map(n => n.neighborhood).filter(Boolean))].sort();
+  const ft = document.getElementById('fType'), fh = document.getElementById('fHood');
+  types.forEach(t => ft.add(new Option(t, t)));
+  hoods.forEach(h => fh.add(new Option(h, h)));
+  ft.onchange = () => filterType = ft.value;
+  fh.onchange = () => filterHood = fh.value;
+}
+
+fetch('/graph.json').then(r => r.json()).then(data => {
+  G = data;
+  document.getElementById('stats').textContent =
+    G.nodes.length + ' nodes · ' + G.edges.length + ' edges';
+  populateFilters();
+  initSim();
+  loop();
+});
+</script>
+</body>
+</html>

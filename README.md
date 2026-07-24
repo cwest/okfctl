@@ -50,6 +50,8 @@ okfctl bundle info mykb
 - `log show [dir]` — print the change history
 - `validate <dir>` — validate a bundle against the OKF spec floor
 - `lint <dir>` — report curation health findings (orphans, missing cross-references, coverage gaps, type-value hygiene). Advisory by default (exits 0 even with findings); `--strict` exits non-zero on any finding, `--coverage-threshold N` tunes the coverage-gap check (default 3). `lint` never mutates the bundle.
+- `graph export <dir> --format json|dot` — export the concept-node link graph in a machine format (deterministic, CI-diffable). `json` (default) emits nodes (path/title/type/neighborhood/orphan) + edges; `dot` emits Graphviz. For SVG, pipe DOT to Graphviz: `okfctl graph export --format dot | dot -Tsvg > graph.svg`.
+- `serve <dir> --addr 127.0.0.1:8080` — start a local web server rendering the bundle as an interactive knowledge graph (click a node to inspect, follow edges, orphans highlighted, filter by type/neighborhood). The viewer is embedded in the binary — no separate install. Binds loopback by default; override with `--addr`.
 - `config set <key> <value>` — set a config value
 - `config get <key>` — read a config value
 - `config list` — list all config values
