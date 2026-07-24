@@ -22,10 +22,16 @@ import (
 )
 
 func newValidateCmd() *cobra.Command {
-	return &cobra.Command{
+	var templates, strict bool
+	c := &cobra.Command{
 		Use:   "validate [bundle-dir]",
-		Short: "Check a bundle for OKF spec-floor conformance",
-		Args:  cobra.MaximumNArgs(1),
+		Short: "Check a bundle for OKF spec-floor conformance (optionally overlay team type-templates)",
+		Long: "validate enforces the OKF spec floor (type present + non-empty, §7). " +
+			"With --templates it also runs the opt-in team overlay (§9.4), reporting " +
+			"template drift as warnings; drift never fails the floor. Drift is advisory " +
+			"by default (exit 0); pass --strict to exit non-zero on drift. Floor " +
+			"violations always fail regardless of --strict.",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."
 			if len(args) == 1 {
@@ -35,15 +41,41 @@ func newValidateCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("load bundle: %w", err)
 			}
+			out := cmd.OutOrStdout()
 			findings := okf.Validate(b)
-			if len(findings) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "OK: bundle conforms to the OKF spec floor")
+			for _, f := range findings {
+				fmt.Fprintf(out, "FAIL %s: %s\n", f.Path, f.Message)
+			}
+
+			var drift []okf.DriftFinding
+			if templates {
+				drift = okf.TemplateDrift(b)
+				for _, d := range drift {
+					fmt.Fprintf(out, "warning %s: %s\n", d.Path, d.Message)
+				}
+			}
+
+			// The spec floor is non-negotiable: any floor finding fails.
+			if len(findings) > 0 {
+				return fmt.Errorf("%d conformance finding(s)", len(findings))
+			}
+			// Template drift is advisory unless --strict.
+			if len(drift) > 0 {
+				fmt.Fprintf(out, "%d template drift warning(s)\n", len(drift))
+				if strict {
+					return fmt.Errorf("%d template drift warning(s)", len(drift))
+				}
 				return nil
 			}
-			for _, f := range findings {
-				fmt.Fprintf(cmd.OutOrStdout(), "FAIL %s: %s\n", f.Path, f.Message)
+			if templates {
+				fmt.Fprintln(out, "OK: bundle conforms to the OKF spec floor and team templates")
+			} else {
+				fmt.Fprintln(out, "OK: bundle conforms to the OKF spec floor")
 			}
-			return fmt.Errorf("%d conformance finding(s)", len(findings))
+			return nil
 		},
 	}
+	c.Flags().BoolVar(&templates, "templates", false, "also run the opt-in type-template overlay (§9.4), reporting drift as warnings")
+	c.Flags().BoolVar(&strict, "strict", false, "with --templates, exit non-zero on any template drift (default: advisory, exit 0)")
+	return c
 }

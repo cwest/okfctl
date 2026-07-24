@@ -28,7 +28,21 @@ import (
 // overwrite an existing file. Frontmatter is YAML-marshaled (never concatenated)
 // so a type/title containing newlines or YAML metacharacters is safely quoted
 // and cannot inject additional frontmatter keys. Returns the absolute path written.
+//
+// NewNode is the no-template path: it delegates to NewNodeFromTemplate with an
+// empty template, so both paths share one containment/marshal/write mechanism.
 func NewNode(root, relPath, typ, title string) (string, error) {
+	return NewNodeFromTemplate(root, relPath, typ, title, Template{})
+}
+
+// NewNodeFromTemplate creates a node conformant to both the spec floor and a
+// governing type template (PRD §9.3). Beyond the required type + title, it stubs
+// the template's required fields (with a "TODO" placeholder so the node starts
+// free of template drift) and recommended fields (empty), and lays down its
+// body_sections as empty `## ` headings. An empty Template scaffolds nothing —
+// that is the plain NewNode path. Existing-file, containment, and empty-type
+// refusals apply. Returns the absolute path written.
+func NewNodeFromTemplate(root, relPath, typ, title string, t Template) (string, error) {
 	if strings.TrimSpace(typ) == "" {
 		return "", fmt.Errorf("type is required and must be non-empty (OKF §7)")
 	}
@@ -36,10 +50,6 @@ func NewNode(root, relPath, typ, title string) (string, error) {
 		relPath += ".md"
 	}
 	abs := filepath.Join(root, filepath.FromSlash(relPath))
-	// Containment check: the resolved target must stay within root. filepath.Join
-	// already applies Clean, so a "../" escape or an absolute relPath surfaces
-	// here as a Rel result that starts with "..". Refuse it — writing outside the
-	// bundle root produces a file Load can never see, breaking the node contract.
 	rootAbs, err := filepath.Abs(root)
 	if err != nil {
 		return "", err
@@ -59,10 +69,6 @@ func NewNode(root, relPath, typ, title string) (string, error) {
 		return "", err
 	}
 
-	// Build frontmatter as an ordered YAML mapping (type first, then optional
-	// title), marshaled — NOT string-concatenated — so any value is safely quoted.
-	// yaml.v3 has no MapSlice/MapItem (that is yaml.v2); an explicit MappingNode
-	// preserves key order deterministically while still escaping every scalar.
 	fm := &yaml.Node{Kind: yaml.MappingNode}
 	appendKV := func(key, val string) {
 		fm.Content = append(fm.Content,
@@ -74,6 +80,28 @@ func NewNode(root, relPath, typ, title string) (string, error) {
 	if strings.TrimSpace(title) != "" {
 		appendKV("title", title)
 	}
+	// Stub the template's fields. Required fields get a "TODO" placeholder so the
+	// node starts life free of template drift (§9.3: "conformant to both the spec
+	// floor and the team's convention") while still signalling the author what to
+	// fill in; recommended fields are stubbed empty (they are advisory, never
+	// drift). Skip keys already written (type, title).
+	required := map[string]bool{}
+	for _, key := range t.RequiredFields {
+		required[key] = true
+	}
+	fields, sections := TemplateScaffold(t)
+	written := map[string]bool{"type": true, "title": true}
+	for _, key := range fields {
+		if written[key] {
+			continue
+		}
+		val := ""
+		if required[key] {
+			val = "TODO"
+		}
+		appendKV(key, val)
+		written[key] = true
+	}
 	fmBytes, err := yaml.Marshal(fm)
 	if err != nil {
 		return "", fmt.Errorf("marshal frontmatter: %w", err)
@@ -83,8 +111,6 @@ func NewNode(root, relPath, typ, title string) (string, error) {
 	if strings.TrimSpace(heading) == "" {
 		heading = strings.TrimSuffix(filepath.Base(relPath), ".md")
 	}
-	// If the heading spans multiple lines (e.g. a multiline title), keep only the
-	// first line for the H1 so the body stays well-formed.
 	if i := strings.IndexByte(heading, '\n'); i >= 0 {
 		heading = heading[:i]
 	}
@@ -94,6 +120,9 @@ func NewNode(root, relPath, typ, title string) (string, error) {
 	sb.Write(fmBytes)
 	sb.WriteString("---\n\n")
 	sb.WriteString("# " + heading + "\n")
+	for _, section := range sections {
+		sb.WriteString("\n## " + section + "\n")
+	}
 	if err := os.WriteFile(abs, []byte(sb.String()), 0o644); err != nil {
 		return "", err
 	}
