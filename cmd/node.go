@@ -38,6 +38,18 @@ func newNodeCmd() *cobra.Command {
 			if typ == "" {
 				return fmt.Errorf("--type is required (OKF §7: every node needs a non-empty type)")
 			}
+			// If a template governs this type, scaffold from it (§9.3); otherwise
+			// create a plain conformant node (unchanged path).
+			if b, err := okf.Load(dir); err == nil {
+				if t, ok := okf.Templates(b)[typ]; ok {
+					p, err := okf.NewNodeFromTemplate(dir, args[0], typ, title, t)
+					if err != nil {
+						return err
+					}
+					fmt.Fprintf(cmd.OutOrStdout(), "Created %s (from %s template)\n", p, typ)
+					return nil
+				}
+			}
 			p, err := okf.NewNode(dir, args[0], typ, title)
 			if err != nil {
 				return err
