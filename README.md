@@ -59,7 +59,7 @@ okfctl bundle info mykb
 
 - `okfctl-search index build [bundle-dir]` — embed every concept node into `.okfctl/index.db`, recording the embedder model + dimension. Content-hash keyed: an unchanged node is not re-embedded; deterministic for a fixed embedder.
 - `okfctl-search --semantic "query" [bundle-dir]` — rank nodes by cosine similarity to the query (top-`--k`, default 5). Refuses an index built under a different model (rebuild with `index build`).
-- `okfctl-search related <node-path> [bundle-dir]` — a node's nearest neighbors (self excluded); the primitive `lint` consumes for its semantic checks.
+- `okfctl-search related <node-path> [bundle-dir]` — a node's nearest neighbors (self excluded); the neighbor set the spec (§8.6) says `lint` will consume for its semantic checks in a later increment (not yet wired).
 - `--embedder hash` (default) is the offline, dependency-free embedder. `--embedder model2vec` (the pure-Go static model) is not yet available and errors honestly until a later increment.
 - `lint <dir>` — report curation health findings (orphans, missing cross-references, coverage gaps, type-value hygiene). Advisory by default (exits 0 even with findings); `--strict` exits non-zero on any finding, `--coverage-threshold N` tunes the coverage-gap check (default 3). `lint` never mutates the bundle.
 - `graph export <dir> --format json|dot` — export the concept-node link graph in a machine format (deterministic, CI-diffable). `json` (default) emits nodes (path/title/type/neighborhood/orphan) + edges; `dot` emits Graphviz. For SVG, pipe DOT to Graphviz: `okfctl graph export --format dot | dot -Tsvg > graph.svg`.
