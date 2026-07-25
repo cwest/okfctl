@@ -92,10 +92,20 @@ func TestPlugin_Related(t *testing.T) {
 	}
 }
 
-func TestPlugin_Model2vecNotYet(t *testing.T) {
+// TestPlugin_Model2vecNeedsModelPath pins the end-to-end contract for an
+// unconfigured model2vec run: the plugin must fail with an actionable message
+// rather than silently falling back to the hash embedder, which would answer
+// the query with the wrong vectors.
+func TestPlugin_Model2vecNeedsModelPath(t *testing.T) {
+	t.Setenv("OKFCTL_CONFIG_HOME", t.TempDir()) // ignore the developer's real config
 	dir := writeSearchBundle(t)
 	_, err := runPlugin(t, "--embedder", "model2vec", "index", "build", dir)
-	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "not yet") {
-		t.Errorf("model2vec should error 'not yet available'; got %v", err)
+	if err == nil {
+		t.Fatal("model2vec with no configured model_path should error, got nil")
+	}
+	for _, want := range []string{"model_path", "--model-path"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should tell the user how to fix it (%q); got %v", want, err)
+		}
 	}
 }
