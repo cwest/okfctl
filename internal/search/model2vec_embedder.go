@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Model2VecEmbedder joins the two halves built in 5c-1 and 5c-2 — the WordPiece
@@ -47,10 +48,10 @@ func LoadModel2VecEmbedder(dir string) (*Model2VecEmbedder, error) {
 	return &Model2VecEmbedder{model: model, tok: tok, name: modelName(dir)}, nil
 }
 
-// modelName reports a human-readable model identity for index provenance. It
-// prefers the base model recorded in config.json so a re-index can tell that the
-// vectors came from, say, potion-base-8M rather than some other local directory;
-// the directory name is only a fallback.
+// modelName reports a human-readable model identity, which an index stores so a
+// later query can refuse vectors built by a different model. Precedence: an
+// explicit name in config.json, then the HuggingFace cache layout, then the
+// directory name.
 func modelName(dir string) string {
 	raw, err := os.ReadFile(filepath.Join(dir, "config.json"))
 	if err == nil {
@@ -67,7 +68,37 @@ func modelName(dir string) string {
 			}
 		}
 	}
+	if name := huggingFaceCacheName(dir); name != "" {
+		return name
+	}
 	return filepath.Base(filepath.Clean(dir))
+}
+
+// huggingFaceCacheName recovers a readable model id from HuggingFace's cache
+// layout, .../models--<org>--<name>/snapshots/<revision>, whose leaf directory
+// is a bare commit hash. Without this, an index's provenance reads as an opaque
+// SHA. The revision is preserved as a suffix because two snapshots of the same
+// repo can hold different weights, and an index must not silently treat them as
+// interchangeable. Returns "" when dir is not a HuggingFace cache path.
+func huggingFaceCacheName(dir string) string {
+	clean := filepath.Clean(dir)
+	rev := filepath.Base(clean)
+	parent := filepath.Dir(clean)
+	if filepath.Base(parent) != "snapshots" {
+		return ""
+	}
+	repo := filepath.Base(filepath.Dir(parent))
+	if !strings.HasPrefix(repo, "models--") {
+		return ""
+	}
+	name := strings.ReplaceAll(strings.TrimPrefix(repo, "models--"), "--", "/")
+	if name == "" {
+		return ""
+	}
+	if len(rev) > 12 {
+		rev = rev[:12]
+	}
+	return name + "@" + rev
 }
 
 func (m *Model2VecEmbedder) Name() string { return m.name }

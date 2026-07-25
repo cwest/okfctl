@@ -17,6 +17,7 @@ package search
 import (
 	"math"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -33,6 +34,33 @@ func potionDir(t *testing.T) string {
 
 func TestModel2VecEmbedder_Interface(t *testing.T) {
 	var _ Embedder = (*Model2VecEmbedder)(nil) // compile-time: satisfies the 5b seam
+}
+
+// TestModelName_HuggingFaceCacheLayout pins index provenance: a HuggingFace
+// snapshot directory ends in a bare commit hash, so naming the model after the
+// leaf directory would record an index as built by "bf8b0566…" — unreadable,
+// and useless for telling two models apart.
+func TestModelName_HuggingFaceCacheLayout(t *testing.T) {
+	cases := map[string]string{
+		"/c/hub/models--minishlab--potion-base-8M/snapshots/bf8b056651a2c21b8d2565580b8569da283cab23": "minishlab/potion-base-8M@bf8b056651a2",
+		"/c/hub/models--minishlab--potion-base-8M/snapshots/abc123/":                                  "minishlab/potion-base-8M@abc123",
+		"/home/me/models/my-local-model":                                                              "my-local-model",
+		"/some/snapshots/deadbeef":                                                                    "deadbeef",
+	}
+	for dir, want := range cases {
+		if got := modelName(dir); got != want {
+			t.Errorf("modelName(%q) = %q, want %q", dir, got, want)
+		}
+	}
+}
+
+// TestModelName_RealModelIsReadable guards the end-to-end provenance string an
+// index actually stores for the real cached model.
+func TestModelName_RealModelIsReadable(t *testing.T) {
+	got := modelName(potionDir(t))
+	if !strings.Contains(got, "potion-base-8M") {
+		t.Errorf("model name %q should name the model, not just a hash", got)
+	}
 }
 
 // TestModel2VecEmbedder_TokenizerFidelity proves the Go WordPiece produces the
