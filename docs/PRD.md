@@ -291,7 +291,9 @@ This distinction is central to the product and must not blur.
 on `PATH`, exactly as `git` finds `git-<name>` and `kubectl` finds
 `kubectl-<name>`. `okfctl foo bar` with an `okfctl-foo` on `PATH` invokes it with
 `bar` and passes through flags and environment. **`plugin list`** discovers
-installed extensions; **`plugin install`** is a convenience installer. This keeps
+installed extensions; **`plugin install <source>`** copies an `okfctl-<name>`
+executable into the managed plugins dir (default `$OKFCTL_CONFIG_HOME/plugins`,
+override with `--dir`) so `plugin list` and dispatch find it. This keeps
 the core small and lets the community ship capabilities—exporters, importers,
 domain-specific linters, and the semantic-search plugin (§8)—without touching the
 core or waiting on a release.
