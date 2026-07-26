@@ -37,6 +37,7 @@ const (
 	formNone linkForm = iota
 	formRootRel
 	formDirRel
+	formRootAbs
 )
 
 // scannedLink is one in-bundle markdown link found in a node body, with enough
@@ -79,7 +80,16 @@ func scanNodeLinks(b *Bundle, dir, body string) []scannedLink {
 
 		var resolved string
 		var form linkForm
-		if norm := filepath.ToSlash(filepath.Clean(url)); b.Nodes[norm] != nil {
+		if strings.HasPrefix(url, "/") {
+			// OKF §5.1: a "/"-absolute link resolves against the bundle root
+			// (the loaded bundle dir). okfctl loads exactly one bundle rooted at
+			// the passed dir, so "/x/y.md" resolves to the node keyed "x/y.md".
+			if abs := filepath.ToSlash(filepath.Clean(strings.TrimPrefix(url, "/"))); b.Nodes[abs] != nil {
+				resolved, form = abs, formRootAbs
+			} else {
+				continue
+			}
+		} else if norm := filepath.ToSlash(filepath.Clean(url)); b.Nodes[norm] != nil {
 			resolved, form = norm, formRootRel
 		} else if rel := filepath.ToSlash(filepath.Clean(filepath.Join(dir, url))); b.Nodes[rel] != nil {
 			resolved, form = rel, formDirRel
@@ -130,6 +140,8 @@ func PlanMove(b *Bundle, old, new string) ([]LinkRewrite, error) {
 			switch l.form {
 			case formRootRel:
 				newURL = new
+			case formRootAbs:
+				newURL = "/" + new
 			case formDirRel:
 				r, err := filepath.Rel(dir, new)
 				if err != nil {

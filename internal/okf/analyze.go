@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -199,7 +200,50 @@ func Analyze(b *Bundle, opts AnalyzeOptions) AnalyzeReport {
 	rep.Connectivity = analyzeConnectivity(b)
 	rep.Clusters = analyzeClusters(b, opts)
 	rep.Structure = analyzeStructure(b)
+	rep.normalizeSlices()
 	return rep
+}
+
+// normalizeSlices replaces nil slices with empty slices so the JSON contract is
+// stable: every dimension serializes as an array ([]), never null. The machine
+// consumer (curation sweep) relies on iterable arrays.
+func (r *AnalyzeReport) normalizeSlices() {
+	if r.Coverage.DanglingLinks == nil {
+		r.Coverage.DanglingLinks = []DanglingLink{}
+	}
+	if r.Coverage.ThinNodes == nil {
+		r.Coverage.ThinNodes = []ThinNode{}
+	}
+	if r.Coverage.Uncited == nil {
+		r.Coverage.Uncited = []AnalyzeNodeRef{}
+	}
+	if r.Coverage.SingleCitation == nil {
+		r.Coverage.SingleCitation = []AnalyzeNodeRef{}
+	}
+	if r.Coverage.KnownGaps == nil {
+		r.Coverage.KnownGaps = []string{}
+	}
+	if r.Freshness.Stale == nil {
+		r.Freshness.Stale = []StaleNode{}
+	}
+	if r.Freshness.TimeSensitive == nil {
+		r.Freshness.TimeSensitive = []TimeSensitiveNode{}
+	}
+	if r.Connectivity.Orphans == nil {
+		r.Connectivity.Orphans = []AnalyzeNodeRef{}
+	}
+	if r.Connectivity.WeaklyLinked == nil {
+		r.Connectivity.WeaklyLinked = []WeaklyLinked{}
+	}
+	if r.Clusters == nil {
+		r.Clusters = []ClusterFinding{}
+	}
+	if r.Structure.DuplicateTitles == nil {
+		r.Structure.DuplicateTitles = []DuplicateGroup{}
+	}
+	if r.Structure.NearDuplicateSlugs == nil {
+		r.Structure.NearDuplicateSlugs = []SlugPair{}
+	}
 }
 
 func analyzeSummary(b *Bundle, opts AnalyzeOptions) AnalyzeSummary {
@@ -276,12 +320,20 @@ func danglingTargets(b *Bundle, nodePath string, n *Node) []string {
 		if IsReservedPath(link) {
 			continue
 		}
-		// Resolves to a real node? -> not dangling.
-		if rootRel := filepath.ToSlash(filepath.Clean(link)); b.Nodes[rootRel] != nil {
-			continue
-		}
-		if dirRel := filepath.ToSlash(filepath.Clean(filepath.Join(dir, link))); b.Nodes[dirRel] != nil {
-			continue
+		// Resolves to a real node? -> not dangling. Three forms, matching the
+		// shared edge-builder: "/"-absolute (bundle-root relative, OKF §5.1),
+		// root-relative, then dir-relative against the linking node's dir.
+		if strings.HasPrefix(link, "/") {
+			if abs := filepath.ToSlash(filepath.Clean(strings.TrimPrefix(link, "/"))); b.Nodes[abs] != nil {
+				continue
+			}
+		} else {
+			if rootRel := filepath.ToSlash(filepath.Clean(link)); b.Nodes[rootRel] != nil {
+				continue
+			}
+			if dirRel := filepath.ToSlash(filepath.Clean(filepath.Join(dir, link))); b.Nodes[dirRel] != nil {
+				continue
+			}
 		}
 		if !seen[url] {
 			seen[url] = true
@@ -463,8 +515,11 @@ func analyzeClusters(b *Bundle, opts AnalyzeOptions) []ClusterFinding {
 	return out
 }
 
-// nodeTags returns a node's frontmatter tags as strings (nil when absent or not
-// a list; a scalar tag is treated as a single-element list).
+// nodeTags returns a node's frontmatter tags as strings (nil when absent). A
+// scalar tag is treated as a single-element list. Non-string scalar elements
+// (YAML parses a bare `403` as an int, `1.5` as a float, `true` as a bool) are
+// coerced to their string form — the reference stringifies every tag element, so
+// a numeric tag is a real tag and must still cluster.
 func nodeTags(n *Node) []string {
 	raw, ok := n.Frontmatter["tags"]
 	if !ok {
@@ -474,15 +529,36 @@ func nodeTags(n *Node) []string {
 	case []any:
 		var out []string
 		for _, t := range v {
-			if s, ok := t.(string); ok {
+			if s := scalarToString(t); s != "" {
 				out = append(out, s)
 			}
 		}
 		return out
-	case string:
-		return []string{v}
+	default:
+		if s := scalarToString(v); s != "" {
+			return []string{s}
+		}
 	}
 	return nil
+}
+
+// scalarToString renders a YAML scalar (string, int, int64, float64, bool) to
+// its string form, matching the reference's str(t) coercion. Non-scalar values
+// (maps, nested lists) yield "".
+func scalarToString(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case int:
+		return strconv.Itoa(t)
+	case int64:
+		return strconv.FormatInt(t, 10)
+	case float64:
+		return strconv.FormatFloat(t, 'g', -1, 64)
+	case bool:
+		return strconv.FormatBool(t)
+	}
+	return ""
 }
 
 func analyzeStructure(b *Bundle) StructureReport {

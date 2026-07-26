@@ -15,6 +15,7 @@
 package okf
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -81,6 +82,24 @@ func TestAnalyze_Coverage_ResolvedLinkNotDangling(t *testing.T) {
 	rep := Analyze(b, DefaultAnalyzeOptions())
 	if len(rep.Coverage.DanglingLinks) != 0 {
 		t.Fatalf("want no dangling links, got %+v", rep.Coverage.DanglingLinks)
+	}
+}
+
+// A "/"-absolute link that resolves (OKF §5.1, bundle-root relative) is NOT
+// dangling. The real corpus writes every concept cross-link this way, so a
+// resolved "/x/y.md" must never be reported as a coverage gap.
+func TestAnalyze_Coverage_RootAbsoluteLinkNotDangling(t *testing.T) {
+	pinClock(t, fixedNow)
+	b := mkLintBundle(t, map[string]string{
+		"index.md":      "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [A](research/a.md)\n- [B](method/b.md)\n",
+		"research/a.md": lintDoc("Concept", "A", "See [B](/method/b.md)."),
+		"method/b.md":   lintDoc("Concept", "B", "Body."),
+	})
+	rep := Analyze(b, DefaultAnalyzeOptions())
+	for _, d := range rep.Coverage.DanglingLinks {
+		if d.Target == "/method/b.md" {
+			t.Fatalf("resolved root-absolute link should not be dangling, got %+v", rep.Coverage.DanglingLinks)
+		}
 	}
 }
 
@@ -211,8 +230,6 @@ func TestAnalyze_Connectivity_OrphanAndWeaklyLinked(t *testing.T) {
 	}
 }
 
-// --- Clusters / synthesis --------------------------------------------------
-
 func TestAnalyze_Clusters_TagCoOccurrence(t *testing.T) {
 	pinClock(t, fixedNow)
 	b := mkLintBundle(t, map[string]string{
@@ -228,6 +245,33 @@ func TestAnalyze_Clusters_TagCoOccurrence(t *testing.T) {
 	}
 	if rep.Clusters[0].Tag != "wine" || len(rep.Clusters[0].Nodes) != 3 {
 		t.Fatalf("want wine/3, got %+v", rep.Clusters[0])
+	}
+}
+
+// A numeric tag (YAML parses bare `403` as an int) is still a valid tag and
+// must cluster. The real corpus tags several security nodes with `403`; the
+// reference stringifies every tag element, so okfctl must too.
+func TestAnalyze_Clusters_NumericTag(t *testing.T) {
+	pinClock(t, fixedNow)
+	// tags: [403] parses 403 as an int in YAML.
+	numTag := func(title string) string {
+		return "---\ntype: Concept\ntitle: " + title + "\ntags: [403]\n---\n\n# " + title + "\n\nb\n"
+	}
+	b := mkLintBundle(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [A](a.md)\n- [B](b.md)\n- [C](c.md)\n",
+		"a.md":     numTag("A"),
+		"b.md":     numTag("B"),
+		"c.md":     numTag("C"),
+	})
+	rep := Analyze(b, DefaultAnalyzeOptions())
+	found := false
+	for _, c := range rep.Clusters {
+		if c.Tag == "403" && len(c.Nodes) == 3 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("want numeric tag 403 clustered across 3 nodes, got %+v", rep.Clusters)
 	}
 }
 
@@ -263,6 +307,38 @@ func TestAnalyze_Structure_NearDuplicateSlugs(t *testing.T) {
 }
 
 // --- report-level ----------------------------------------------------------
+
+func TestAnalyze_EmptyDimensionsAreEmptySlicesNotNil(t *testing.T) {
+	pinClock(t, fixedNow)
+	// A minimal clean-ish corpus: exercise that list fields never marshal to
+	// JSON null (nil slice). The machine consumer (curation sweep) relies on
+	// arrays being present and iterable.
+	b := mkLintBundle(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [A](a.md)\n",
+		"a.md":     tsDoc("Concept", "A", nil, "2026-07-20T00:00:00Z", "2026-07-20T00:00:00Z", strings.Repeat("body line\n", 20)),
+	})
+	rep := Analyze(b, DefaultAnalyzeOptions())
+	if rep.Freshness.Stale == nil {
+		t.Fatalf("Freshness.Stale must be a non-nil slice for JSON stability")
+	}
+	if rep.Freshness.TimeSensitive == nil {
+		t.Fatalf("Freshness.TimeSensitive must be a non-nil slice")
+	}
+	if rep.Connectivity.Orphans == nil || rep.Connectivity.WeaklyLinked == nil {
+		t.Fatalf("Connectivity slices must be non-nil")
+	}
+	if rep.Coverage.DanglingLinks == nil || rep.Coverage.ThinNodes == nil ||
+		rep.Coverage.Uncited == nil || rep.Coverage.SingleCitation == nil ||
+		rep.Coverage.KnownGaps == nil {
+		t.Fatalf("Coverage slices must be non-nil")
+	}
+	if rep.Clusters == nil {
+		t.Fatalf("Clusters must be non-nil")
+	}
+	if rep.Structure.DuplicateTitles == nil || rep.Structure.NearDuplicateSlugs == nil {
+		t.Fatalf("Structure slices must be non-nil")
+	}
+}
 
 func TestAnalyze_SummaryCountsNodes(t *testing.T) {
 	pinClock(t, fixedNow)
