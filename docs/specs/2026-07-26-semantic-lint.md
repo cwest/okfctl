@@ -83,7 +83,12 @@ A node whose best neighbor scores **below** a floor — semantically isolated, t
 `orphan` check: `orphan` means *nothing links here*, this means *nothing is even
 about the same thing*.
 
-Default floor **0.30**, tunable via `--isolation-floor`.
+Default floor **0.20**, tunable via `--isolation-floor`. The floor is low by
+design: calibrated against potion-base-8M, same-topic-different-wording nodes
+score ~0.27–0.33 while a genuinely off-topic node scores ~0.13, so a 0.30 floor
+would flag legitimate on-topic nodes as dead concepts. Mean-pooled static
+embeddings compress absolute scores — the ranking is reliable, the magnitudes
+are not — so the floor targets the clear outlier rather than a semantic ideal.
 
 ## Behavior
 

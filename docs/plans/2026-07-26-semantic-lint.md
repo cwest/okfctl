@@ -24,7 +24,7 @@ RED: `internal/okf/lint_semantic_test.go`
   - `TestLintSimilarUnlinked_SuppressedWhenLinked`: same pair, A links B → none.
     Also suppressed when only B links A (either direction counts).
   - `TestLintSimilarUnlinked_BelowThreshold`: 0.79 with threshold 0.80 → none.
-  - `TestLintNoSemanticNeighbors`: node whose best neighbor is 0.12 (floor 0.30)
+  - `TestLintNoSemanticNeighbors`: node whose best neighbor is 0.12 (floor 0.20)
     → one `no-semantic-neighbors` finding; a node with a 0.55 neighbor → none.
   - `TestLintSemantic_Deterministic`: same input twice → identical slices.
 GREEN: `internal/okf/lint_semantic.go` — `LintSemantic(b *Bundle, idx SemanticIndex,
