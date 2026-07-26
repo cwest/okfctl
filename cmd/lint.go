@@ -118,6 +118,6 @@ func newLintCmd() *cobra.Command {
 	c.Flags().IntVar(&coverageThreshold, "coverage-threshold", 0, "min distinct nodes that must mention a term to report a coverage gap (default 3)")
 	c.Flags().BoolVar(&semantic, "semantic", false, "also run similarity checks against the index built by 'okfctl-search index build'")
 	c.Flags().Float64Var(&similarityThreshold, "similarity-threshold", 0, "cosine score at/above which two unlinked nodes are reported (default 0.80; implies --semantic data)")
-	c.Flags().Float64Var(&isolationFloor, "isolation-floor", 0, "score a node's best neighbor must reach to count as connected (default 0.30)")
+	c.Flags().Float64Var(&isolationFloor, "isolation-floor", 0, "score a node's best neighbor must reach to count as connected (default 0.20)")
 	return c
 }

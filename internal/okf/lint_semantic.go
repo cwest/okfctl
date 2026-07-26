@@ -45,7 +45,16 @@ type SemanticOptions struct {
 
 const (
 	defaultSimilarityThreshold = 0.80
-	defaultIsolationFloor      = 0.30
+	// defaultIsolationFloor is deliberately low. Calibrated against
+	// potion-base-8M over a small wine corpus, same-topic-different-wording
+	// nodes score ~0.27-0.33 while a genuinely off-topic node (a Kubernetes
+	// concept among wine notes) scores ~0.13. A 0.30 floor therefore flags
+	// legitimate on-topic nodes as "dead concepts" — a false positive that
+	// trains users to ignore the check. 0.20 separates the true outlier from
+	// merely-loosely-related kin. Mean-pooled static embeddings produce
+	// compressed absolute scores; the RANKING is reliable, the magnitudes are
+	// not, so the floor targets the clear outlier rather than a semantic ideal.
+	defaultIsolationFloor = 0.20
 )
 
 // LintSemantic runs the similarity-driven curation checks the PRD (§8.6) calls

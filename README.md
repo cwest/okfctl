@@ -80,6 +80,29 @@ okfctl-search --embedder model2vec --model-path ~/models/potion-base-8M --semant
 
 The directory needs the standard model2vec layout: `config.json`, `model.safetensors`, and `tokenizer.json` (or `vocab.txt`). If no path is configured, `model2vec` fails with an actionable error rather than silently falling back to `hash` — a query answered by the wrong embedder is worse than one that refuses to run. An index records the model it was built with, so switching embedders requires a rebuild.
 - `lint <dir>` — report curation health findings (orphans, missing cross-references, coverage gaps, type-value hygiene). Advisory by default (exits 0 even with findings); `--strict` exits non-zero on any finding, `--coverage-threshold N` tunes the coverage-gap check (default 3). `lint` never mutates the bundle.
+- `lint <dir> --semantic` — add the two similarity-driven checks (see below). Requires an index built by `okfctl-search index build`; **no embedding model is needed to lint**, because core only ever *reads* an index.
+
+#### Semantic lint (`--semantic`)
+
+Structural lint asks *"is anything linked to this?"*. Semantic lint asks *"is anything even about the same thing?"* — the curation question the graph alone can't answer:
+
+| check | finding | reads as |
+|---|---|---|
+| `similar-unlinked` | two nodes scoring ≥ `--similarity-threshold` (default `0.80`) with **no link in either direction** | *"these cover the same ground and don't reference each other — missing cross-reference?"* |
+| `no-semantic-neighbors` | a node whose **best** neighbor falls below `--isolation-floor` (default `0.20`) | *"nothing in the corpus is close to this — dead concept, or missing context?"* |
+
+```sh
+okfctl-search index build ./my-bundle     # the plugin builds (needs a model)
+okfctl lint ./my-bundle --semantic        # core reads (needs none)
+```
+
+Three deliberate behaviors:
+
+- **Opt-in.** Without `--semantic`, output is unchanged and the index is never read.
+- **A missing index is an error, not a silent skip** — it names `okfctl-search index build`. A quiet structural-only fallback would let CI believe semantic checks ran when they did not.
+- **Index drift is surfaced.** Nodes added since the last `index build` produce one `stale-index` finding listing them, so a partial pass never reads as a clean one.
+
+Findings are only as meaningful as the embedder that built the index. With the default `hash` embedder, `similar-unlinked` effectively means "shares vocabulary"; with `--embedder model2vec` it means genuinely related subject matter. Build the index with `model2vec` if you intend to act on these findings.
 - `graph export <dir> --format json|dot` — export the concept-node link graph in a machine format (deterministic, CI-diffable). `json` (default) emits nodes (path/title/type/neighborhood/orphan) + edges; `dot` emits Graphviz. For SVG, pipe DOT to Graphviz: `okfctl graph export --format dot | dot -Tsvg > graph.svg`.
 - `serve <dir> --addr 127.0.0.1:8080` — start a local web server rendering the bundle as an interactive knowledge graph (click a node to inspect, follow edges, orphans highlighted, filter by type/neighborhood). The viewer is embedded in the binary — no separate install. Binds loopback by default; override with `--addr`.
 - `config set <key> <value>` — set a config value
