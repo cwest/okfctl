@@ -34,12 +34,16 @@ const (
 // Scaffold writes a minimal conformant bundle into dir: a reserved index.md and
 // log.md and an .okf spec pin. The result passes Validate with zero findings
 // (it has no concept nodes yet, so the type floor is vacuously satisfied).
+//
+// The scaffolded index.md carries NO frontmatter (OKF §6). The bundle's
+// okf_version is pinned by the .okf sidecar; `okfctl index build` surfaces it as
+// the sole permitted index frontmatter key (§11) once the index is regenerated.
 func Scaffold(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	files := map[string]string{
-		"index.md": "---\ntype: Index\n---\n\n# Knowledge Base\n\n_Progressive-disclosure entry point. Add \"start here\" links as nodes land._\n",
+		"index.md": "# Knowledge Base\n\n_Progressive-disclosure entry point. Add \"start here\" links as nodes land._\n",
 		"log.md":   logHeader + logPlaceholder,
 		".okf":     "okf_version: " + SpecVersion + "\n",
 	}
