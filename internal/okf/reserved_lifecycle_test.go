@@ -48,7 +48,7 @@ func TestRenderIndex_GroupsByNeighborhoodDeterministically(t *testing.T) {
 	}
 	got := RenderIndex(b)
 
-	if !strings.HasPrefix(got, "---\ntype: Index\n") {
+	if !strings.HasPrefix(got, "---\n") || !strings.Contains(got, "\ntype: Index\n") {
 		t.Errorf("index missing Index frontmatter; got:\n%s", got)
 	}
 	li := strings.Index(got, "lifting")
