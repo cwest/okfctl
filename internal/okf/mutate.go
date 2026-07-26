@@ -106,7 +106,7 @@ func scanNodeLinks(b *Bundle, dir, body string) []scannedLink {
 func PlanMove(b *Bundle, old, new string) ([]LinkRewrite, error) {
 	old = filepath.ToSlash(filepath.Clean(old))
 	new = filepath.ToSlash(filepath.Clean(new))
-	if ReservedFiles[old] || ReservedFiles[new] {
+	if IsReservedPath(old) || IsReservedPath(new) {
 		return nil, fmt.Errorf("cannot move reserved file (%s -> %s)", old, new)
 	}
 	if b.Nodes[old] == nil {
@@ -159,7 +159,7 @@ func PlanMove(b *Bundle, old, new string) ([]LinkRewrite, error) {
 func ApplyMove(root string, b *Bundle, old, new string, rewrites []LinkRewrite) error {
 	old = filepath.ToSlash(filepath.Clean(old))
 	new = filepath.ToSlash(filepath.Clean(new))
-	if ReservedFiles[old] || ReservedFiles[new] {
+	if IsReservedPath(old) || IsReservedPath(new) {
 		return fmt.Errorf("cannot move reserved file (%s -> %s)", old, new)
 	}
 	oldAbs := filepath.Join(root, filepath.FromSlash(old))
@@ -223,7 +223,7 @@ func ApplyMove(root string, b *Bundle, old, new string, rewrites []LinkRewrite) 
 // (zero inbound links) as a direct consequence of removing path. It is pure.
 func PlanRemoveOrphans(b *Bundle, path string) ([]string, error) {
 	path = filepath.ToSlash(filepath.Clean(path))
-	if ReservedFiles[path] {
+	if IsReservedPath(path) {
 		return nil, fmt.Errorf("cannot remove reserved file: %s", path)
 	}
 	if b.Nodes[path] == nil {

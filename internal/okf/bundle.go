@@ -17,13 +17,25 @@ package okf
 import (
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
 )
 
-// ReservedFiles are the bundle-level files that are not concept nodes.
+// ReservedFiles are the reserved base names that are not concept nodes. A file
+// named index.md or log.md is reserved at ANY depth: a knowledge base commonly
+// keeps a per-neighborhood index.md and log.md (e.g. wine/index.md,
+// security/auth/log.md), and those are structural files (front door /
+// append-only change history), not concepts. Recognition is by base name, so
+// use isReservedPath to test a bundle-relative path.
 var ReservedFiles = map[string]bool{"index.md": true, "log.md": true}
+
+// IsReservedPath reports whether a bundle-relative slash path names a reserved
+// file (index.md or log.md) at any depth.
+func IsReservedPath(rel string) bool {
+	return ReservedFiles[path.Base(rel)]
+}
 
 // Bundle is a loaded OKF bundle: concept nodes keyed by bundle-relative path,
 // plus the reserved files, plus the derived link graph.
@@ -102,7 +114,7 @@ func readOkfVersion(root string) string {
 }
 
 func (b *Bundle) place(rel string, n *Node) {
-	if ReservedFiles[rel] {
+	if IsReservedPath(rel) {
 		b.Reserved[rel] = n
 		return
 	}

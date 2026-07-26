@@ -190,7 +190,7 @@ func newNodeCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p := withMD(args[0])
-			if okf.ReservedFiles[p] {
+			if okf.IsReservedPath(p) {
 				return fmt.Errorf("cannot edit reserved file: %s", p)
 			}
 			abs := filepath.Join(editBundle, filepath.FromSlash(p))
