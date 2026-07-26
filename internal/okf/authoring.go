@@ -80,6 +80,13 @@ func NewNodeFromTemplate(root, relPath, typ, title string, t Template) (string, 
 	if strings.TrimSpace(title) != "" {
 		appendKV("title", title)
 	}
+	// Stamp created + modified at birth (both equal), so a node authored through
+	// okfctl starts life with an accurate, computed timestamp rather than a
+	// hand-maintained one. created is immutable from here on; modified advances
+	// on every subsequent okfctl write. (Corpus form: RFC3339 UTC.)
+	birth := nowUTC().Format(timestampLayout)
+	appendKV("created", birth)
+	appendKV("modified", birth)
 	// Stub the template's fields. Required fields get a "TODO" placeholder so the
 	// node starts life free of template drift (§9.3: "conformant to both the spec
 	// floor and the team's convention") while still signalling the author what to
@@ -90,7 +97,7 @@ func NewNodeFromTemplate(root, relPath, typ, title string, t Template) (string, 
 		required[key] = true
 	}
 	fields, sections := TemplateScaffold(t)
-	written := map[string]bool{"type": true, "title": true}
+	written := map[string]bool{"type": true, "title": true, "created": true, "modified": true}
 	for _, key := range fields {
 		if written[key] {
 			continue

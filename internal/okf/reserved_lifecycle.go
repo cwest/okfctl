@@ -82,6 +82,14 @@ func RenderIndex(b *Bundle) string {
 	return sb.String()
 }
 
+// WriteIndex regenerates index.md on disk from the current bundle. It is the
+// single writer for the reserved index (both `index build` and the automatic
+// create/edit/delete/rename maintenance call it) so the two paths cannot
+// diverge on how the index is produced.
+func WriteIndex(b *Bundle) error {
+	return os.WriteFile(filepath.Join(b.Root, "index.md"), []byte(RenderIndex(b)), 0o644)
+}
+
 // IndexInSync reports whether the on-disk index.md matches what RenderIndex would
 // generate for the current bundle. When stale, it returns a short human-readable
 // report. A missing index.md counts as out of sync.
