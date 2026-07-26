@@ -60,6 +60,9 @@ func newGraphExportCmd() *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), out)
 			case "dot":
 				fmt.Fprint(cmd.OutOrStdout(), graphDOT(g))
+			case "svg":
+				return fmt.Errorf("no native svg format; pipe dot to Graphviz: " +
+					"okfctl graph export --format dot | dot -Tsvg > graph.svg")
 			default:
 				return fmt.Errorf("unknown format %q (want json or dot)", format)
 			}

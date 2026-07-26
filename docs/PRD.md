@@ -208,7 +208,7 @@ graph TD
     okfctl --> template["template<br/>list · show"]
     okfctl --> validate["validate<br/>conformance (+ --templates overlay)"]
     okfctl --> lint["lint ★<br/>orphans · contradictions · stale · missing-links"]
-    okfctl --> graphcmd["graph<br/>export (json/svg/dot)"]
+    okfctl --> graphcmd["graph<br/>export (json/dot)"]
     okfctl --> serve["serve<br/>(web visualizer)"]
     okfctl --> search["search<br/>lexical/graph (core)"]
     okfctl --> searchplugin["okfctl-search ★<br/>--semantic · index build · related (plugin)"]
@@ -277,8 +277,9 @@ This distinction is central to the product and must not blur.
   interactive, navigable knowledge graph: click a node to read it, follow edges,
   see orphans highlighted, filter by `type`/tag/neighborhood. Assets are embedded
   in the binary; no separate install. This is the gap neither existing tool fills.
-- **`graph`**—export the graph in machine formats (`json`, `dot`, `svg`) for use
-  in other tools and CI.
+- **`graph`**—export the graph in machine formats (`json`, `dot`) for use
+  in other tools and CI. For SVG, pipe DOT to Graphviz:
+  `okfctl graph export --format dot | dot -Tsvg > graph.svg`.
 - **`search`**—query the graph from the CLI. Core `search` is lexical and
   graph-structural (by title, tag, type, or content substring, plus neighborhood
   traversal), stdlib-only. Semantic (vector) search is the `okfctl-search` plugin
