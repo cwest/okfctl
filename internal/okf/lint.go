@@ -138,13 +138,22 @@ func linkedTargets(b *Bundle, path string, n *Node) map[string]bool {
 }
 
 func lintMissingXrefs(b *Bundle) []LintFinding {
-	// Map every concept node's title (lowercased) to its path.
+	// Map every concept node's title (lowercased) to its path. A title shared by
+	// more than one node is AMBIGUOUS: a bare mention cannot be attributed to a
+	// single node, so it is dropped (recorded as "" and skipped below) rather
+	// than resolved to whichever node happened to load last.
 	titleToPath := map[string]string{}
+	ambiguous := map[string]bool{}
 	for path, n := range b.Nodes {
 		t := strings.ToLower(strings.TrimSpace(nodeTitle(n)))
-		if t != "" {
-			titleToPath[t] = path
+		if t == "" {
+			continue
 		}
+		if _, seen := titleToPath[t]; seen {
+			ambiguous[t] = true
+			continue
+		}
+		titleToPath[t] = path
 	}
 
 	var out []LintFinding
@@ -158,6 +167,9 @@ func lintMissingXrefs(b *Bundle) []LintFinding {
 		}
 		sort.Strings(titles)
 		for _, title := range titles {
+			if ambiguous[title] {
+				continue // cannot resolve a shared title to one node
+			}
 			target := titleToPath[title]
 			if target == path {
 				continue // a node mentioning its own title is not a missing xref
