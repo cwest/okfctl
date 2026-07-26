@@ -1,4 +1,1 @@
----
-type: Index
----
 # KB
