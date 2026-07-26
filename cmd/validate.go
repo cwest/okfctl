@@ -27,10 +27,12 @@ func newValidateCmd() *cobra.Command {
 		Use:   "validate [bundle-dir]",
 		Short: "Check a bundle for OKF spec-floor conformance (optionally overlay team type-templates)",
 		Long: "validate enforces the OKF spec floor (type present + non-empty, §7). " +
-			"With --templates it also runs the opt-in team overlay (§9.4), reporting " +
-			"template drift as warnings; drift never fails the floor. Drift is advisory " +
-			"by default (exit 0); pass --strict to exit non-zero on drift. Floor " +
-			"violations always fail regardless of --strict.",
+			"It also reports git drift: a node whose frontmatter `modified` contradicts " +
+			"its git last-commit date (read-only — it never rewrites the file, and " +
+			"degrades to nothing outside a git repo). With --templates it additionally " +
+			"runs the opt-in team overlay (§9.4), reporting template drift. All drift is " +
+			"advisory by default (exit 0); pass --strict to exit non-zero on any drift. " +
+			"Floor violations always fail regardless of --strict.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."
@@ -55,15 +57,25 @@ func newValidateCmd() *cobra.Command {
 				}
 			}
 
+			// Git drift: report when a node's frontmatter `modified` contradicts
+			// its git last-commit date. Read-only (never rewrites the file), and
+			// degrades to nothing outside a git repo. Advisory like template
+			// drift — surfaced always, failing the run only under --strict.
+			gitDrift := okf.DriftFindings(b)
+			for _, d := range gitDrift {
+				fmt.Fprintf(out, "warning %s: %s\n", d.Path, d.Message)
+			}
+
 			// The spec floor is non-negotiable: any floor finding fails.
 			if len(findings) > 0 {
 				return fmt.Errorf("%d conformance finding(s)", len(findings))
 			}
-			// Template drift is advisory unless --strict.
-			if len(drift) > 0 {
-				fmt.Fprintf(out, "%d template drift warning(s)\n", len(drift))
+			// Template drift and git drift are advisory unless --strict.
+			totalDrift := len(drift) + len(gitDrift)
+			if totalDrift > 0 {
+				fmt.Fprintf(out, "%d drift warning(s)\n", totalDrift)
 				if strict {
-					return fmt.Errorf("%d template drift warning(s)", len(drift))
+					return fmt.Errorf("%d drift warning(s)", totalDrift)
 				}
 				return nil
 			}
@@ -76,6 +88,6 @@ func newValidateCmd() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&templates, "templates", false, "also run the opt-in type-template overlay (§9.4), reporting drift as warnings")
-	c.Flags().BoolVar(&strict, "strict", false, "with --templates, exit non-zero on any template drift (default: advisory, exit 0)")
+	c.Flags().BoolVar(&strict, "strict", false, "exit non-zero on any drift (git drift and, with --templates, template drift); default: advisory, exit 0")
 	return c
 }
