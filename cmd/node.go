@@ -244,7 +244,81 @@ func newNodeCmd() *cobra.Command {
 	}
 	editC.Flags().StringVar(&editBundle, "bundle", ".", "bundle directory")
 	node.AddCommand(editC)
+
+	node.AddCommand(newNodeRefreshCmd())
 	return node
+}
+
+// newNodeRefreshCmd builds `node refresh`, the bulk remediation for the git
+// drift the validate/drift check reports: it rewrites each drifting node's
+// frontmatter `modified` to its git last-commit day. `created` is never touched,
+// the body is preserved verbatim, and log.md/index.md are maintained via the
+// same derived-artifact paths as the other node verbs.
+//
+//	okfctl node refresh <bundle>          # fix every drifting node
+//	okfctl node refresh <bundle> <path>   # fix a single node
+//	okfctl node refresh --dry-run <bundle>  # list, write nothing, exit 0
+//
+// It degrades cleanly outside a git repo (no git = no drift = no-op, exit 0) and
+// exits non-zero ONLY on a real failure, never on "found drift and fixed it".
+func newNodeRefreshCmd() *cobra.Command {
+	var dry bool
+	c := &cobra.Command{
+		Use:   "refresh <bundle> [path]",
+		Short: "Rewrite stale `modified` timestamps to git last-commit (bulk drift fix)",
+		Long: "refresh is the remediation for the git drift that validate reports: it " +
+			"rewrites each drifting node's frontmatter `modified` to its git last-commit " +
+			"day. `created` is immutable and never touched, the Markdown body is preserved " +
+			"verbatim, and log.md/index.md are maintained. With a trailing path it fixes a " +
+			"single node. --dry-run lists what would change and writes nothing. It degrades " +
+			"to a clean no-op outside a git repo, and exits non-zero only on real failure.",
+		Args: cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dir := args[0]
+			b, err := okf.Load(dir)
+			if err != nil {
+				return fmt.Errorf("load bundle: %w", err)
+			}
+
+			var plan []okf.RefreshChange
+			if len(args) == 2 {
+				plan, err = okf.RefreshPlanNode(b, withMD(args[1]))
+				if err != nil {
+					return err
+				}
+			} else {
+				plan = okf.RefreshPlan(b)
+			}
+
+			out := cmd.OutOrStdout()
+			if len(plan) == 0 {
+				fmt.Fprintln(out, "No drift: all modified timestamps agree with git.")
+				return nil
+			}
+
+			if dry {
+				for _, ch := range plan {
+					fmt.Fprintf(out, "would refresh %s: %s -> %s\n", ch.Path, ch.OldModified, ch.NewModified[:10])
+				}
+				fmt.Fprintf(out, "%d node(s) would be refreshed (dry run; nothing written)\n", len(plan))
+				return nil
+			}
+
+			if err := okf.RefreshApply(plan); err != nil {
+				return err
+			}
+			for _, ch := range plan {
+				fmt.Fprintf(out, "refreshed %s: %s -> %s\n", ch.Path, ch.OldModified, ch.NewModified[:10])
+				logOnRefresh(cmd, dir, ch.Path)
+			}
+			// Regenerate index.md once after all refreshes (not per node).
+			maintainIndex(cmd, dir)
+			fmt.Fprintf(out, "%d node(s) refreshed\n", len(plan))
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&dry, "dry-run", false, "list what would change and exit 0 without writing")
+	return c
 }
 
 // resolveEditor picks the editor command: $OKFCTL_EDITOR, then $VISUAL, then

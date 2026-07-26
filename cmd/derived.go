@@ -73,6 +73,16 @@ func maintainOnMove(cmd *cobra.Command, dir, oldRel, newRel string) {
 	maintainIndex(cmd, dir)
 }
 
+// logOnRefresh records a single node's timestamp refresh in log.md. Unlike the
+// maintainOn* helpers it does NOT regenerate index.md — a bulk refresh appends
+// one log line per node and regenerates the index once at the end, so the index
+// is not rebuilt N times. Best-effort: reported, never fatal.
+func logOnRefresh(cmd *cobra.Command, dir, rel string) {
+	if err := okf.AppendLog(dir, "refreshed "+rel); err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not update log.md: %v\n", err)
+	}
+}
+
 // maintainIndex regenerates index.md from the current bundle so it never
 // silently drifts after a node create/edit/delete/rename. A build step a human
 // must remember is a build step that drifts; okfctl maintains it automatically.
