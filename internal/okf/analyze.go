@@ -287,8 +287,9 @@ func analyzeCoverage(b *Bundle, opts AnalyzeOptions) CoverageReport {
 }
 
 // danglingTargets returns the sorted, de-duped set of .md link targets in a
-// node body that do NOT resolve to a known node (root-relative or dir-relative,
-// matching scanNodeLinks resolution) and are not reserved index/log links.
+// node body that do NOT resolve to a known node (via any of the three forms
+// scanNodeLinks resolves: "/"-absolute bundle-root relative, root-relative, or
+// dir-relative) and are not reserved index/log links.
 func danglingTargets(b *Bundle, nodePath string, n *Node) []string {
 	dir := filepath.Dir(nodePath)
 	seen := map[string]bool{}
