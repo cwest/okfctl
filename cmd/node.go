@@ -40,21 +40,32 @@ func newNodeCmd() *cobra.Command {
 			}
 			// If a template governs this type, scaffold from it (§9.3); otherwise
 			// create a plain conformant node (unchanged path).
+			created := ""
 			if b, err := okf.Load(dir); err == nil {
 				if t, ok := okf.Templates(b)[typ]; ok {
 					p, err := okf.NewNodeFromTemplate(dir, args[0], typ, title, t)
 					if err != nil {
 						return err
 					}
+					created = p
 					fmt.Fprintf(cmd.OutOrStdout(), "Created %s (from %s template)\n", p, typ)
-					return nil
 				}
 			}
-			p, err := okf.NewNode(dir, args[0], typ, title)
-			if err != nil {
-				return err
+			if created == "" {
+				p, err := okf.NewNode(dir, args[0], typ, title)
+				if err != nil {
+					return err
+				}
+				created = p
+				fmt.Fprintf(cmd.OutOrStdout(), "Created %s\n", p)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Created %s\n", p)
+			// Maintain the derived artifacts: record the creation in log.md and
+			// regenerate index.md so a new node is never an audit gap and the
+			// index never silently drifts. Best-effort: a failure here must not
+			// undo an already-written node, so it is reported, not fatal.
+			if rel, rerr := bundleRel(dir, created); rerr == nil {
+				maintainOnCreate(cmd, dir, rel)
+			}
 			return nil
 		},
 	}
@@ -210,14 +221,23 @@ func newNodeCmd() *cobra.Command {
 			}
 			findings := okf.Validate(b)
 			out := cmd.OutOrStdout()
-			if len(findings) == 0 {
-				fmt.Fprintf(out, "%s edited; bundle valid\n", p)
-				return nil
+			if len(findings) != 0 {
+				for _, f := range findings {
+					fmt.Fprintf(out, "%s: %s\n", f.Path, f.Message)
+				}
+				return fmt.Errorf("%d validation finding(s) after edit", len(findings))
 			}
-			for _, f := range findings {
-				fmt.Fprintf(out, "%s: %s\n", f.Path, f.Message)
+			// The edit went through okfctl and left a valid bundle: refresh the
+			// node's modified timestamp (created is left untouched), record the
+			// edit in log.md, and regenerate index.md. This is how modified stays
+			// honest for the okfctl-mediated edit path — the $EDITOR-only path is
+			// what the git drift check exists to catch.
+			if err := okf.TouchModifiedFile(abs, nowUTCcmd()); err != nil {
+				return fmt.Errorf("refresh modified: %w", err)
 			}
-			return fmt.Errorf("%d validation finding(s) after edit", len(findings))
+			maintainOnEdit(cmd, editBundle, p)
+			fmt.Fprintf(out, "%s edited; bundle valid\n", p)
+			return nil
 		},
 	}
 	editC.Flags().StringVar(&editBundle, "bundle", ".", "bundle directory")
