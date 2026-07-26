@@ -40,6 +40,7 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newIndexCmd())
 	root.AddCommand(newLogCmd())
 	root.AddCommand(newLintCmd())
+	root.AddCommand(newAnalyzeCmd())
 	root.AddCommand(newGraphCmd())
 	root.AddCommand(newServeCmd())
 	root.AddCommand(newTemplateCmd())
