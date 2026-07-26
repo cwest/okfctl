@@ -140,6 +140,11 @@ Findings are only as meaningful as the embedder that built the index. With the d
 - `config set <key> <value>` — set a config value
 - `config get <key>` — read a config value
 - `config list` — list all config values
+- `registry add <name> <git-url>` — register (or re-point) a named remote bundle source. Named remotes are plain git URLs — this is `git remote` for OKF bundles, **not** a hosted service, account system, or schema registry. They live in the one okfctl config store (keyed `registry.<name>`), so there is no second config file.
+- `registry list` — list the registered `name` → `url` sources, sorted by name.
+- `registry show <name>` — print a source's git URL (nonzero exit on an unknown name).
+- `registry remove <name>` (alias `rm`) — unregister a source.
+- `connect <name|git-url> [dir]` — materialize a remote bundle source into a local directory over git. A registered name resolves to its URL; an ad-hoc git URL is used directly. A fresh destination is `git clone`d; an existing checkout of the same source is fast-forwarded (`git pull --ff-only`, never a history-rewriting merge); a non-empty directory that is not that checkout is left untouched. `okfctl` shells out to `git` (no new dependency) and does no authentication of its own — reaching a private URL is git's concern (ssh agent, credential helper). Default `dir` is a directory named after the source (trailing `.git` stripped), matching `git clone`.
 - `completion <bash|zsh|fish>` — generate a shell completion script
 - `version` — print the okfctl version (also `okfctl --version`); reports the release tag injected at build time, or `dev` for a plain source build
 

@@ -51,6 +51,8 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newServeCmd())
 	root.AddCommand(newTemplateCmd())
 	root.AddCommand(newPluginCmd())
+	root.AddCommand(newRegistryCmd())
+	root.AddCommand(newConnectCmd())
 	root.AddCommand(newVersionCmd())
 	return root
 }
