@@ -99,6 +99,47 @@ func TestTouchModifiedFileAddsMissingModified(t *testing.T) {
 	}
 }
 
+// The separator blank line between the frontmatter fence and the body must
+// survive a refresh byte-for-byte. The corpus writes `---\n\n# Heading`; a
+// refresh that collapses that to `---\n# Heading` is a prose change the drift
+// remediation must never make (it would show as a diff on every refreshed node).
+func TestTouchModifiedFilePreservesBlankSeparator(t *testing.T) {
+	root := t.TempDir()
+	abs := filepath.Join(root, "n.md")
+	orig := "---\ntype: Concept\ncreated: 2026-01-01T00:00:00Z\nmodified: 2026-01-01T00:00:00Z\n---\n\n# Heading\n\nProse.\n"
+	if err := os.WriteFile(abs, []byte(orig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := TouchModifiedFile(abs, time.Date(2026, 7, 26, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	got := readAll(t, abs)
+	want := "---\ntype: Concept\ncreated: 2026-01-01T00:00:00Z\nmodified: 2026-07-26T00:00:00Z\n---\n\n# Heading\n\nProse.\n"
+	if got != want {
+		t.Fatalf("refresh was not body-preserving:\nGOT  %q\nWANT %q", got, want)
+	}
+}
+
+// A node whose body directly follows the fence with NO blank line
+// (`---\n# Heading`) must also round-trip exactly — the refresh preserves
+// whatever separator the file had, it does not impose one.
+func TestTouchModifiedFilePreservesNoBlankSeparator(t *testing.T) {
+	root := t.TempDir()
+	abs := filepath.Join(root, "n.md")
+	orig := "---\ntype: Concept\nmodified: 2026-01-01T00:00:00Z\n---\n# Heading\n"
+	if err := os.WriteFile(abs, []byte(orig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := TouchModifiedFile(abs, time.Date(2026, 7, 26, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	got := readAll(t, abs)
+	want := "---\ntype: Concept\nmodified: 2026-07-26T00:00:00Z\n---\n# Heading\n"
+	if got != want {
+		t.Fatalf("refresh altered the fence/body separator:\nGOT  %q\nWANT %q", got, want)
+	}
+}
+
 func readAll(t *testing.T, path string) string {
 	t.Helper()
 	b, err := os.ReadFile(path)

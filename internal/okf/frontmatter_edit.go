@@ -41,7 +41,7 @@ func TouchModifiedFile(abs string, at time.Time) error {
 	}
 	stamp := at.UTC().Format(timestampLayout)
 
-	sp, ok := splitFrontmatter(raw)
+	yamlBlock, rawAfter, ok := splitFrontmatterRaw(raw)
 	if !ok {
 		// No frontmatter block: prepend a minimal one carrying just modified.
 		// (Validate will still flag a missing type — that is the floor's job,
@@ -53,7 +53,7 @@ func TouchModifiedFile(abs string, at time.Time) error {
 	}
 
 	var doc yaml.Node
-	if err := yaml.Unmarshal(sp.yamlBlock, &doc); err != nil {
+	if err := yaml.Unmarshal(yamlBlock, &doc); err != nil {
 		return fmt.Errorf("parse frontmatter of %s: %w", abs, err)
 	}
 	root := frontmatterMapping(&doc)
@@ -74,7 +74,9 @@ func TouchModifiedFile(abs string, at time.Time) error {
 	out.WriteString("---\n")
 	out.Write(fmBuf.Bytes())
 	out.WriteString("---\n")
-	out.Write(sp.body)
+	// rawAfter is the body region verbatim (including any blank separator line),
+	// so the only bytes that change are inside the frontmatter block.
+	out.Write(rawAfter)
 	return os.WriteFile(abs, out.Bytes(), 0o644)
 }
 

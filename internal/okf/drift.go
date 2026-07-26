@@ -16,7 +16,6 @@ package okf
 
 import (
 	"fmt"
-	"sort"
 	"time"
 )
 
@@ -62,33 +61,14 @@ func sameCalendarDay(a, b time.Time) bool {
 // is produced. A node without a `modified` field cannot contradict anything and
 // is skipped. Findings are returned sorted by path for deterministic output.
 func DriftFindings(b *Bundle) []Finding {
-	var out []Finding
-	paths := make([]string, 0, len(b.Nodes))
-	for p := range b.Nodes {
-		paths = append(paths, p)
-	}
-	sort.Strings(paths)
-	for _, p := range paths {
-		n := b.Nodes[p]
-		if n.Frontmatter == nil {
-			continue
-		}
-		mod, ok := frontmatterTime(n.Frontmatter["modified"])
-		if !ok {
-			continue // no reliable modified to compare
-		}
-		git, ok, err := GitLastCommitDate(b.Root, p)
-		if err != nil || !ok {
-			continue // no git source of truth: degrade, do not report
-		}
-		if sameCalendarDay(mod, git) {
-			continue
-		}
+	pairs := scanDrift(b)
+	out := make([]Finding, 0, len(pairs))
+	for _, dp := range pairs {
 		out = append(out, Finding{
-			Path: p,
+			Path: dp.path,
 			Message: fmt.Sprintf(
-				"modified %s disagrees with git last-commit %s; run `okfctl node edit` (or fix the field) to refresh it",
-				mod.Format("2006-01-02"), git.Format("2006-01-02"),
+				"modified %s disagrees with git last-commit %s; run `okfctl node refresh` to fix it (or `okfctl node edit` per node)",
+				dp.oldModified.Format("2006-01-02"), dp.gitDay.Format("2006-01-02"),
 			),
 		})
 	}

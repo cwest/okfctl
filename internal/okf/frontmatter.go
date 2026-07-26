@@ -79,5 +79,43 @@ func splitFrontmatter(src []byte) (split, bool) {
 	return split{yamlBlock: yamlBuf.Bytes(), body: after}, true
 }
 
+// splitFrontmatterRaw is the byte-preserving variant of splitFrontmatter. It
+// returns the frontmatter YAML block and the body region EXACTLY as it appears
+// after the closing `---` fence's newline — including any leading blank
+// separator line. splitFrontmatter deliberately strips that separator for
+// parsing (a parsed body should not start with a blank line); this variant
+// keeps it so an in-place rewriter can reproduce the file byte-for-byte outside
+// the field it changed. rawAfter is everything after the closing `---\n`.
+func splitFrontmatterRaw(src []byte) (yamlBlock, rawAfter []byte, ok bool) {
+	const delim = "---"
+	if !bytes.HasPrefix(src, []byte(delim+"\n")) && !bytes.HasPrefix(src, []byte(delim+"\r\n")) {
+		return nil, nil, false
+	}
+	nl := bytes.IndexByte(src, '\n')
+	rest := src[nl+1:]
+
+	lines := bytes.SplitAfter(rest, []byte("\n"))
+	var yamlBuf bytes.Buffer
+	consumed := 0
+	found := false
+	for _, line := range lines {
+		consumed += len(line)
+		trimmed := bytes.TrimSuffix(line, []byte("\n"))
+		trimmed = bytes.TrimSuffix(trimmed, []byte("\r"))
+		if bytes.Equal(trimmed, []byte(delim)) {
+			found = true
+			break
+		}
+		yamlBuf.Write(bytes.TrimSuffix(bytes.TrimSuffix(line, []byte("\n")), []byte("\r")))
+		yamlBuf.WriteByte('\n')
+	}
+	if !found {
+		return nil, nil, false
+	}
+	// rest[consumed:] is everything after the closing fence line (including its
+	// own trailing newline already consumed), i.e. the verbatim body region.
+	return yamlBuf.Bytes(), rest[consumed:], true
+}
+
 // ensure goldmark-meta stays pinned as a dependency for downstream rendering.
 var _ = gmmeta.Meta
