@@ -150,6 +150,7 @@ func newNodeCmd() *cobra.Command {
 			if err := okf.ApplyMove(mvBundle, b, old, newP, rewrites); err != nil {
 				return err
 			}
+			maintainOnMove(cmd, mvBundle, old, newP)
 			fmt.Fprintf(out, "Moved %s -> %s (%d inbound link(s) rewritten)\n", old, newP, len(rewrites))
 			return nil
 		},
@@ -182,6 +183,7 @@ func newNodeCmd() *cobra.Command {
 				if err := os.Remove(abs); err != nil {
 					return fmt.Errorf("remove %s: %w", p, err)
 				}
+				maintainOnDelete(cmd, rmBundle, p)
 				fmt.Fprintf(out, "Removed %s\n", p)
 			}
 			for _, o := range orphans {
