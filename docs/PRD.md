@@ -308,6 +308,28 @@ flowchart LR
     onpath -->|no| err["helpful error +<br/>did-you-mean suggestion"]
 ```
 
+### 6.5 Remote bundle sources—`registry` and `connect`
+
+Every other command operates on a local bundle directory; `registry` and
+`connect` are how a remote bundle *becomes* a local directory. They are plain
+**git remote** wiring for OKF bundles—not a hosted service, account system, or
+schema registry (§5.2, §9.1). A "registry" here is a local, named directory of
+remote sources, each a git URL; `okfctl` hosts nothing.
+
+- **`registry add <name> <git-url>`**—register (or re-point) a named remote
+  bundle source. **`registry list`**—list the registered `name → url` pairs.
+  **`registry show <name>`**—print one source's URL. **`registry remove <name>`**
+  (alias `rm`)—unregister a source. Named remotes live in the one okfctl config
+  store (§12), keyed `registry.<name>`; there is no second config mechanism.
+- **`connect <name|git-url> [dir]`**—materialize a remote source into a local
+  directory over git. A registered name resolves to its URL; an ad-hoc git URL is
+  used directly. A fresh destination is `git clone`d; an existing checkout of the
+  same source is fast-forwarded (`git pull --ff-only`, never a history-rewriting
+  merge); a non-empty directory that is not that checkout is left untouched.
+  `okfctl` shells out to git and does no authentication of its own—reaching a
+  private URL is git's concern (ssh agent, credential helper), exactly as with
+  any git remote.
+
 ## 7. Managed `type`—the one required field
 
 ### 7.1 Why `type` is managed, not merely validated
