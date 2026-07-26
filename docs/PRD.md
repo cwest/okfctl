@@ -144,7 +144,8 @@ extension model together.
 | Node create / edit | Partial | Yes | Yes (+ TUI editor) | Yes |
 | `index.md` / `log.md` maintenance | Yes | Yes | Yes (auto) | Yes |
 | Graph export | No | Yes | Yes (JSON/YAML/SVG/PNG) | Yes |
-| Lint / index / search | Partial | Yes | Partial | Yes |
+| Lint / index | Partial | Yes | Partial | Yes |
+| Lexical / graph search (core, stdlib) | Partial | Yes | Partial | **Yes** |
 | Semantic (vector) search | No | No | No | **Yes** |
 | Type-template / convention system | No | No | No | **Yes** |
 | Interactive **web** visualizer | No | No | No | **Yes** |
