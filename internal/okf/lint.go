@@ -205,12 +205,26 @@ func isWordByte(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 }
 
-// lintCoverageGaps reports terms mentioned as plain text by `threshold` or more
-// DISTINCT nodes that have no node of their own. Candidate terms are the
-// Title-Case multi-word phrases appearing in node bodies; a term that resolves
-// to an existing node title is covered (not a gap).
+// lintCoverageGaps reports KNOWN concept terms — terms some node declares as a
+// title or alias — that have no node of their own yet are referenced by
+// `threshold` or more DISTINCT nodes (via a plain-text mention or another node's
+// alias declaration).
+//
+// Precision rules (increment 8): a candidate must be a real concept, not prose.
+//   - A term is "covered" (not a gap) when it equals an existing node's title.
+//   - A term is a gap CANDIDATE only when it is "known": declared as a title or
+//     alias somewhere in the corpus. Bare capitalized prose words/phrases that
+//     no node ever names as a concept (sentence-initial "The"/"This", ALLCAPS
+//     values like "VERIFIED", passing proper nouns like "Google Cloud") are not
+//     concepts and are never reported.
+//   - Single capitalized words are dropped unless declared as an alias — the bar
+//     is "multiword OR a known/declared term".
+//
+// This targets the real corpus: matching capitalized prose surfaces produced
+// 2,276 findings dominated by stopwords, ALLCAPS status values, and proper
+// nouns; keying on declared concepts keeps only defensibly-real gaps.
 func lintCoverageGaps(b *Bundle, threshold int) []LintFinding {
-	// Existing node titles (lowercased) are "covered".
+	// Node titles (lowercased) are covered: the concept has a node.
 	covered := map[string]bool{}
 	for _, n := range b.Nodes {
 		if t := strings.ToLower(strings.TrimSpace(nodeTitle(n))); t != "" {
@@ -218,21 +232,49 @@ func lintCoverageGaps(b *Bundle, threshold int) []LintFinding {
 		}
 	}
 
-	// term (lowercased) -> set of distinct node paths that mention it;
-	// display (lowercased term) -> canonical display form (first seen).
+	// Known concept terms declared as an alias by some node, keyed lowercased to
+	// a canonical display form (first seen). A title that has a node is covered
+	// above; a title without a node is unusual but still a known concept.
+	declared := map[string]string{}
+	for _, n := range b.Nodes {
+		for _, a := range nodeAliases(n) {
+			key := strings.ToLower(strings.TrimSpace(a))
+			if key == "" || covered[key] {
+				continue
+			}
+			if _, ok := declared[key]; !ok {
+				declared[key] = strings.TrimSpace(a)
+			}
+		}
+	}
+
+	// Count distinct nodes referencing each known term — a plain-text multiword
+	// mention in the body, or the term declared as an alias by that node.
 	mentions := map[string]map[string]bool{}
-	display := map[string]string{}
+	note := func(key, path string) {
+		if mentions[key] == nil {
+			mentions[key] = map[string]bool{}
+		}
+		mentions[key][path] = true
+	}
 	for path, n := range b.Nodes {
+		// Alias declarations by this node.
+		for _, a := range nodeAliases(n) {
+			key := strings.ToLower(strings.TrimSpace(a))
+			if key != "" && !covered[key] {
+				note(key, path)
+			}
+		}
+		// Plain-text multiword concept mentions in this node's body.
 		for _, term := range candidateTerms(n.Body) {
 			key := strings.ToLower(term)
 			if covered[key] {
 				continue // already has a node
 			}
-			if mentions[key] == nil {
-				mentions[key] = map[string]bool{}
-				display[key] = term
+			if _, ok := declared[key]; !ok {
+				continue // not a known/declared concept — prose noise, skip
 			}
-			mentions[key][path] = true
+			note(key, path)
 		}
 	}
 
@@ -247,29 +289,54 @@ func lintCoverageGaps(b *Bundle, threshold int) []LintFinding {
 			out = append(out, LintFinding{
 				Check:   "coverage-gap",
 				Path:    "",
-				Message: fmt.Sprintf("coverage-gap: %q is mentioned by %d nodes but has no node of its own", display[k], len(mentions[k])),
+				Message: fmt.Sprintf("coverage-gap: %q is referenced by %d nodes but has no node of its own", declared[k], len(mentions[k])),
 			})
 		}
 	}
 	return out
 }
 
-// candidateTerms extracts Title-Case multi-word phrases from a body (e.g.
-// "Malolactic Fermentation", "Terroir"). A phrase is a run of consecutive
-// capitalized words. Single capitalized words are included (e.g. "Terroir").
+// nodeAliases returns the node's declared aliases (frontmatter `aliases:` list),
+// as strings. A non-list or absent value yields nil.
+func nodeAliases(n *Node) []string {
+	raw, ok := n.Frontmatter["aliases"]
+	if !ok {
+		return nil
+	}
+	list, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, v := range list {
+		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// candidateTerms extracts multiword Title-Case concept phrases from a body (e.g.
+// "Malolactic Fermentation"). A phrase is a run of two or more consecutive
+// capitalized words. Runs break at common English stopwords so that a
+// sentence-initial "The"/"This"/"A"/"An" or a connective ("Of", "And") never
+// starts or joins a phrase — that noise class (single capitalized words and
+// stopword-led fragments) is what made the check unusable on the real corpus.
+// Single-word candidates are intentionally excluded here; a single-word concept
+// is admitted only when it is a declared alias (see lintCoverageGaps).
 func candidateTerms(body string) []string {
 	var terms []string
 	seen := map[string]bool{}
 	var cur []string
 	flush := func() {
-		if len(cur) > 0 {
+		if len(cur) >= 2 {
 			term := strings.Join(cur, " ")
 			if !seen[term] {
 				seen[term] = true
 				terms = append(terms, term)
 			}
-			cur = nil
 		}
+		cur = nil
 	}
 	for _, line := range strings.Split(body, "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "#") {
@@ -277,7 +344,7 @@ func candidateTerms(body string) []string {
 		}
 		for _, w := range strings.Fields(line) {
 			trimmed := strings.Trim(w, ".,;:!?()[]\"'`*_")
-			if isCapitalizedWord(trimmed) {
+			if isCapitalizedWord(trimmed) && !isStopword(trimmed) {
 				cur = append(cur, trimmed)
 			} else {
 				flush()
@@ -287,6 +354,38 @@ func candidateTerms(body string) []string {
 	}
 	return terms
 }
+
+// stopwords are common English function words that, when capitalized, signal
+// sentence-initial position or a connective rather than a concept boundary.
+var stopwords = map[string]bool{
+	"a": true, "an": true, "the": true, "this": true, "that": true,
+	"these": true, "those": true, "it": true, "its": true, "and": true,
+	"or": true, "but": true, "nor": true, "for": true, "so": true,
+	"yet": true, "as": true, "at": true, "by": true, "in": true,
+	"of": true, "on": true, "to": true, "up": true, "off": true,
+	"out": true, "over": true, "under": true, "with": true, "from": true,
+	"into": true, "onto": true, "upon": true, "about": true, "above": true,
+	"below": true, "after": true, "before": true, "between": true,
+	"during": true, "through": true, "because": true, "while": true,
+	"when": true, "where": true, "why": true, "how": true, "what": true,
+	"which": true, "who": true, "whom": true, "whose": true, "if": true,
+	"then": true, "else": true, "than": true, "too": true, "very": true,
+	"just": true, "not": true, "no": true, "yes": true, "all": true,
+	"any": true, "both": true, "each": true, "few": true, "more": true,
+	"most": true, "other": true, "some": true, "such": true, "only": true,
+	"own": true, "same": true, "here": true, "there": true, "now": true,
+	"also": true, "however": true, "thus": true, "hence": true,
+	"therefore": true, "instead": true, "rather": true, "once": true,
+	"every": true, "our": true, "their": true, "his": true, "her": true,
+	"my": true, "your": true, "us": true, "them": true, "me": true,
+	"him": true, "is": true, "are": true, "was": true, "were": true,
+	"be": true, "been": true, "being": true, "has": true, "have": true,
+	"had": true, "do": true, "does": true, "did": true, "will": true,
+	"would": true, "can": true, "could": true, "should": true, "may": true,
+	"might": true, "must": true, "shall": true,
+}
+
+func isStopword(w string) bool { return stopwords[strings.ToLower(w)] }
 
 func isCapitalizedWord(w string) bool {
 	if w == "" {

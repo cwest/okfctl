@@ -1,3 +1,17 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package cmd
 
 import (
@@ -69,15 +83,18 @@ func TestLintCmd_CleanBundleExitsZero(t *testing.T) {
 }
 
 func TestLintCmd_CoverageThresholdFlag(t *testing.T) {
+	// "Card Sorting" is a declared alias (of z.md's Information Architecture)
+	// with no node of its own, referenced by a.md (prose) and z.md (alias) —
+	// two distinct nodes.
 	dir := writeLintFixture(t, map[string]string{
-		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [A](a.md)\n- [B](b.md)\n",
-		"a.md":     doc("Concept", "A", "The wine shows Terroir clearly."),
-		"b.md":     doc("Concept", "B", "Terroir dominates here."),
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [A](a.md)\n- [Z](z.md)\n",
+		"a.md":     doc("Concept", "A", "The team ran Card Sorting to structure it."),
+		"z.md":     "---\ntype: Concept\ntitle: Information Architecture\naliases: [Card Sorting]\n---\n\n# Information Architecture\n\nIA basics.\n",
 	})
-	// default threshold 3: no coverage-gap for a 2-mention term
+	// default threshold 3: no coverage-gap for a 2-reference term
 	out, _ := runOKF(t, "lint", dir)
-	if contains(out, "coverage-gap") && contains(out, "Terroir") {
-		t.Fatalf("default threshold 3 should not flag a 2-mention term:\n%s", out)
+	if contains(out, "coverage-gap") && contains(out, "Card Sorting") {
+		t.Fatalf("default threshold 3 should not flag a 2-reference term:\n%s", out)
 	}
 	// threshold 2: now flagged
 	out2, _ := runOKF(t, "lint", "--coverage-threshold", "2", dir)
