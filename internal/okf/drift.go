@@ -39,13 +39,15 @@ func frontmatterTime(v any) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// sameDay reports whether two instants fall on the same UTC calendar day. The
-// corpus stamps modified at date granularity (T00:00:00Z), while a git commit
-// carries a real wall-clock time, so drift is judged by calendar day: a node
-// committed any time on the day its modified names is honest.
-func sameDay(a, b time.Time) bool {
-	ay, am, ad := a.UTC().Date()
-	by, bm, bd := b.UTC().Date()
+// sameCalendarDay reports whether two instants name the same calendar day, each
+// evaluated in its OWN recorded location. The corpus stamps modified as a bare
+// date (T00:00:00Z), and a git commit records the author's local offset; judging
+// both in a shared UTC frame would flag a late-in-the-local-day commit (whose
+// UTC instant rolls to the next date) as drift, a false positive that trains
+// users to ignore the check. So each side keeps the day it was written as.
+func sameCalendarDay(a, b time.Time) bool {
+	ay, am, ad := a.Date()
+	by, bm, bd := b.Date()
 	return ay == by && am == bm && ad == bd
 }
 
@@ -79,7 +81,7 @@ func DriftFindings(b *Bundle) []Finding {
 		if err != nil || !ok {
 			continue // no git source of truth: degrade, do not report
 		}
-		if sameDay(mod, git) {
+		if sameCalendarDay(mod, git) {
 			continue
 		}
 		out = append(out, Finding{
