@@ -1,0 +1,85 @@
+# goreleaser configuration for okfctl.
+# Ships cross-platform binaries for the okfctl CLI and its bundled
+# okfctl-search plugin. Version metadata is injected into main's package
+# vars via ldflags and surfaced by `okfctl version` / `okfctl --version`.
+#
+# This file ships the release MECHANISM. Cutting an actual release is a
+# separate manual step (tag push -> the release workflow runs goreleaser).
+#
+# Verify locally:
+#   goreleaser check
+#   goreleaser release --snapshot --clean
+version: 2
+
+project_name: okfctl
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: okfctl
+    main: .
+    binary: okfctl
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+  - id: okfctl-search
+    main: ./cmd/okfctl-search
+    binary: okfctl-search
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: okfctl
+    ids:
+      - okfctl
+      - okfctl-search
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats:
+      - tar.gz
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  draft: true
+  prerelease: auto

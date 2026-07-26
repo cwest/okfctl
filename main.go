@@ -21,7 +21,17 @@ import (
 	"github.com/cwest/okfctl/cmd"
 )
 
+// Build metadata injected at release time via -ldflags by goreleaser
+// (see .goreleaser.yaml). A plain `go build` leaves these empty, in which
+// case cmd keeps its "dev" defaults.
+var (
+	version = ""
+	commit  = ""
+	date    = ""
+)
+
 func main() {
+	cmd.SetVersionInfo(version, commit, date)
 	if err := cmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "okfctl:", err)
 		os.Exit(1)

@@ -8,6 +8,34 @@ for the full plan. The walking skeleton (increment 1) covered bundle,
 node, validate, and config; this increment adds lifecycle management for
 the reserved `index.md` and `log.md` files.
 
+## Install
+
+Install the latest tagged release with `go install`:
+
+```sh
+go install github.com/cwest/okfctl@latest
+```
+
+Or download a prebuilt binary for your platform from the
+[releases page](https://github.com/cwest/okfctl/releases) (darwin and
+linux, amd64 and arm64). Each archive bundles both `okfctl` and the
+`okfctl-search` plugin — extract them onto your `PATH`:
+
+```sh
+tar -xzf okfctl_<version>_<os>_<arch>.tar.gz
+sudo mv okfctl okfctl-search /usr/local/bin/
+```
+
+Verify the install and the reported version:
+
+```sh
+okfctl version        # e.g. okfctl v1.2.3 (commit abc1234, built 2026-...)
+okfctl --version      # same string
+```
+
+A binary built straight from source with a plain `go build` (no release
+metadata injected) reports `dev`.
+
 ## Build
 
 ```sh
@@ -110,6 +138,7 @@ Findings are only as meaningful as the embedder that built the index. With the d
 - `config get <key>` — read a config value
 - `config list` — list all config values
 - `completion <bash|zsh|fish>` — generate a shell completion script
+- `version` — print the okfctl version (also `okfctl --version`); reports the release tag injected at build time, or `dev` for a plain source build
 
 ## What validate checks
 

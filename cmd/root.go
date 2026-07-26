@@ -31,7 +31,12 @@ func NewRootCmd() *cobra.Command {
 		Short:         "Manage Open Knowledge Format (OKF) bundles",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Wire --version to the same build metadata as the `version`
+		// subcommand, so both report the ldflags-injected value.
+		Version: versionString(),
 	}
+	// Print just the version string for --version, matching `version`.
+	root.SetVersionTemplate("{{.Version}}\n")
 	root.AddCommand(newValidateCmd())
 	root.AddCommand(newBundleCmd())
 	root.AddCommand(newNodeCmd())
@@ -45,6 +50,7 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newServeCmd())
 	root.AddCommand(newTemplateCmd())
 	root.AddCommand(newPluginCmd())
+	root.AddCommand(newVersionCmd())
 	return root
 }
 
