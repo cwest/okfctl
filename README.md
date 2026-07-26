@@ -60,7 +60,25 @@ okfctl bundle info mykb
 - `okfctl-search index build [bundle-dir]` — embed every concept node into `.okfctl/index.db`, recording the embedder model + dimension. Content-hash keyed: an unchanged node is not re-embedded; deterministic for a fixed embedder.
 - `okfctl-search --semantic "query" [bundle-dir]` — rank nodes by cosine similarity to the query (top-`--k`, default 5). Refuses an index built under a different model (rebuild with `index build`).
 - `okfctl-search related <node-path> [bundle-dir]` — a node's nearest neighbors (self excluded); the neighbor set the spec (§8.6) says `lint` will consume for its semantic checks in a later increment (not yet wired).
-- `--embedder hash` (default) is the offline, dependency-free embedder. `--embedder model2vec` (the pure-Go static model) is not yet available and errors honestly until a later increment.
+- `--embedder hash` (default) is the offline, dependency-free embedder. It is deterministic and needs no model, but it is *lexical* — it matches tokens, not meaning.
+
+#### Real semantic search with `--embedder model2vec`
+
+`--embedder model2vec` runs a genuine static embedding model (for example [`minishlab/potion-base-8M`](https://huggingface.co/minishlab/potion-base-8M)) in **pure Go** — the BERT WordPiece tokenizer and the Model2Vec inference math are both ported into `internal/search`, so there is still no CGO, no Python, and no ONNX runtime. Vectors match the upstream `model2vec` library's own output to within `1e-5`, which is verified against the real model in the test suite.
+
+`okfctl` never downloads a model at runtime. Point it at a directory you already have on disk:
+
+```sh
+# once — persisted in okfctl's JSON config
+okfctl config set model_path ~/models/potion-base-8M
+okfctl-search --embedder model2vec index build ./my-bundle
+okfctl-search --embedder model2vec --semantic "tannin structure" ./my-bundle
+
+# or per-invocation, overriding the config
+okfctl-search --embedder model2vec --model-path ~/models/potion-base-8M --semantic "…" ./my-bundle
+```
+
+The directory needs the standard model2vec layout: `config.json`, `model.safetensors`, and `tokenizer.json` (or `vocab.txt`). If no path is configured, `model2vec` fails with an actionable error rather than silently falling back to `hash` — a query answered by the wrong embedder is worse than one that refuses to run. An index records the model it was built with, so switching embedders requires a rebuild.
 - `lint <dir>` — report curation health findings (orphans, missing cross-references, coverage gaps, type-value hygiene). Advisory by default (exits 0 even with findings); `--strict` exits non-zero on any finding, `--coverage-threshold N` tunes the coverage-gap check (default 3). `lint` never mutates the bundle.
 - `graph export <dir> --format json|dot` — export the concept-node link graph in a machine format (deterministic, CI-diffable). `json` (default) emits nodes (path/title/type/neighborhood/orphan) + edges; `dot` emits Graphviz. For SVG, pipe DOT to Graphviz: `okfctl graph export --format dot | dot -Tsvg > graph.svg`.
 - `serve <dir> --addr 127.0.0.1:8080` — start a local web server rendering the bundle as an interactive knowledge graph (click a node to inspect, follow edges, orphans highlighted, filter by type/neighborhood). The viewer is embedded in the binary — no separate install. Binds loopback by default; override with `--addr`.

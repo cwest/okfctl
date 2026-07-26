@@ -15,53 +15,15 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 
+	"github.com/cwest/okfctl/internal/okfconfig"
 	"github.com/spf13/cobra"
 )
 
-func configPath() string {
-	home := os.Getenv("OKFCTL_CONFIG_HOME")
-	if home == "" {
-		if h, err := os.UserConfigDir(); err == nil {
-			home = filepath.Join(h, "okfctl")
-		} else {
-			home = ".okfctl"
-		}
-	}
-	return filepath.Join(home, "config.json")
-}
-
-func loadConfig() (map[string]string, error) {
-	m := map[string]string{}
-	data, err := os.ReadFile(configPath())
-	if os.IsNotExist(err) {
-		return m, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(data, &m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func saveConfig(m map[string]string) error {
-	p := configPath()
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(p, data, 0o644)
-}
+func loadConfig() (map[string]string, error) { return okfconfig.Load() }
+func saveConfig(m map[string]string) error   { return okfconfig.Save(m) }
 
 func newConfigCmd() *cobra.Command {
 	c := &cobra.Command{Use: "config", Short: "Get and set okfctl configuration"}

@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 
 	"github.com/cwest/okfctl/internal/okf"
+	"github.com/cwest/okfctl/internal/okfconfig"
 	"github.com/cwest/okfctl/internal/search"
 	"github.com/spf13/cobra"
 )
@@ -36,18 +37,35 @@ func main() {
 	}
 }
 
-// resolveEmbedder returns the embedder named by --embedder. Only "hash" (the
-// offline default) is available in this increment; "model2vec" is the pure-Go
-// static model deferred to increment 5c — it errors honestly rather than
-// silently falling back.
-func resolveEmbedder(name string) (search.Embedder, error) {
+// resolveEmbedder returns the embedder named by --embedder. "hash" is the
+// zero-config offline default; "model2vec" loads a real static model from a
+// local directory resolved flag-first, then config (`okfctl config set
+// model_path`). okfctl never downloads a model at runtime, so an unset path is
+// a clear, actionable error rather than a silent fallback to hash — a query
+// answered by the wrong embedder is worse than one that refuses to run.
+func resolveEmbedder(name, modelPath string) (search.Embedder, error) {
 	switch name {
 	case "hash":
 		return search.NewHashEmbedder(), nil
 	case "model2vec":
-		return nil, fmt.Errorf("--embedder model2vec is not yet available (increment 5c); use the default 'hash' embedder")
+		dir := modelPath
+		if dir == "" {
+			cfg, err := okfconfig.Load()
+			if err != nil {
+				return nil, fmt.Errorf("reading okfctl config: %w", err)
+			}
+			dir = cfg["model_path"]
+		}
+		if dir == "" {
+			return nil, fmt.Errorf("--embedder model2vec needs a local model directory: run `okfctl config set model_path <dir>` or pass --model-path <dir>")
+		}
+		e, err := search.LoadModel2VecEmbedder(dir)
+		if err != nil {
+			return nil, fmt.Errorf("loading model2vec model from %s: %w", dir, err)
+		}
+		return e, nil
 	default:
-		return nil, fmt.Errorf("unknown embedder %q (available: hash)", name)
+		return nil, fmt.Errorf("unknown embedder %q (available: hash, model2vec)", name)
 	}
 }
 
@@ -58,6 +76,7 @@ func indexPath(bundleDir string) string {
 func newSearchCmd() *cobra.Command {
 	var (
 		embedderName string
+		modelPath    string
 		semantic     string
 		k            int
 	)
@@ -73,7 +92,7 @@ func newSearchCmd() *cobra.Command {
 			if semantic == "" {
 				return cmd.Help()
 			}
-			e, err := resolveEmbedder(embedderName)
+			e, err := resolveEmbedder(embedderName, modelPath)
 			if err != nil {
 				return err
 			}
@@ -90,23 +109,24 @@ func newSearchCmd() *cobra.Command {
 			return nil
 		},
 	}
-	root.PersistentFlags().StringVar(&embedderName, "embedder", "hash", "embedder: hash (offline default) | model2vec (increment 5c)")
+	root.PersistentFlags().StringVar(&embedderName, "embedder", "hash", "embedder: hash (offline default) | model2vec (local static model)")
+	root.PersistentFlags().StringVar(&modelPath, "model-path", "", "model2vec model directory (overrides the model_path config key)")
 	root.Flags().StringVar(&semantic, "semantic", "", "semantic query string")
 	root.PersistentFlags().IntVar(&k, "k", 5, "max results")
 
-	root.AddCommand(newIndexCmd(&embedderName))
+	root.AddCommand(newIndexCmd(&embedderName, &modelPath))
 	root.AddCommand(newRelatedCmd(&k))
 	return root
 }
 
-func newIndexCmd(embedderName *string) *cobra.Command {
+func newIndexCmd(embedderName, modelPath *string) *cobra.Command {
 	c := &cobra.Command{Use: "index", Short: "Manage the semantic index"}
 	c.AddCommand(&cobra.Command{
 		Use:   "build [bundle-dir]",
 		Short: "Embed changed concept nodes into .okfctl/index.db",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			e, err := resolveEmbedder(*embedderName)
+			e, err := resolveEmbedder(*embedderName, *modelPath)
 			if err != nil {
 				return err
 			}
