@@ -125,6 +125,21 @@ func lintOrphans(b *Bundle) []LintFinding {
 	return out
 }
 
+// proseBody returns the node's prose body with any leading YAML frontmatter
+// fence removed. For a well-formed node the loader already stripped frontmatter,
+// so Body is prose-only and this is a no-op. But when a node's frontmatter fails
+// to parse, the loader preserves the whole file as Body (so validate can flag
+// it); this strips a leading `---` ... `---` fence from that raw text so the
+// lint checks scan PROSE only — frontmatter metadata (type/title/status/aliases
+// values) is never a concept mention. Uses the same splitter as the loader so
+// the fence detection can never diverge.
+func proseBody(n *Node) string {
+	if s, ok := splitFrontmatter([]byte(n.Body)); ok {
+		return string(s.body)
+	}
+	return n.Body
+}
+
 // linkedTargets returns the set of node paths a given node already links to.
 func linkedTargets(b *Bundle, path string, n *Node) map[string]bool {
 	out := map[string]bool{}
@@ -158,7 +173,7 @@ func lintMissingXrefs(b *Bundle) []LintFinding {
 
 	var out []LintFinding
 	for path, n := range b.Nodes {
-		body := strings.ToLower(n.Body)
+		body := strings.ToLower(proseBody(n))
 		linked := linkedTargets(b, path, n)
 		// Deterministic order over titles.
 		var titles []string
@@ -278,7 +293,7 @@ func lintCoverageGaps(b *Bundle, threshold int) []LintFinding {
 			}
 		}
 		// Plain-text multiword concept mentions in this node's body.
-		for _, term := range candidateTerms(n.Body) {
+		for _, term := range candidateTerms(proseBody(n)) {
 			key := strings.ToLower(term)
 			if covered[key] {
 				continue // already has a node
