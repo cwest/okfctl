@@ -182,19 +182,24 @@ func TestRenderIndex_IdempotentWithOkfVersion(t *testing.T) {
 	}
 }
 
-// TestWriteIndex_LeavesSubNeighborhoodIndexUntouched asserts the non-root case:
-// WriteIndex only ever rewrites the bundle-root index.md. A per-neighborhood
-// index.md deeper in the tree is not touched (and so never gains okf_version).
-func TestWriteIndex_LeavesSubNeighborhoodIndexUntouched(t *testing.T) {
+// TestWriteIndex_RegeneratesNonConformantNestedIndex asserts the OKF §6
+// nested-index contract: `index build` regenerates the index.md in EVERY
+// content-bearing directory, so a stale or non-conformant per-directory
+// index.md (here one carrying illegal `type: Index` frontmatter) is rewritten
+// into the spec-conformant, frontmatter-free nested form. (This inverts the
+// pre-§6 flat model, under which WriteIndex only ever touched the bundle-root
+// index and left a nested index untouched — that model was the divergence this
+// change fixes.)
+func TestWriteIndex_RegeneratesNonConformantNestedIndex(t *testing.T) {
 	dir := t.TempDir()
 	if err := Scaffold(dir); err != nil {
 		t.Fatal(err)
 	}
 	writeBundleRootIndex(t, dir, "---\nokf_version: \"0.1\"\n---\n\n# Knowledge Base\n")
-	writeNode(t, dir, "wine/tannin.md", "Reference", "Tannin")
+	writeNodeFM(t, dir, "wine/tannin.md", "Reference", "Tannin", "Astringent phenolics.")
 	subIndex := filepath.Join(dir, "wine", "index.md")
-	subBody := "---\ntype: Index\n---\n\n# Wine\n"
-	if err := os.WriteFile(subIndex, []byte(subBody), 0o644); err != nil {
+	// A stale, non-conformant nested index (illegal frontmatter per §6).
+	if err := os.WriteFile(subIndex, []byte("---\ntype: Index\n---\n\n# stale\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -210,7 +215,23 @@ func TestWriteIndex_LeavesSubNeighborhoodIndexUntouched(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != subBody {
-		t.Errorf("sub-neighborhood index.md was modified by WriteIndex:\nwant:\n%s\ngot:\n%s", subBody, got)
+	// The nested index must be regenerated to the conformant shape: no
+	// frontmatter (§6), and it enumerates its own concept dir-relatively.
+	if strings.HasPrefix(string(got), "---\n") {
+		t.Errorf("§6: regenerated nested index must carry no frontmatter; got:\n%s", got)
+	}
+	if !strings.Contains(string(got), "* [Tannin](tannin.md) - Astringent phenolics.") {
+		t.Errorf("regenerated nested index must list its concept dir-relatively with description; got:\n%s", got)
+	}
+	// And the whole rebuilt tree is in sync + validates clean.
+	b2, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, report := IndexInSync(b2); !ok {
+		t.Errorf("index reported stale immediately after WriteIndex; report:\n%s", report)
+	}
+	if f := Validate(b2); len(f) != 0 {
+		t.Errorf("regenerated nested tree must validate clean; got findings: %v", f)
 	}
 }
