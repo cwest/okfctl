@@ -33,7 +33,12 @@ func writeNode(t *testing.T, dir, rel, typ, title string) {
 	}
 }
 
-func TestRenderIndex_GroupsByNeighborhoodDeterministically(t *testing.T) {
+// TestRenderIndex_RootEnumeratesOwnDirectoryDeterministically pins the
+// bundle-root index (OKF §6): it enumerates its OWN directory's contents —
+// content-bearing child directories linked dir-relatively (`lifting/`, `wine/`)
+// and root-level concepts by base name — sorted deterministically, and carries
+// the §11 okf_version marker (Scaffold writes a .okf) and nothing else.
+func TestRenderIndex_RootEnumeratesOwnDirectoryDeterministically(t *testing.T) {
 	dir := t.TempDir()
 	if err := Scaffold(dir); err != nil {
 		t.Fatal(err)
@@ -48,29 +53,25 @@ func TestRenderIndex_GroupsByNeighborhoodDeterministically(t *testing.T) {
 	}
 	got := RenderIndex(b)
 
-	// Scaffold writes a .okf sidecar, so the bundle-root index carries the
-	// okf_version marker (§11) and nothing else — never `type: Index` (§6).
+	// §11: root carries the okf_version marker, never `type: Index` (§6).
 	if !strings.HasPrefix(got, "---\nokf_version: ") {
 		t.Errorf("root index missing the okf_version frontmatter marker; got:\n%s", got)
 	}
 	if strings.Contains(got, "type: Index") {
 		t.Errorf("index must not emit `type: Index` frontmatter; got:\n%s", got)
 	}
-	li := strings.Index(got, "lifting")
-	wi := strings.Index(got, "wine")
-	if li < 0 || wi < 0 || li > wi {
-		t.Errorf("neighborhoods not sorted (lifting before wine); got:\n%s", got)
+	// §6: child directories are linked dir-relatively, sorted.
+	li := strings.Index(got, "](lifting/)")
+	wi := strings.Index(got, "](wine/)")
+	if li < 0 || wi < 0 {
+		t.Errorf("root index must link child dirs as `lifting/` and `wine/`; got:\n%s", got)
 	}
-	ai := strings.Index(got, "acidity.md")
-	ti := strings.Index(got, "tannin.md")
-	if ai < 0 || ti < 0 || ai > ti {
-		t.Errorf("nodes not sorted within neighborhood; got:\n%s", got)
+	if li > wi {
+		t.Errorf("child directories not sorted (lifting before wine); got:\n%s", got)
 	}
-	if !strings.Contains(got, "[Tannin](wine/tannin.md)") {
-		t.Errorf("node not rendered as a titled link; got:\n%s", got)
-	}
-	if !strings.Contains(got, "Reference") {
-		t.Errorf("node type not surfaced; got:\n%s", got)
+	// §6: the root index does NOT enumerate nested concepts bundle-relatively.
+	if strings.Contains(got, "wine/tannin.md") {
+		t.Errorf("root index must not list nested concepts bundle-relatively; got:\n%s", got)
 	}
 }
 
@@ -90,7 +91,8 @@ func TestIndexInSync_TrueAfterBuildFalseAfterChange(t *testing.T) {
 	_ = Scaffold(dir)
 	writeNode(t, dir, "wine/tannin.md", "Reference", "Tannin")
 	b, _ := Load(dir)
-	if err := os.WriteFile(filepath.Join(dir, "index.md"), []byte(RenderIndex(b)), 0o644); err != nil {
+	// Build the FULL nested tree (root + wine/index.md), not just the root.
+	if err := WriteIndex(b); err != nil {
 		t.Fatal(err)
 	}
 	b2, _ := Load(dir)

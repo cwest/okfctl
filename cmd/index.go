@@ -16,7 +16,6 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/cwest/okfctl/internal/okf"
 	"github.com/spf13/cobra"
@@ -38,7 +37,8 @@ func newIndexCmd() *cobra.Command {
 			if err := okf.WriteIndex(b); err != nil {
 				return fmt.Errorf("write index.md: %w", err)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s\n", filepath.Join(dir, "index.md"))
+			dirs := okf.IndexDirs(b)
+			fmt.Fprintf(cmd.OutOrStdout(), "Wrote %d index.md file(s) under %s\n", len(dirs), dir)
 			return nil
 		},
 	})
