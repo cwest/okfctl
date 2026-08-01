@@ -9,7 +9,7 @@
 > three shipped-on-launch capabilities—managed `type` conformance (§7), local
 > vector search (§8), and a versioned type-template system (§9)—that together
 > make the curation loop real. The implementation language is settled (Go; see
-> [§11.1](#111-implementation-language-and-library-stackdecided-go)).
+> [§13.1](#131-implementation-language-and-library-stackdecided-go)).
 
 ## 1. Summary
 
@@ -36,7 +36,7 @@ is fully specified below:
   surface it—while never enforcing a fixed taxonomy of type *values*, which the
   spec forbids.
 - **Local vector search (§8).** A semantic `search` plugin backed by a local
-  embedding model and an on-disk `sqlite-vec` index, adopting the exact `Embedder`
+  embedding model and an on-disk flat vector index, adopting the exact `Embedder`
   protocol already in production in `cwest/knowledge-base`. It powers "similar but
   unlinked" and "orphan with no semantic neighbors" findings in `lint`, fully
   offline.
@@ -138,7 +138,7 @@ extension model together.
 
 | Capability | `openknowledge` (community, reference) | `okfcli/okf` (community) | `scrinium` (community) | `okfctl` (this) |
 |---|---|---|---|---|
-| Language | Go | Go | Rust | Go (see §11.1) |
+| Language | Go | Go | Rust | Go (see §13.1) |
 | Scaffold / create bundle | Yes | Yes | Yes | Yes |
 | Validate structure | Yes | Yes | Yes | Yes |
 | Node create / edit | Partial | Yes | Yes (+ TUI editor) | Yes |
@@ -413,15 +413,22 @@ alongside the baked vectors, and `okfctl` does the same in its index (§8.3) so 
 rebuild is reproducible and a query made with a mismatched model is rejected
 rather than silently wrong.
 
-### 8.3 Store—`sqlite-vec`, keyed on content hash
+### 8.3 Store—flat Go-native JSON, keyed on content hash
 
-- **Store.** A single-file SQLite database with the `sqlite-vec` extension
-  (`asg017/sqlite-vec`): no server, a loadable extension, and embeddable from Go.
-  One `.okfctl/index.db` per bundle. The database records the embedder's `model`
-  and `dim` so a rebuild is reproducible and a query issued against a
-  mismatched-model index is rejected—exactly the discipline `search.json` already
-  applies.
-- **Freshness.** Each row is keyed on the node's **content hash**, the same
+> **Decided.** The store is a flat Go-native JSON file, **not** `sqlite-vec`.
+> An earlier draft named a single-file SQLite database with the `sqlite-vec`
+> extension (`asg017/sqlite-vec`); it was rejected because a CGO/C-extension
+> breaks the static-binary, no-separate-install guarantee. See
+> [ADR 0004](adr/0004-flat-json-vector-store.md).
+
+- **Store.** A single flat, Go-serialized file (JSON), `.okfctl/index.db`, one
+  per bundle: no SQLite, no server, no loadable native extension. It records the
+  embedder's `model` and `dim` so a rebuild is reproducible and a query issued
+  against a mismatched-model index is rejected—exactly the discipline
+  `search.json` already applies. Similarity is a brute-force cosine scan over the
+  stored vectors, instant at single-bundle scale (an ANN index is a later slice
+  if scale ever demands it).
+- **Freshness.** Each record is keyed on the node's **content hash**, the same
   primitive `lint` uses. `search index build` re-embeds only the nodes whose
   content changed; unchanged nodes keep their vectors. The index therefore cannot
   silently go stale—the "a field is not a process" discipline (§2.2) applied to the
@@ -432,21 +439,23 @@ rather than silently wrong.
 ### 8.4 Architecture fit—a PATH-dispatch plugin, not core
 
 Per the language spike, the core binary stays stdlib-only and statically linked
-(§11.1). A local embedding model plus the `sqlite-vec` extension is a heavy
-optional dependency, so the semantic side of `search` ships as a **PATH-dispatch
-plugin** (`okfctl-search`, the §6.4 model), not baked into core. Core keeps
-lexical and graph `search`; the plugin adds `--semantic`. This keeps the promise
-in §5.1: the core is dependency-free, and weight rides the plugin model.
+(§13.1). A local embedding model is a heavy optional dependency, so the semantic
+side of `search` ships as a **PATH-dispatch plugin** (`okfctl-search`, the §6.4
+model), not baked into core. Core keeps lexical and graph `search`; the plugin
+adds `--semantic`. This keeps the promise in §5.1: the core is dependency-free,
+and weight rides the plugin model.
 
 The plugin MUST reconcile with the existing Python embedder rather than duplicate
-it. Two implementation paths are on the table, to be decided in the build
-(§11.2):
+it. Two implementation paths were on the table (§13.2); the build **decided the
+native-Go path** ([ADR 0005](adr/0005-pure-go-embedder.md)):
 
 1. **Shell out** to the existing `tools/okf` Python embedder—reuse the exact
    in-production code, at the cost of a Python runtime dependency for the plugin.
-2. **Re-implement** the Model2Vec and MLX clients natively in Go against the same
-   `Embedder` contract and the same models—no Python at runtime, at the cost of a
-   faithful port that must track the protocol.
+   *Rejected.*
+2. **Re-implement** the Model2Vec client natively in Go against the same
+   `Embedder` contract and the same model—no Python at runtime, at the cost of a
+   faithful port that must track the protocol. **Chosen:** a pure-Go Model2Vec +
+   WordPiece embedder in `internal/search`, verified to `1e-5` against upstream.
 
 Either way, the protocol, the models, and the `model`-field reproducibility
 discipline are shared with `cwest/knowledge-base`; only the language of the client
@@ -459,7 +468,7 @@ flowchart TD
     q["okfctl search &quot;q&quot;"] --> lex["lexical / graph<br/>(core, stdlib)"]
     qs["okfctl-search --semantic &quot;q&quot;"] --> vec["vector similarity<br/>(plugin)"]
     build["okfctl-search index build"] --> embed["embed changed nodes<br/>(content-hash keyed)"]
-    embed --> db[("sqlite-vec<br/>.okfctl/index.db<br/>records model + dim")]
+    embed --> db[("flat JSON store<br/>.okfctl/index.db<br/>records model + dim")]
     vec --> db
     rel["okfctl-search related [node]"] --> db
     rel --> lintuse["feeds lint:<br/>similar-but-unlinked · orphan-no-neighbors"]
@@ -470,7 +479,7 @@ flowchart TD
 
 - `okfctl search "q"`—lexical/graph query (core).
 - `okfctl-search --semantic "q"`—vector-similarity query (plugin).
-- `okfctl-search index build`—embed changed nodes into the `sqlite-vec` store.
+- `okfctl-search index build`—embed changed nodes into the flat JSON store.
 - `okfctl-search related [node]`—nearest neighbors of a node; the primitive `lint`
   consumes for its semantic checks.
 
@@ -621,7 +630,7 @@ flowchart TD
     end
 
     subgraph BACK["Optional backends"]
-        vecdb[("sqlite-vec index<br/>content-hash keyed")]
+        vecdb[("flat JSON vector index<br/>content-hash keyed")]
         emb["embedder<br/>Model2Vec / MLX / Hash"]
         llm["LLM<br/>opt-in, contradiction checks"]
         git["git remotes<br/>registry / connect"]
@@ -686,7 +695,24 @@ Design principles:
 - **Open source.** Apache-2.0, Contributor License Agreement, generated
   release artifacts, semantic versioning.
 
-## 13. Open Decisions
+## 13. Foundational Decisions
+
+Every foundational architectural decision below is now settled and shipped
+except one. Each settled decision has a dedicated Architecture Decision Record
+(ADR) in [`docs/adr/`](adr/README.md) carrying its full rationale, the rejected
+alternative, and what the choice costs; the summaries here state the outcome and
+link the record rather than re-arguing it. The one genuinely open item (§13.3) is
+called out as such.
+
+| Decision | Status | Record |
+|---|---|---|
+| Implementation language (§13.1) | Decided: Go | [ADR 0001](adr/0001-build-in-go.md) |
+| Extension model (§6.4) | Decided: PATH-dispatch | [ADR 0002](adr/0002-path-dispatch-extension-model.md) |
+| Managed `type` boundary (§7) | Decided: presence only | [ADR 0003](adr/0003-managed-type-presence-only.md) |
+| Vector store (§8.3) | Decided: flat Go-native JSON | [ADR 0004](adr/0004-flat-json-vector-store.md) |
+| Semantic-search build path (§13.2) | Decided: pure-Go embedder | [ADR 0005](adr/0005-pure-go-embedder.md) |
+| Web visualizer front-end (§13.4) | Decided: vanilla JS + `go:embed` | [ADR 0006](adr/0006-vanilla-js-embedded-visualizer.md) |
+| Curation backend interface (§13.3) | **Open** | — |
 
 ### 13.1 Implementation language and library stack—*decided: Go*
 
@@ -723,45 +749,67 @@ is I/O- and LLM-latency-bound rather than CPU-bound, so it does not favor either
 language; it should be architected around caching embedding/LLM results by
 content hash (realized as the §8.3 content-hash-keyed index).
 
-**Named stack.** Command framework: `spf13/cobra` (Apache-2.0), with `spf13/viper`
-(MIT) adopted only if config files are needed beyond flags. Extension model:
-PATH-dispatch (`okfctl-<name>`, the `kubectl`/`git` pattern), plus an explicit
-`plugin list` discovery command. Markdown parsing: `goldmark` with
-`goldmark-meta` for frontmatter (MIT). YAML: `goldmark-meta` or `gopkg.in/yaml.v3`.
-Graph structure and DOT/JSON export: `dominikbraun/graph` (Apache-2.0), or
-`gonum/graph` (BSD-3) if the lint loop grows heavier analytics; confirm
-`dominikbraun/graph` still meets the health bar at adoption. Embedded server:
-`net/http` + `go:embed` (stdlib), deferring `go-chi/chi` until routing complexity
-justifies it. Vector store for the `okfctl-search` plugin: SQLite with the
-`sqlite-vec` extension (`asg017/sqlite-vec`, Apache-2.0/MIT), via a
-CGO-free or extension-loading Go SQLite driver—confirmed against the §8.4
-build-path decision at adoption. Distribution: `CGO_ENABLED=0` static builds
-across `GOOS`/`GOARCH` for the core, with GoReleaser for the release matrix. All
-named libraries are permissive-licensed (Apache-2.0/MIT/BSD) and non-archived.
+**Named stack (as built).** Command framework: `spf13/cobra` (Apache-2.0).
+Extension model: PATH-dispatch (`okfctl-<name>`, the `kubectl`/`git` pattern),
+plus an explicit `plugin list` discovery command (see
+[ADR 0002](adr/0002-path-dispatch-extension-model.md)). Markdown+frontmatter
+parsing: `goldmark` with `goldmark-meta` (MIT). YAML: `gopkg.in/yaml.v3`. Graph
+structure and DOT/JSON export: **the standard library** — the link graph is a
+small in-memory value type built and serialized in `internal/okf` with stdlib
+`sort` and `encoding/json`, no third-party graph library. Embedded server:
+`net/http` + `go:embed` (stdlib). Vector store for the `okfctl-search` plugin: a
+**flat Go-native JSON store** keyed on content hash, brute-force cosine over the
+corpus — no SQLite and no CGO/C-extension (see
+[ADR 0004](adr/0004-flat-json-vector-store.md)). Distribution: `CGO_ENABLED=0`
+static builds across `GOOS`/`GOARCH` for the core, with GoReleaser for the
+release matrix. The full rationale for the language choice — cross-compilation,
+dependency surface, YAML maturity, prior art, and Rust's one win — lives in
+[ADR 0001](adr/0001-build-in-go.md).
+
+> **Historical note.** An earlier draft of this stack named `sqlite-vec`
+> (`asg017/sqlite-vec`) for the vector store and `dominikbraun/graph` for graph
+> structure/export. Neither was adopted: `sqlite-vec` was rejected for its
+> CGO/C-extension cost against the static-binary guarantee (see
+> [ADR 0004](adr/0004-flat-json-vector-store.md)), and the graph handling is
+> stdlib-only, so `go.mod`'s direct dependencies are exactly `spf13/cobra`,
+> `yuin/goldmark-meta`, and `gopkg.in/yaml.v3`.
 
 ### 13.2 Semantic-search build path—shell out vs. native Go embedder
 
-The `okfctl-search` plugin must reconcile with the in-production Python embedder
-rather than duplicate the protocol (§8.4). Which of the two build paths to take—
-shell out to the existing `tools/okf` Python code, or re-implement the Model2Vec
-and MLX clients natively in Go against the same `Embedder` contract—remains a
-build decision. It affects the plugin's runtime dependency (Python present vs. a
-pure-Go binary) but not the protocol, the models, or the reproducibility
-discipline, all of which are fixed and shared with `cwest/knowledge-base`.
+**Decided: a pure-Go native embedder.** See
+[ADR 0005](adr/0005-pure-go-embedder.md).
+
+The `okfctl-search` plugin reconciles with the in-production Python embedder by
+**porting the protocol into Go, not shelling out to it** (§8.4). The BERT
+WordPiece tokenizer and the Model2Vec static-model inference are re-implemented
+natively in `internal/search`, so the plugin is a single, fully-offline static
+binary with no Python, ONNX, or model server at runtime. The port is verified
+faithful (vectors match the upstream `model2vec` library to within `1e-5`, and
+the offline `HashEmbedder` is byte-identical to the shared `cwest/knowledge-base`
+implementation), so the protocol, the models, and the `model`-field
+reproducibility discipline stay shared with the KB — only the client language
+differs. The cost of owning that port, and the rejected shell-out alternative,
+are recorded in [ADR 0005](adr/0005-pure-go-embedder.md).
 
 ### 13.3 Curation backend interface
 
 The interface for the optional LLM-backed semantic checks (contradiction
 detection beyond vector similarity) remains open as a design task, now scoped to
 the Go ecosystem. It sits behind the same opt-in boundary as the vector index and,
-like it, should cache results by content hash.
+like it, should cache results by content hash. This is the **only remaining open
+decision** in this section — every other item above is decided and shipped, with
+an ADR. No decision has been made here yet, so there is no ADR to record.
 
 ### 13.4 Web visualizer front-end approach
 
-Whether the visualizer ships a minimal vanilla front-end or a small framework
-build remains open, now a front-end design task for the `serve` command. Either
-way the assets are baked in via `go:embed`, so the choice is orthogonal to the
-settled Go backend.
+**Decided: vanilla JS, a single `go:embed`-ed page, no build step.** See
+[ADR 0006](adr/0006-vanilla-js-embedded-visualizer.md).
+
+The `serve` visualizer ships a small, self-contained force-directed renderer in
+one `index.html`, embedded into the binary via `go:embed`, with no npm/Node build
+step. The rejected alternative (a JS framework build) and what the vanilla choice
+costs as the viewer grows are recorded in
+[ADR 0006](adr/0006-vanilla-js-embedded-visualizer.md).
 
 ## 14. Success Criteria
 
