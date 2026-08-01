@@ -2,7 +2,9 @@
 
 A CLI for managing Open Knowledge Format (OKF) bundles.
 
-See [docs/PRD.md](docs/PRD.md) for the tool spec and
+See [docs/PRD.md](docs/PRD.md) for the tool spec,
+[docs/adr/](docs/adr/README.md) for the Architecture Decision Records (why the
+architecture is the way it is), and
 [docs/plans/2026-07-22-roadmap.md](docs/plans/2026-07-22-roadmap.md)
 for the full plan. The walking skeleton (increment 1) covered bundle,
 node, validate, and config; this increment adds lifecycle management for
