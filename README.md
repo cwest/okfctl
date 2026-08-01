@@ -89,7 +89,7 @@ okfctl bundle info mykb
 
 - `okfctl-search index build [bundle-dir]` — embed every concept node into `.okfctl/index.db`, recording the embedder model + dimension. Content-hash keyed: an unchanged node is not re-embedded; deterministic for a fixed embedder.
 - `okfctl-search --semantic "query" [bundle-dir]` — rank nodes by cosine similarity to the query (top-`--k`, default 5). Refuses an index built under a different model (rebuild with `index build`).
-- `okfctl-search related <node-path> [bundle-dir]` — a node's nearest neighbors (self excluded); the neighbor set the spec (§8.6) says `lint` will consume for its semantic checks in a later increment (not yet wired).
+- `okfctl-search related <node-path> [bundle-dir]` — a node's nearest neighbors (self excluded); the neighbor set `lint --semantic` consumes for its similarity-driven checks (§8.6).
 - `--embedder hash` (default) is the offline, dependency-free embedder. It is deterministic and needs no model, but it is *lexical* — it matches tokens, not meaning.
 
 #### Real semantic search with `--embedder model2vec`
