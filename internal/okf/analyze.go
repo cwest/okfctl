@@ -80,6 +80,7 @@ func (o AnalyzeOptions) withDefaults() AnalyzeOptions {
 type AnalyzeReport struct {
 	Summary      AnalyzeSummary     `json:"summary"`
 	Coverage     CoverageReport     `json:"coverage_gaps"`
+	Epistemic    EpistemicReport    `json:"epistemic"`
 	Freshness    FreshnessReport    `json:"freshness"`
 	Connectivity ConnectivityReport `json:"connectivity"`
 	Clusters     []ClusterFinding   `json:"clusters"`
@@ -112,6 +113,22 @@ type CoverageReport struct {
 type DanglingLink struct {
 	From   string `json:"from"`
 	Target string `json:"target"`
+}
+
+// EpistemicReport surfaces the observed distribution of the `epistemic` grade
+// key (§11 unknown key). It is OBSERVATIONAL, not a gate: analyze recognizes the
+// key and reports whatever values appear so a curator can spot an outlier or
+// typo, but okfctl never enum-checks or rejects a value (over-conformance on an
+// unknown key is a spec violation). Untagged counts nodes with no epistemic key.
+type EpistemicReport struct {
+	Distribution []EpistemicCount `json:"distribution"`
+	Untagged     int              `json:"untagged"`
+}
+
+// EpistemicCount is one observed epistemic value and how many nodes carry it.
+type EpistemicCount struct {
+	Value string `json:"value"`
+	Count int    `json:"count"`
 }
 
 // ThinNode is a node whose body is below the thin-lines threshold.
@@ -196,6 +213,7 @@ func Analyze(b *Bundle, opts AnalyzeOptions) AnalyzeReport {
 	rep := AnalyzeReport{}
 	rep.Summary = analyzeSummary(b, opts)
 	rep.Coverage = analyzeCoverage(b, opts)
+	rep.Epistemic = analyzeEpistemic(b)
 	rep.Freshness = analyzeFreshness(b, opts)
 	rep.Connectivity = analyzeConnectivity(b)
 	rep.Clusters = analyzeClusters(b, opts)
@@ -222,6 +240,9 @@ func (r *AnalyzeReport) normalizeSlices() {
 	}
 	if r.Coverage.KnownGaps == nil {
 		r.Coverage.KnownGaps = []string{}
+	}
+	if r.Epistemic.Distribution == nil {
+		r.Epistemic.Distribution = []EpistemicCount{}
 	}
 	if r.Freshness.Stale == nil {
 		r.Freshness.Stale = []StaleNode{}
@@ -270,8 +291,11 @@ func analyzeCoverage(b *Bundle, opts AnalyzeOptions) CoverageReport {
 		if bl := bodyLineCount(n.Body); bl < opts.ThinLines {
 			out.ThinNodes = append(out.ThinNodes, ThinNode{Path: p, BodyLines: bl})
 		}
-		// Citation strength.
-		switch citationCount(n.Body) {
+		// Citation strength. SourceCitations() reads v0.2 §5.1 `sources`
+		// frontmatter first and falls back to the legacy body `# Citations`
+		// list for v0.1 documents (§13.1), so the uncited / single-citation
+		// signals reflect the v0.2 evidence layout, not just the body list.
+		switch n.SourceCitations() {
 		case 0:
 			out.Uncited = append(out.Uncited, AnalyzeNodeRef{Path: p})
 		case 1:
@@ -284,6 +308,34 @@ func analyzeCoverage(b *Bundle, opts AnalyzeOptions) CoverageReport {
 	}
 	sort.Strings(out.KnownGaps)
 	return out
+}
+
+// analyzeEpistemic tallies the observed distribution of the `epistemic` grade
+// key across concept nodes (§11 unknown key: surfaced, never enum-gated). The
+// distribution is ordered by count descending, then value ascending, so the
+// output is deterministic and the dominant grades read first. Untagged is the
+// number of nodes carrying no epistemic key.
+func analyzeEpistemic(b *Bundle) EpistemicReport {
+	counts := map[string]int{}
+	untagged := 0
+	for _, p := range sortedNodePaths(b) {
+		if v, ok := b.Nodes[p].Epistemic(); ok {
+			counts[v]++
+		} else {
+			untagged++
+		}
+	}
+	dist := make([]EpistemicCount, 0, len(counts))
+	for v, c := range counts {
+		dist = append(dist, EpistemicCount{Value: v, Count: c})
+	}
+	sort.Slice(dist, func(i, j int) bool {
+		if dist[i].Count != dist[j].Count {
+			return dist[i].Count > dist[j].Count // count descending
+		}
+		return dist[i].Value < dist[j].Value // then value ascending
+	})
+	return EpistemicReport{Distribution: dist, Untagged: untagged}
 }
 
 // danglingTargets returns the sorted, de-duped set of .md link targets in a

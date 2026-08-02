@@ -27,7 +27,7 @@ import (
 // validate Finding (a spec-floor violation), a lint finding is curation
 // guidance — never a format failure.
 type LintFinding struct {
-	Check   string `json:"check"` // "orphan" | "missing-xref" | "coverage-gap" | "type-hygiene" | "broken-link"
+	Check   string `json:"check"` // "orphan" | "missing-xref" | "coverage-gap" | "type-hygiene" | "broken-link" | "status-lifecycle" | "spec-version"
 	Path    string `json:"path"`  // node path the finding is about ("" for bundle-level findings)
 	Message string `json:"message"`
 }
@@ -56,6 +56,8 @@ func Lint(b *Bundle, opts LintOptions) []LintFinding {
 	findings = append(findings, lintBrokenLinks(b)...)
 	findings = append(findings, lintCoverageGaps(b, threshold)...)
 	findings = append(findings, lintTypeHygiene(b)...)
+	findings = append(findings, lintStatusLifecycle(b)...)
+	findings = append(findings, lintSpecVersion(b)...)
 
 	sort.SliceStable(findings, func(i, j int) bool {
 		if findings[i].Path != findings[j].Path {
