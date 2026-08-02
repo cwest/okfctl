@@ -40,6 +40,7 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newValidateCmd())
 	root.AddCommand(newBundleCmd())
 	root.AddCommand(newNodeCmd())
+	root.AddCommand(newMigrateCmd())
 	root.AddCommand(newConfigCmd())
 	root.AddCommand(newCompletionCmd(root))
 	root.AddCommand(newIndexCmd())
