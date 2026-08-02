@@ -264,6 +264,7 @@ func newNodeCmd() *cobra.Command {
 // exits non-zero ONLY on a real failure, never on "found drift and fixed it".
 func newNodeRefreshCmd() *cobra.Command {
 	var dry bool
+	var yes bool
 	c := &cobra.Command{
 		Use:   "refresh <bundle> [path]",
 		Short: "Rewrite stale `modified` timestamps to git last-commit (bulk drift fix)",
@@ -272,7 +273,12 @@ func newNodeRefreshCmd() *cobra.Command {
 			"day. `created` is immutable and never touched, the Markdown body is preserved " +
 			"verbatim, and log.md/index.md are maintained. With a trailing path it fixes a " +
 			"single node. --dry-run lists what would change and writes nothing. It degrades " +
-			"to a clean no-op outside a git repo, and exits non-zero only on real failure.",
+			"to a clean no-op outside a git repo, and exits non-zero only on real failure.\n\n" +
+			"A plan dominated by a single commit — the signature of a bulk mechanical " +
+			"commit, whose remediation would collapse real authoring history into the " +
+			"migration date — is REFUSED unless --yes is given. The right fix in that case " +
+			"is to list the mechanical commit in " + okf.DriftIgnoreRevsFile + " (like " +
+			"`git blame --ignore-revs-file`), so drift walks back to the prior real commit.",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := args[0]
@@ -305,6 +311,22 @@ func newNodeRefreshCmd() *cobra.Command {
 				return nil
 			}
 
+			// Guardrail: a plan dominated by one commit is a bulk mechanical
+			// commit, not incremental cleanup — refuse to silently flatten its
+			// distinct authoring dates. --yes is the explicit escape hatch; the
+			// durable cure is to list the commit in .okf-drift-ignore-revs.
+			if g := okf.RefreshGuard(plan); g.Triggered && !yes {
+				return fmt.Errorf(
+					"refusing: %d of %d planned refreshes come from a single commit (%s) — "+
+						"this looks like a bulk mechanical commit, and refreshing would collapse "+
+						"the real authoring dates it touched into that one date.\n"+
+						"  To opt the commit out of drift (recommended), add its SHA to %s in the "+
+						"bundle root:\n\n      echo %s >> %s\n\n"+
+						"  and re-run — drift will walk back to the prior real commit.\n"+
+						"  To refresh anyway (this rewrites the dates), re-run with --yes.",
+					g.Count, g.Total, g.Commit, okf.DriftIgnoreRevsFile, g.Commit, okf.DriftIgnoreRevsFile)
+			}
+
 			if err := okf.RefreshApply(plan); err != nil {
 				return err
 			}
@@ -319,6 +341,7 @@ func newNodeRefreshCmd() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&dry, "dry-run", false, "list what would change and exit 0 without writing")
+	c.Flags().BoolVar(&yes, "yes", false, "refresh even when a single commit dominates the plan (overrides the bulk-commit guard)")
 	return c
 }
 
