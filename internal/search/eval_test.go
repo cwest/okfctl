@@ -79,10 +79,10 @@ func TestEval_RetrievalQuality(t *testing.T) {
 	s := BuildIndex(b, e, nil)
 
 	passageMRR, passageRecall := evalRanker(t, s, e, func(qv []float64) []Result {
-		return rankPassages(s.Passages, qv, 5)
+		return rankPassages(s.Passages, qv, 5, Filter{}, nil)
 	})
 	wholeMRR, wholeRecall := evalRanker(t, s, e, func(qv []float64) []Result {
-		return rank(s.Entries, qv, 5, "")
+		return rank(s.Entries, qv, 5, "", Filter{}, nil)
 	})
 
 	t.Logf("corpus=%s nodes=%d passages=%d queries=%d", corpus, len(s.Entries), len(s.Passages), len(goldSet))

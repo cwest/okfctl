@@ -16,7 +16,10 @@ package search
 
 import (
 	"fmt"
+	"math"
 	"sort"
+	"strings"
+	"time"
 )
 
 // Result is one ranked search hit. Snippet carries the best-matching passage
@@ -28,6 +31,115 @@ type Result struct {
 	Snippet string
 }
 
+// NodeMeta is the per-node metadata the scoping filters and recency decay key on,
+// resolved from the live *okf.Bundle at query time rather than denormalized onto
+// the index. Type and Tags back the §4.1 filters; Generated backs §5.2/§13.1
+// recency decay. The index (Entry/PassageEntry) intentionally does NOT carry
+// these — contentHash hashes only title+body, so a frontmatter-only edit (a type
+// change, a new tag, a refreshed generated.at) does not re-embed, and a cached
+// copy denormalized onto the index would go stale silently. Resolving against the
+// bundle avoids that trap.
+type NodeMeta struct {
+	Type         string
+	Tags         []string
+	Generated    time.Time // §5.2 generated.at (or §13.1 legacy timestamp)
+	HasGenerated bool      // false when the node carries no usable date
+}
+
+// Filter narrows a semantic query to a subset of nodes BEFORE ranking. Empty
+// fields impose no constraint; set fields compose with AND. PathPrefix keeps only
+// nodes whose bundle-relative path starts with the prefix; Type keeps only nodes
+// whose §4.1 type matches exactly; Tag keeps only nodes carrying that §4.1 tag.
+// A filter that matches zero nodes yields an empty result, never an error and
+// never a silent fall-back to the unfiltered set (consistent with lexical
+// Search's null-query behavior).
+type Filter struct {
+	PathPrefix string
+	Type       string
+	Tag        string
+}
+
+// IsEmpty reports whether the filter imposes no constraint at all.
+func (f Filter) IsEmpty() bool {
+	return f.PathPrefix == "" && f.Type == "" && f.Tag == ""
+}
+
+// keep reports whether the node at path (with metadata m) passes every set
+// constraint. A node with no metadata entry fails any set Type/Tag constraint —
+// we cannot assert a match we cannot see — but PathPrefix is checked on the path
+// itself and needs no metadata.
+func (f Filter) keep(path string, m NodeMeta, hasMeta bool) bool {
+	if f.PathPrefix != "" && !strings.HasPrefix(path, f.PathPrefix) {
+		return false
+	}
+	if f.Type != "" {
+		if !hasMeta || m.Type != f.Type {
+			return false
+		}
+	}
+	if f.Tag != "" {
+		if !hasMeta || !containsTag(m.Tags, f.Tag) {
+			return false
+		}
+	}
+	return true
+}
+
+func containsTag(tags []string, want string) bool {
+	for _, t := range tags {
+		if t == want {
+			return true
+		}
+	}
+	return false
+}
+
+// DecayOptions configures post-ranking recency decay. It is OFF by default (a nil
+// *DecayOptions on QueryOptions). When set, a result's raw cosine is multiplied by
+// an exponential recency factor derived from the node's §5.2 generated.at (with
+// the §13.1 legacy timestamp fallback) and Now, and results re-sort on that
+// product. The correctness invariant the card fixes: the relevance floor is
+// applied to RAW cosine FIRST (see MinRelevance) so decay only reorders survivors
+// — recency can never promote an irrelevant-but-fresh node above a relevant one.
+type DecayOptions struct {
+	// HalfLifeDays is the age in days at which a node's score is halved. Must be
+	// > 0 for decay to apply; <= 0 disables the multiplier (no penalty).
+	HalfLifeDays float64
+	// Now is the reference instant ages are measured from (injected for tests).
+	Now time.Time
+	// MinRelevance is the raw-cosine floor. A result whose UNDECAYED cosine is
+	// below this is dropped before decay reorders the rest. Zero admits everything.
+	MinRelevance float64
+}
+
+// factor returns the multiplicative recency factor in (0, 1] for a node generated
+// at gen. A node with no usable date (hasGen false) gets factor 1 (no penalty):
+// absence of a date is not a reason to demote a node. Half-life decay:
+// factor = 0.5 ^ (ageDays / halfLife). §5.2: generated.at marks the content's
+// last meaningful change, the signal that tells a recent edit from a stale fact.
+func (d *DecayOptions) factor(gen time.Time, hasGen bool) float64 {
+	if d.HalfLifeDays <= 0 || !hasGen {
+		return 1
+	}
+	ageDays := d.Now.Sub(gen).Hours() / 24
+	if ageDays <= 0 {
+		return 1 // future or same-instant content gets no penalty
+	}
+	return math.Pow(0.5, ageDays/d.HalfLifeDays)
+}
+
+// QueryOptions bundles the additive scoping controls. The zero value (empty
+// Filter, nil Meta, nil Decay) makes QueryWith behave identically to Query.
+type QueryOptions struct {
+	// Meta maps node path -> metadata for filters and decay. Nil disables both
+	// (a filter with no metadata to resolve against can constrain nothing).
+	Meta map[string]NodeMeta
+	// Filter narrows the candidate set before ranking.
+	Filter Filter
+	// Decay, when non-nil, applies post-ranking recency decay.
+	Decay *DecayOptions
+}
+
 // Query embeds q with e (which MUST match the store's model), computes cosine
 // similarity, and returns the top-k results sorted by score descending. Ties
 // break by path for determinism. When the store has a passage layer it ranks
@@ -35,14 +147,60 @@ type Result struct {
 // passage's text as the Snippet; when it does not (a legacy index), it falls
 // back to whole-node Entries with empty snippets.
 func Query(s *Store, e Embedder, q string, k int) ([]Result, error) {
+	return QueryWith(s, e, q, k, QueryOptions{})
+}
+
+// QueryWith is Query plus additive scoping (path/type/tag filters, §4.1) and
+// optional post-ranking recency decay (§5.2/§13.1). With an empty Filter and nil
+// Decay it is byte-for-byte equivalent to Query. Filters are applied PRE-ranking
+// (against opts.Meta resolved from the live bundle); decay is applied POST-ranking
+// with the relevance floor on RAW cosine.
+func QueryWith(s *Store, e Embedder, q string, k int, opts QueryOptions) ([]Result, error) {
 	if s.Model != e.Name() {
 		return nil, ErrModelMismatch
 	}
 	qv := e.Encode([]string{q})[0]
+
+	// Rank first with an effectively-unbounded k so filtering/decay never lose a
+	// result to a premature top-k cut; apply the real k after the full pipeline.
+	var ranked []Result
 	if len(s.Passages) > 0 {
-		return rankPassages(s.Passages, qv, k), nil
+		ranked = rankPassages(s.Passages, qv, 0, opts.Filter, opts.Meta)
+	} else {
+		ranked = rank(s.Entries, qv, 0, "", opts.Filter, opts.Meta)
 	}
-	return rank(s.Entries, qv, k, ""), nil
+
+	if opts.Decay != nil {
+		ranked = applyDecay(ranked, opts.Decay, opts.Meta)
+	}
+
+	if k > 0 && len(ranked) > k {
+		ranked = ranked[:k]
+	}
+	return ranked, nil
+}
+
+// applyDecay enforces the relevance floor on RAW cosine, then re-scores the
+// survivors by cosine×recency-factor and re-sorts. Sub-floor results are dropped
+// entirely so a fresh-but-irrelevant node can never be promoted above a relevant
+// older one. Ties break by path for determinism.
+func applyDecay(in []Result, d *DecayOptions, meta map[string]NodeMeta) []Result {
+	out := make([]Result, 0, len(in))
+	for _, r := range in {
+		if r.Score < d.MinRelevance {
+			continue // §floor: cut on RAW cosine before decay reorders
+		}
+		m, ok := meta[r.Path]
+		r.Score *= d.factor(m.Generated, ok && m.HasGenerated)
+		out = append(out, r)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Score != out[j].Score {
+			return out[i].Score > out[j].Score
+		}
+		return out[i].Path < out[j].Path
+	})
+	return out
 }
 
 // Related returns the nearest neighbors of the node at nodePath using its stored
@@ -58,16 +216,24 @@ func Related(s *Store, nodePath string, k int) ([]Result, error) {
 	if self == nil {
 		return nil, fmt.Errorf("node %q not found in index", nodePath)
 	}
-	return rank(s.Entries, self.Vector, k, nodePath), nil
+	return rank(s.Entries, self.Vector, k, nodePath, Filter{}, nil), nil
 }
 
-// rank scores every entry against vec (skipping exclude), sorts by score desc
-// then path, and returns the top k.
-func rank(entries []Entry, vec []float64, k int, exclude string) []Result {
+// rank scores every entry against vec (skipping exclude and any entry the filter
+// rejects), sorts by score desc then path, and returns the top k (k<=0 returns
+// all). The filter is applied PRE-ranking so a filtered-out node never occupies a
+// top-k slot.
+func rank(entries []Entry, vec []float64, k int, exclude string, filter Filter, meta map[string]NodeMeta) []Result {
 	results := make([]Result, 0, len(entries))
 	for _, en := range entries {
 		if en.Path == exclude {
 			continue
+		}
+		if !filter.IsEmpty() {
+			m, ok := meta[en.Path]
+			if !filter.keep(en.Path, m, ok) {
+				continue
+			}
 		}
 		results = append(results, Result{Score: cosine(vec, en.Vector), Path: en.Path})
 	}
@@ -87,8 +253,11 @@ func rank(entries []Entry, vec []float64, k int, exclude string) []Result {
 // passage per node (so a long node cannot flood the results with its many
 // sections), then sorts by score desc then path and returns the top k. The
 // surviving passage's text becomes the result Snippet. Ties within a node break
-// by heading path so dedup is deterministic.
-func rankPassages(passages []PassageEntry, vec []float64, k int) []Result {
+// by heading path so dedup is deterministic. The filter keys on the passage's
+// NodePath metadata and is applied PRE-ranking — critical now that the ranked unit
+// is a passage, which carries no §4.1 type/tag of its own: the constraint must
+// resolve to the owning node or a filter would silently stop applying to passages.
+func rankPassages(passages []PassageEntry, vec []float64, k int, filter Filter, meta map[string]NodeMeta) []Result {
 	type best struct {
 		score   float64
 		heading string
@@ -96,6 +265,12 @@ func rankPassages(passages []PassageEntry, vec []float64, k int) []Result {
 	}
 	byNode := map[string]best{}
 	for _, p := range passages {
+		if !filter.IsEmpty() {
+			m, ok := meta[p.NodePath]
+			if !filter.keep(p.NodePath, m, ok) {
+				continue
+			}
+		}
 		sc := cosine(vec, p.Vector)
 		cur, ok := byNode[p.NodePath]
 		if !ok || sc > cur.score || (sc == cur.score && p.HeadingPath < cur.heading) {

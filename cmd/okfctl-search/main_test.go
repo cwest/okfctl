@@ -54,6 +54,28 @@ func writeSearchBundle(t *testing.T) string {
 	return dir
 }
 
+// writeScopedBundle lays down nodes across two path prefixes, two types, and a
+// tag so the CLI filter flags have something to bite on.
+func writeScopedBundle(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	files := map[string]string{
+		"wine/tannin.md":  "---\ntype: Concept\ntitle: Tannin\ntags: [red]\n---\n\n# Tannin\n\nTannin gives structure and astringency to wine.\n",
+		"wine/pairing.md": "---\ntype: Playbook\ntitle: Pairing\n---\n\n# Pairing\n\nPair structure and acidity with food.\n",
+		"coffee/roast.md": "---\ntype: Concept\ntitle: Roast\n---\n\n# Roast\n\nRoast level shapes structure and acidity in coffee.\n",
+	}
+	for rel, c := range files {
+		p := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(c), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
 func TestPlugin_IndexBuildThenSemantic(t *testing.T) {
 	dir := writeSearchBundle(t)
 	if _, err := runPlugin(t, "index", "build", dir); err != nil {
@@ -126,6 +148,130 @@ func TestPlugin_Model2vecNeedsModelPath(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error should tell the user how to fix it (%q); got %v", want, err)
 		}
+	}
+}
+
+// TestPlugin_FilterPath pins that --path restricts semantic results to nodes
+// under the prefix; a competing coffee node must not appear.
+func TestPlugin_FilterPath(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", "structure acidity", "--path", "wine/", dir)
+	if err != nil {
+		t.Fatalf("semantic --path: %v", err)
+	}
+	if strings.Contains(out, "coffee/") {
+		t.Errorf("--path wine/ leaked a coffee result: %q", out)
+	}
+	if !strings.Contains(out, "wine/") {
+		t.Errorf("--path wine/ returned no wine results: %q", out)
+	}
+}
+
+// TestPlugin_FilterType pins that --type restricts to a single §4.1 type.
+func TestPlugin_FilterType(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", "structure acidity", "--type", "Playbook", dir)
+	if err != nil {
+		t.Fatalf("semantic --type: %v", err)
+	}
+	if !strings.Contains(out, "wine/pairing.md") {
+		t.Errorf("--type Playbook should surface wine/pairing.md; got %q", out)
+	}
+	if strings.Contains(out, "wine/tannin.md") || strings.Contains(out, "coffee/roast.md") {
+		t.Errorf("--type Playbook leaked a Concept node: %q", out)
+	}
+}
+
+// TestPlugin_FilterTag pins that --tag restricts to nodes carrying that §4.1 tag.
+func TestPlugin_FilterTag(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", "structure", "--tag", "red", dir)
+	if err != nil {
+		t.Fatalf("semantic --tag: %v", err)
+	}
+	if !strings.Contains(out, "wine/tannin.md") {
+		t.Errorf("--tag red should surface wine/tannin.md; got %q", out)
+	}
+	if strings.Contains(out, "wine/pairing.md") || strings.Contains(out, "coffee/roast.md") {
+		t.Errorf("--tag red leaked an untagged node: %q", out)
+	}
+}
+
+// TestPlugin_FilterZeroMatchEmptyNotError is the CLI-level negative control: a
+// type filter matching nothing prints no result lines and exits 0 — not an error,
+// and not a silent unfiltered fall-back.
+func TestPlugin_FilterZeroMatchEmptyNotError(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", "structure", "--type", "NoSuchType", dir)
+	if err != nil {
+		t.Fatalf("zero-match filter must exit 0, got %v", err)
+	}
+	if strings.TrimSpace(out) != "" {
+		t.Errorf("zero-match filter must print nothing (no silent unfiltered fall-back); got %q", out)
+	}
+}
+
+// TestPlugin_UnfilteredUnchanged is the CLI filter control: a query with no filter
+// flags produces the same output as before filters existed — proven by comparing a
+// bare query against one that passes empty flags.
+func TestPlugin_UnfilteredUnchanged(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	bare, err := runPlugin(t, "--semantic", "structure acidity", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Empty-string filter flags are the no-op path and must match the bare output.
+	empty, err := runPlugin(t, "--semantic", "structure acidity", "--path", "", "--type", "", "--tag", "", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bare != empty {
+		t.Errorf("empty filter flags changed output:\nbare=%q\nempty=%q", bare, empty)
+	}
+}
+
+// TestPlugin_HalfLifeAcceptedAndUnsetUnchanged pins that --half-life is a real
+// flag, and that WITHOUT it the ranking is unchanged (decay is off by default).
+func TestPlugin_HalfLifeAcceptedAndUnsetUnchanged(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	// Unset: baseline.
+	base, err := runPlugin(t, "--semantic", "structure acidity", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// half-life=0 must be treated as unset (no decay) and produce identical output.
+	off, err := runPlugin(t, "--semantic", "structure acidity", "--half-life", "0", dir)
+	if err != nil {
+		t.Fatalf("--half-life 0: %v", err)
+	}
+	if base != off {
+		t.Errorf("--half-life 0 (off) changed ranking:\nbase=%q\noff=%q", base, off)
+	}
+	// A set half-life must at least run without error and return results.
+	on, err := runPlugin(t, "--semantic", "structure acidity", "--half-life", "30", dir)
+	if err != nil {
+		t.Fatalf("--half-life 30: %v", err)
+	}
+	if strings.TrimSpace(on) == "" {
+		t.Errorf("--half-life 30 returned no results")
 	}
 }
 

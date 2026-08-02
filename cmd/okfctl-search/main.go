@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/cwest/okfctl/internal/okf"
 	"github.com/cwest/okfctl/internal/okfconfig"
@@ -80,6 +81,10 @@ func newSearchCmd() *cobra.Command {
 		modelPath    string
 		semantic     string
 		k            int
+		pathPrefix   string
+		typeFilter   string
+		tagFilter    string
+		halfLife     float64
 	)
 
 	root := &cobra.Command{
@@ -102,7 +107,31 @@ func newSearchCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("no index at %s (run 'okfctl-search index build' first): %w", indexPath(dir), err)
 			}
-			res, err := search.Query(s, e, semantic, k)
+
+			opts := search.QueryOptions{
+				Filter: search.Filter{PathPrefix: pathPrefix, Type: typeFilter, Tag: tagFilter},
+			}
+			// Filters (§4.1 type/tag) and recency decay (§5.2/§13.1) resolve against
+			// the LIVE bundle at query time, not off the index: contentHash keys only
+			// on title+body, so a frontmatter-only edit (type, tag, generated.at) does
+			// not re-embed and a value denormalized onto the index would go stale.
+			needBundle := !opts.Filter.IsEmpty() || halfLife > 0
+			if needBundle {
+				b, err := okf.Load(dir)
+				if err != nil {
+					return err
+				}
+				opts.Meta = buildNodeMeta(b)
+			}
+			if halfLife > 0 {
+				// Recency decay is post-ranking and off by default; the relevance floor
+				// stays on RAW cosine inside QueryWith so a fresh-but-weak node can never
+				// be promoted above a relevant older one. Floor 0 admits everything the
+				// ranker already returned; decay only reorders survivors.
+				opts.Decay = &search.DecayOptions{HalfLifeDays: halfLife, Now: time.Now(), MinRelevance: 0}
+			}
+
+			res, err := search.QueryWith(s, e, semantic, k, opts)
 			if err != nil {
 				return err
 			}
@@ -114,10 +143,34 @@ func newSearchCmd() *cobra.Command {
 	root.PersistentFlags().StringVar(&modelPath, "model-path", "", "model2vec model directory (overrides the model_path config key)")
 	root.Flags().StringVar(&semantic, "semantic", "", "semantic query string")
 	root.PersistentFlags().IntVar(&k, "k", 5, "max results")
+	// §4.1 scoping filters, applied pre-ranking, composed with AND. Empty = no
+	// constraint (the query is unchanged).
+	root.Flags().StringVar(&pathPrefix, "path", "", "restrict to nodes whose path starts with this prefix")
+	root.Flags().StringVar(&typeFilter, "type", "", "restrict to nodes with this §4.1 type")
+	root.Flags().StringVar(&tagFilter, "tag", "", "restrict to nodes carrying this §4.1 tag")
+	// §5.2/§13.1 recency decay, post-ranking, off by default (0 = no decay).
+	root.Flags().Float64Var(&halfLife, "half-life", 0, "recency half-life in days (0 = no decay); reorders survivors, never promotes an irrelevant-but-fresh node")
 
 	root.AddCommand(newIndexCmd(&embedderName, &modelPath))
 	root.AddCommand(newRelatedCmd(&k))
 	return root
+}
+
+// buildNodeMeta resolves the per-node metadata the filters and recency decay key
+// on from the live bundle: §4.1 type/tags and §5.2 generated.at (with the §13.1
+// legacy `timestamp` fallback, via Node.Generated). This is the query-time
+// resolution the card mandates instead of denormalizing onto the index.
+func buildNodeMeta(b *okf.Bundle) map[string]search.NodeMeta {
+	m := make(map[string]search.NodeMeta, len(b.Nodes))
+	for path, n := range b.Nodes {
+		nm := search.NodeMeta{Type: n.Type(), Tags: n.Tags()}
+		if gen, ok := n.Generated(); ok { // §5.2 generated.at / §13.1 timestamp fallback
+			nm.Generated = gen.At
+			nm.HasGenerated = true
+		}
+		m[path] = nm
+	}
+	return m
 }
 
 func newIndexCmd(embedderName, modelPath *string) *cobra.Command {
