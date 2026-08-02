@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/cwest/okfctl/internal/okf"
 	"github.com/cwest/okfctl/internal/okfconfig"
@@ -186,6 +187,26 @@ func bundleArg(args []string) string {
 
 func printResults(cmd *cobra.Command, res []search.Result) {
 	for _, r := range res {
-		fmt.Fprintf(cmd.OutOrStdout(), "%.4f\t%s\n", r.Score, r.Path)
+		fmt.Fprintf(cmd.OutOrStdout(), "%.4f	%s\n", r.Score, r.Path)
+		if s := snippetPreview(r.Snippet); s != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "	%s\n", s)
+		}
 	}
+}
+
+// snippetPreview flattens a passage's markdown into a single-line preview:
+// whitespace runs (including newlines) collapse to single spaces and the result
+// is truncated to a readable width so long sections do not flood the terminal.
+// Returns "" for an empty snippet (e.g. a legacy passage-less index).
+func snippetPreview(text string) string {
+	const maxLen = 200
+	fields := strings.Fields(text)
+	if len(fields) == 0 {
+		return ""
+	}
+	s := strings.Join(fields, " ")
+	if len(s) > maxLen {
+		s = s[:maxLen] + "…"
+	}
+	return s
 }

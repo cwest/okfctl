@@ -19,20 +19,29 @@ import (
 	"sort"
 )
 
-// Result is one ranked search hit.
+// Result is one ranked search hit. Snippet carries the best-matching passage
+// text when the store has a passage layer; it is empty for a passage-less
+// (legacy) index answered off whole-node vectors.
 type Result struct {
-	Score float64
-	Path  string
+	Score   float64
+	Path    string
+	Snippet string
 }
 
 // Query embeds q with e (which MUST match the store's model), computes cosine
-// similarity against every entry, and returns the top-k results sorted by score
-// descending. Ties break by path for determinism.
+// similarity, and returns the top-k results sorted by score descending. Ties
+// break by path for determinism. When the store has a passage layer it ranks
+// passages and dedupes to the best-scoring passage per node, returning that
+// passage's text as the Snippet; when it does not (a legacy index), it falls
+// back to whole-node Entries with empty snippets.
 func Query(s *Store, e Embedder, q string, k int) ([]Result, error) {
 	if s.Model != e.Name() {
 		return nil, ErrModelMismatch
 	}
 	qv := e.Encode([]string{q})[0]
+	if len(s.Passages) > 0 {
+		return rankPassages(s.Passages, qv, k), nil
+	}
 	return rank(s.Entries, qv, k, ""), nil
 }
 
@@ -61,6 +70,41 @@ func rank(entries []Entry, vec []float64, k int, exclude string) []Result {
 			continue
 		}
 		results = append(results, Result{Score: cosine(vec, en.Vector), Path: en.Path})
+	}
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Score != results[j].Score {
+			return results[i].Score > results[j].Score
+		}
+		return results[i].Path < results[j].Path
+	})
+	if k > 0 && len(results) > k {
+		results = results[:k]
+	}
+	return results
+}
+
+// rankPassages scores every passage against vec, dedupes to the best-scoring
+// passage per node (so a long node cannot flood the results with its many
+// sections), then sorts by score desc then path and returns the top k. The
+// surviving passage's text becomes the result Snippet. Ties within a node break
+// by heading path so dedup is deterministic.
+func rankPassages(passages []PassageEntry, vec []float64, k int) []Result {
+	type best struct {
+		score   float64
+		heading string
+		snippet string
+	}
+	byNode := map[string]best{}
+	for _, p := range passages {
+		sc := cosine(vec, p.Vector)
+		cur, ok := byNode[p.NodePath]
+		if !ok || sc > cur.score || (sc == cur.score && p.HeadingPath < cur.heading) {
+			byNode[p.NodePath] = best{score: sc, heading: p.HeadingPath, snippet: p.Text}
+		}
+	}
+	results := make([]Result, 0, len(byNode))
+	for node, b := range byNode {
+		results = append(results, Result{Score: b.score, Path: node, Snippet: b.snippet})
 	}
 	sort.Slice(results, func(i, j int) bool {
 		if results[i].Score != results[j].Score {

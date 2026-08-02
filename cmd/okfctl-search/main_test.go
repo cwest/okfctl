@@ -75,6 +75,24 @@ func TestPlugin_IndexBuildThenSemantic(t *testing.T) {
 	}
 }
 
+// TestPlugin_SemanticPrintsSnippet pins that a semantic query prints the matched
+// passage snippet alongside the score and path, so the caller sees the passage
+// that answered the query rather than just a filename.
+func TestPlugin_SemanticPrintsSnippet(t *testing.T) {
+	dir := writeSearchBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatalf("index build: %v", err)
+	}
+	out, err := runPlugin(t, "--semantic", "tannin structure astringency", dir)
+	if err != nil {
+		t.Fatalf("semantic query: %v", err)
+	}
+	// The snippet text from the Tannin node body must appear in the output.
+	if !strings.Contains(out, "structure and astringency") {
+		t.Errorf("semantic query should print the matched snippet; got %q", out)
+	}
+}
+
 func TestPlugin_Related(t *testing.T) {
 	dir := writeSearchBundle(t)
 	if _, err := runPlugin(t, "index", "build", dir); err != nil {
