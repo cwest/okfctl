@@ -1,3 +1,17 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package okf
 
 import (
@@ -114,6 +128,124 @@ func TestTemplateDrift_NoGoverningTemplate_NoFindings(t *testing.T) {
 	})
 	if d := TemplateDrift(b); len(d) != 0 {
 		t.Fatalf("node with no governing template should not drift, got: %v", d)
+	}
+}
+
+// provTemplate governs "Concept" and requires v0.2 nested provenance: the
+// §5.1 sources family and the §5.2 generated.at date, expressed as the dotted
+// path a template author would write.
+const provTemplate = `---
+type: Type Template
+target_type: Concept
+required_fields: [sources, generated.at]
+---
+
+# Provenance Template
+
+Governs Concept nodes' provenance.
+`
+
+// legacyTemplate governs "Concept" but is authored against the v0.1 spelling
+// (§13.1): a v0.1 author names the flat `timestamp` key it knew.
+const legacyTemplate = `---
+type: Type Template
+target_type: Concept
+required_fields: [timestamp]
+---
+
+# Legacy Template
+`
+
+// mkConceptBundle: a template + one Concept node with the given frontmatter kv
+// lines and body.
+func mkConceptBundle(t *testing.T, template, nodeFrontmatter, nodeBody string) *Bundle {
+	t.Helper()
+	return mkLintBundle(t, map[string]string{
+		"templates/prov.md": template,
+		"wine/tannin.md":    "---\ntype: Concept\n" + nodeFrontmatter + "---\n\n# Tannin\n\n" + nodeBody + "\n",
+	})
+}
+
+// §5.1 + §5.2: a required `sources` field is satisfied by a v0.2 frontmatter
+// sources list, and `generated.at` by a nested generated mapping. This is the
+// shape the FLAT lookup could not express at all.
+func TestTemplateDrift_V02NestedProvenance_Satisfied_Section5_1_5_2(t *testing.T) {
+	b := mkConceptBundle(t, provTemplate,
+		"sources:\n  - resource: https://example.com/a\ngenerated:\n  by: agent:x\n  at: '2026-05-28T00:00:00Z'\n",
+		"Body.")
+	if d := TemplateDrift(b); len(d) != 0 {
+		t.Fatalf("v0.2 node with sources + generated.at should not drift, got: %v", d)
+	}
+}
+
+// §13.1 legacy fallback (body list): a required `sources` field is satisfied by
+// a v0.1 body `# Citations` list when frontmatter `sources` is absent.
+func TestTemplateDrift_LegacyCitationsSatisfiesSources_Section13_1(t *testing.T) {
+	b := mkConceptBundle(t, provTemplate,
+		"generated:\n  at: '2026-05-28T00:00:00Z'\n",
+		"Body.\n\n# Citations\n\n[1] https://example.com/a\n")
+	joined := ""
+	for _, f := range TemplateDrift(b) {
+		joined += f.Message + "\n"
+	}
+	if strings.Contains(joined, "sources") {
+		t.Fatalf("legacy # Citations body list should satisfy required sources (§13.1), got: %v", joined)
+	}
+}
+
+// POSITIVE control: a node genuinely missing v0.2 provenance still drifts on
+// both required fields.
+func TestTemplateDrift_MissingV02Provenance_Drifts(t *testing.T) {
+	b := mkConceptBundle(t, provTemplate, "title: Tannin\n", "Body, no citations.")
+	joined := ""
+	for _, f := range TemplateDrift(b) {
+		joined += f.Message + "\n"
+	}
+	if !strings.Contains(joined, "sources") || !strings.Contains(joined, "generated.at") {
+		t.Fatalf("node missing both sources and generated.at should drift on both, got: %v", joined)
+	}
+}
+
+// NEGATIVE control (the load-bearing one, AGENTS.md "both controls"): a node
+// that correctly migrated to `generated.at` must stay SILENT under a template
+// authored against the LEGACY `timestamp` spelling — the v0.1-authored template
+// does not false-positive drift a v0.2 node (§13.1, bidirectional fallback).
+func TestTemplateDrift_MigratedNode_LegacyTemplate_Silent_Section13_1(t *testing.T) {
+	b := mkConceptBundle(t, legacyTemplate,
+		"generated:\n  by: agent:x\n  at: '2026-05-28T00:00:00Z'\n",
+		"Body.")
+	if d := TemplateDrift(b); len(d) != 0 {
+		t.Fatalf("migrated node (generated.at) must not drift under a [timestamp] template (§13.1), got: %v", d)
+	}
+}
+
+// §13.1 forward direction: a v0.1 node carrying the flat `timestamp` still
+// satisfies a template requiring the v0.2 `generated.at` — the fallback is
+// bidirectional, so neither spelling drifts the other.
+func TestTemplateDrift_LegacyNode_V02Template_Silent_Section13_1(t *testing.T) {
+	b := mkConceptBundle(t, provTemplate,
+		"sources:\n  - resource: https://example.com/a\ntimestamp: '2026-05-28T00:00:00Z'\n",
+		"Body.")
+	joined := ""
+	for _, f := range TemplateDrift(b) {
+		joined += f.Message + "\n"
+	}
+	if strings.Contains(joined, "generated.at") {
+		t.Fatalf("legacy timestamp should satisfy required generated.at (§13.1), got: %v", joined)
+	}
+}
+
+// A non-provenance dotted path with no v0.2 accessor still resolves by literal
+// nested-map traversal: `foo.bar` reads frontmatter foo: { bar: ... }.
+func TestTemplateDrift_GenericDottedPath(t *testing.T) {
+	tmpl := "---\ntype: Type Template\ntarget_type: Concept\nrequired_fields: [meta.owner]\n---\n\n# T\n"
+	present := mkConceptBundle(t, tmpl, "meta:\n  owner: casey\n", "Body.")
+	if d := TemplateDrift(present); len(d) != 0 {
+		t.Fatalf("meta.owner present should not drift, got: %v", d)
+	}
+	absent := mkConceptBundle(t, tmpl, "meta:\n  other: x\n", "Body.")
+	if d := TemplateDrift(absent); len(d) == 0 {
+		t.Fatal("meta.owner absent should drift")
 	}
 }
 
