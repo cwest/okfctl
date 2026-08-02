@@ -32,3 +32,12 @@ func (n *Node) Type() string {
 	}
 	return ""
 }
+
+// Tags returns the node's frontmatter tags (§4.1), nil when absent. Tags are an
+// optional YAML list; a scalar tag normalizes to a one-element list and non-string
+// scalars coerce to their string form. This is the exported accessor for callers
+// outside the package (e.g. semantic-search filters) that need a node's tags
+// without reaching into frontmatter directly.
+func (n *Node) Tags() []string {
+	return nodeTags(n)
+}

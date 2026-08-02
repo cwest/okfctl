@@ -268,7 +268,7 @@ func TestQuery_NegativeControl_ShortNodeUnchanged(t *testing.T) {
 
 	// Whole-node ranking (the pre-change behavior) on the same store.
 	qv := e.Encode([]string{q})[0]
-	wholeTop := rank(s.Entries, qv, 3, "")[0].Path
+	wholeTop := rank(s.Entries, qv, 3, "", Filter{}, nil)[0].Path
 
 	// Passage ranking must produce the same top node.
 	res, err := Query(s, e, q, 3)
