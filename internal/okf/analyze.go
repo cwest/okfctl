@@ -419,10 +419,21 @@ func analyzeFreshness(b *Bundle, opts AnalyzeOptions) FreshnessReport {
 }
 
 // freshnessBasis returns the basis date string, its parsed time, and whether a
-// usable date was found. Field order: modified -> created (the corpus completed
-// its legacy `timestamp` migration in the derived-artifacts card, so there is
-// no legacy fallback here).
+// usable date was found. Resolution order:
+//  1. n.Generated() — the spec's canonical `generated.at` (§5.2) with the legacy
+//     `timestamp` fallback (§13.1). Generated() returns ok=false when neither
+//     yields a usable date, so a zero-value `generated` mapping (an empty/absent
+//     `at` and no legacy timestamp) is never read as a valid basis.
+//  2. modified -> created — okfctl-native compatibility, unchanged. These keys
+//     are not spec-defined; they carry our own v0.1 corpus, which records no
+//     `generated`/`timestamp`.
 func freshnessBasis(n *Node) (string, time.Time, bool) {
+	// §5.2 / §13.1: prefer the spec fields via the shared provenance reader.
+	// Generated() reports ok on `by` alone (§5.2 requires `by`), which leaves a
+	// zero `At`; freshness needs a real DATE, so require a non-zero time here.
+	if g, ok := n.Generated(); ok && !g.At.IsZero() {
+		return g.At.Format("2006-01-02"), g.At, true
+	}
 	for _, key := range []string{"modified", "created"} {
 		if raw, ok := n.Frontmatter[key]; ok {
 			if t, ok := frontmatterTime(raw); ok {
