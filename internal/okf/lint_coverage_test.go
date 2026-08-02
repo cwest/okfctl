@@ -15,6 +15,7 @@
 package okf
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -119,6 +120,99 @@ func TestLint_CoverageGap_TitleMatchIsCovered(t *testing.T) {
 	for _, g := range findingsFor(Lint(b, LintOptions{}), "coverage-gap") {
 		if containsWord(lc(g.Message), "card sorting") {
 			t.Fatalf("Card Sorting is an existing node title; covered, not a gap: %+v", g)
+		}
+	}
+}
+
+func TestLint_CoverageGap_TitlePrefixCoversElaboratedTerm(t *testing.T) {
+	// Regression: a term T is covered by a node whose title LEADS with T and then
+	// elaborates (T is a whole-phrase prefix of the title), even though the title
+	// is not exactly T. Cross-linking T as prose from several other nodes must
+	// NOT report T as a coverage gap — the leading node IS T's home. (Real case:
+	// "Block Buzz" led the title "Block Buzz vs. Discord as the Hermes channel";
+	// referenced by 3+ nodes it was falsely flagged as an uncovered gap.)
+	b := mkLintBundle(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [A](a.md)\n- [B](b.md)\n- [C](c.md)\n- [BB](bb.md)\n",
+		"a.md":     lintDoc("Concept", "A", "We compared Block Buzz to alternatives."),
+		"b.md":     lintDoc("Concept", "B", "Block Buzz keeps coming up."),
+		"c.md":     lintDoc("Concept", "C", "Again, Block Buzz is relevant here."),
+		"bb.md":    aliasDoc("Research", "Block Buzz vs. Discord as the Hermes channel", []string{"Block Buzz"}, "The node covering the Block Buzz concept."),
+	})
+	for _, g := range findingsFor(Lint(b, LintOptions{}), "coverage-gap") {
+		if containsWord(lc(g.Message), "block buzz") {
+			t.Fatalf("Block Buzz leads bb.md's title; it is covered, not a coverage gap: %+v", g)
+		}
+	}
+}
+
+func TestLint_CoverageGap_AliasOnUnrelatedNodeStillGap(t *testing.T) {
+	// Boundary: a term declared only as an ALIAS of a node about a DIFFERENT
+	// concept (the title neither equals nor leads with the term) still has no
+	// home of its own and remains a real gap when referenced enough. This keeps
+	// the coverage-gap check meaningful — an alias marks a known concept, but a
+	// passing alias on an unrelated node is not a covering node.
+	b := mkLintBundle(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [A](a.md)\n- [B](b.md)\n- [C](c.md)\n- [Z](z.md)\n",
+		"a.md":     lintDoc("Concept", "A", "We used Card Sorting to structure the taxonomy."),
+		"b.md":     lintDoc("Concept", "B", "Card Sorting revealed the mental model."),
+		"c.md":     lintDoc("Concept", "C", "Run a Card Sorting study early."),
+		"z.md":     aliasDoc("Concept", "Information Architecture", []string{"Card Sorting"}, "IA basics."),
+	})
+	found := false
+	for _, g := range findingsFor(Lint(b, LintOptions{}), "coverage-gap") {
+		if containsWord(lc(g.Message), "card sorting") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("Card Sorting is aliased only by the unrelated Information Architecture node; it has no home and must remain a gap")
+	}
+}
+
+func TestTitlePrefixTerms_DashSeparatorTerminatesRun(t *testing.T) {
+	// The credited set for a dash-separated title must contain the leading
+	// concept and NOT the trailing elaboration. A standalone em-dash, en-dash,
+	// or spaced hyphen is a clause boundary: "Design systems — the umbrella
+	// discipline" names "design systems", not "design systems — the umbrella".
+	// Without the dash boundary the run swallowed the dash and everything after
+	// it, crediting inert fragments like "design systems — the umbrella".
+	cases := []struct {
+		title string
+		want  []string
+	}{
+		{"design systems — the umbrella discipline", []string{"design", "design systems"}},
+		{"design systems – the umbrella discipline", []string{"design", "design systems"}},
+		{"design systems - the umbrella discipline", []string{"design", "design systems"}},
+		{"design systems—the umbrella discipline", []string{"design", "design systems"}},
+	}
+	for _, tc := range cases {
+		got := titlePrefixTerms(tc.title)
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("titlePrefixTerms(%q) = %v, want %v", tc.title, got, tc.want)
+		}
+		for _, term := range got {
+			if strings.Contains(term, "umbrella") {
+				t.Errorf("titlePrefixTerms(%q) credited a trailing fragment past the dash: %q", tc.title, term)
+			}
+		}
+	}
+}
+
+func TestLint_CoverageGap_DashTitleStillCoversLeadingTerm(t *testing.T) {
+	// Regression guard for the boundary fix: a node whose title leads with a
+	// term and then elaborates after a dash still COVERS that term. Tightening
+	// the credited set must not resurface the finding this check was fixed to
+	// silence — "Design Systems" is the home of dsystems.md, not a gap.
+	b := mkLintBundle(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [A](a.md)\n- [B](b.md)\n- [C](c.md)\n- [DS](ds.md)\n",
+		"a.md":     lintDoc("Concept", "A", "We lean on Design Systems for consistency."),
+		"b.md":     lintDoc("Concept", "B", "Design Systems keep the UI coherent."),
+		"c.md":     lintDoc("Concept", "C", "Again, Design Systems pay off."),
+		"ds.md":    aliasDoc("Research", "Design Systems — the umbrella discipline for UI consistency", []string{"Design Systems"}, "The node covering the Design Systems concept."),
+	})
+	for _, g := range findingsFor(Lint(b, LintOptions{}), "coverage-gap") {
+		if containsWord(lc(g.Message), "design systems") {
+			t.Fatalf("Design Systems leads ds.md's title before the dash; it is covered, not a gap: %+v", g)
 		}
 	}
 }

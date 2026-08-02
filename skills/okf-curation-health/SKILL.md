@@ -111,7 +111,7 @@ $ echo $?
 | `orphan` | a concept node no node (or `index.md`) links to — unreachable by traversal | link it from a relevant node, or from `index.md` via `index build` |
 | `missing-xref` | a node's prose names another node's title as a whole word but doesn't link it | add the `[Title](path.md)` link, or reword if the mention is incidental |
 | `broken-link` | a node links to a `.md` target that resolves to no node, **and a node with that basename exists elsewhere** — a moved or mistyped path (a defect, not an unwritten concept) | fix the path to the resolved candidate the finding names |
-| `coverage-gap` | a **known concept term** (declared as a title/alias) is referenced by ≥ threshold distinct nodes but has no node of its own | author the missing node — it's a real to-do, prioritized by mention count |
+| `coverage-gap` | a **known concept term** (declared as a title/alias) is referenced by ≥ threshold distinct nodes but has no node of its own — a node whose title *is* the term or *leads with* it counts as its home | author the missing node — it's a real to-do, prioritized by mention count |
 | `type-hygiene` | two `type` values fold to the same canonical form (case / trailing-`s` plural), e.g. `Concept` vs `Concepts` | pick one spelling and normalize the drifting nodes |
 
 Two accuracy notes that keep you from chasing ghosts:
@@ -122,8 +122,12 @@ Two accuracy notes that keep you from chasing ghosts:
 - **`coverage-gap` only fires for *known* concepts** — a term some node declares
   as a `title` or `aliases:` entry. Arbitrary capitalized prose ("Google Cloud",
   a sentence-initial "The") is deliberately *not* a candidate; this is what makes
-  the check act on real gaps rather than noise. If you expect a gap and don't get
-  one, the term probably isn't declared as an alias anywhere yet.
+  the check act on real gaps rather than noise. A concept is considered to *have
+  a node* when some node's title equals the term or leads with it (e.g. a node
+  titled "Block Buzz vs. Discord…" is the home for "Block Buzz"); an alias on an
+  otherwise-unrelated node marks the term as known but does not, by itself, give
+  it a home. If you expect a gap and don't get one, the term probably already has
+  a home node — or isn't declared as a concept anywhere yet.
 
 ### `broken-link` vs a dangling link — defect, not gap
 
