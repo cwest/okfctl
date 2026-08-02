@@ -205,8 +205,11 @@ func snippetPreview(text string) string {
 		return ""
 	}
 	s := strings.Join(fields, " ")
-	if len(s) > maxLen {
-		s = s[:maxLen] + "…"
+	// Truncate on rune boundaries, not bytes: the KB carries multi-byte UTF-8
+	// (curly quotes, em-dashes, accented names), and a byte-boundary cut would
+	// split a rune and emit a mangled partial byte before the ellipsis.
+	if r := []rune(s); len(r) > maxLen {
+		s = string(r[:maxLen]) + "…"
 	}
 	return s
 }
