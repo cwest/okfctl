@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func runPlugin(t *testing.T, args ...string) (string, error) {
@@ -75,6 +76,24 @@ func TestPlugin_IndexBuildThenSemantic(t *testing.T) {
 	}
 }
 
+// TestPlugin_SemanticPrintsSnippet pins that a semantic query prints the matched
+// passage snippet alongside the score and path, so the caller sees the passage
+// that answered the query rather than just a filename.
+func TestPlugin_SemanticPrintsSnippet(t *testing.T) {
+	dir := writeSearchBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatalf("index build: %v", err)
+	}
+	out, err := runPlugin(t, "--semantic", "tannin structure astringency", dir)
+	if err != nil {
+		t.Fatalf("semantic query: %v", err)
+	}
+	// The snippet text from the Tannin node body must appear in the output.
+	if !strings.Contains(out, "structure and astringency") {
+		t.Errorf("semantic query should print the matched snippet; got %q", out)
+	}
+}
+
 func TestPlugin_Related(t *testing.T) {
 	dir := writeSearchBundle(t)
 	if _, err := runPlugin(t, "index", "build", dir); err != nil {
@@ -107,5 +126,31 @@ func TestPlugin_Model2vecNeedsModelPath(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error should tell the user how to fix it (%q); got %v", want, err)
 		}
+	}
+}
+
+// TestSnippetPreview_TruncatesOnRuneBoundary pins that a snippet longer than the
+// preview cap is truncated without splitting a multi-byte UTF-8 rune. The KB
+// carries non-ASCII text (curly quotes, em-dashes, accented names), so a
+// byte-boundary cut would emit a mangled partial byte before the ellipsis.
+func TestSnippetPreview_TruncatesOnRuneBoundary(t *testing.T) {
+	// 198 ASCII runes then an em-dash (3 bytes: 0xE2 0x80 0x94). A byte-boundary
+	// cut at 200 lands inside the em-dash (bytes 199..201), splitting the rune.
+	in := strings.Repeat("a", 198) + "—" + strings.Repeat("b", 50)
+	out := snippetPreview(in)
+
+	if !utf8.ValidString(out) {
+		t.Errorf("snippetPreview produced invalid UTF-8 (mid-rune cut): %q", out)
+	}
+	if strings.ContainsRune(out, utf8.RuneError) {
+		t.Errorf("snippetPreview left a replacement-char/partial rune: %q", out)
+	}
+	// It must still truncate: 248 input runes exceed the 200-rune cap.
+	if !strings.HasSuffix(out, "…") {
+		t.Errorf("long snippet should be truncated with an ellipsis; got %q", out)
+	}
+	// The kept body is 200 runes plus the ellipsis.
+	if got := utf8.RuneCountInString(out); got != 201 {
+		t.Errorf("truncated preview should be 200 runes + ellipsis = 201 runes; got %d (%q)", got, out)
 	}
 }
