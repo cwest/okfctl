@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -63,6 +64,7 @@ func loadSemanticIndex(bundleDir string, b *okf.Bundle) (okf.SemanticIndex, erro
 
 func newLintCmd() *cobra.Command {
 	var strict bool
+	var jsonOut bool
 	var coverageThreshold int
 	var semantic bool
 	var similarityThreshold float64
@@ -104,6 +106,27 @@ func newLintCmd() *cobra.Command {
 					IsolationFloor:      isolationFloor,
 				})...)
 			}
+			if jsonOut {
+				// Machine path: marshal the findings as a bare JSON array,
+				// preserving Lint()'s (path, then check) sort. A clean bundle
+				// emits "[]" (never null, never the human "OK" line) so a CI
+				// consumer can always `jq length`. Under --strict the JSON is
+				// still the only thing on stdout — the non-zero exit is
+				// signalled by the returned error, never by a prose trailer
+				// mixed into the stream. Mirrors analyze --json.
+				if findings == nil {
+					findings = []okf.LintFinding{}
+				}
+				enc, err := json.MarshalIndent(findings, "", "  ")
+				if err != nil {
+					return fmt.Errorf("marshal findings: %w", err)
+				}
+				fmt.Fprintln(cmd.OutOrStdout(), string(enc))
+				if strict && len(findings) > 0 {
+					return fmt.Errorf("%d lint finding(s)", len(findings))
+				}
+				return nil
+			}
 			if len(findings) == 0 {
 				fmt.Fprintln(cmd.OutOrStdout(), "OK: no lint findings")
 				return nil
@@ -119,6 +142,7 @@ func newLintCmd() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&strict, "strict", false, "exit non-zero if there are any findings (default: advisory, exit 0)")
+	c.Flags().BoolVar(&jsonOut, "json", false, "emit findings as a machine-readable JSON array (sorted path, then check) instead of the human report")
 	c.Flags().IntVar(&coverageThreshold, "coverage-threshold", 0, "min distinct nodes that must mention a term to report a coverage gap (default 3)")
 	c.Flags().BoolVar(&semantic, "semantic", false, "also run similarity checks against the index built by 'okfctl-search index build'")
 	c.Flags().Float64Var(&similarityThreshold, "similarity-threshold", 0, "cosine score at/above which two unlinked nodes are reported (default 0.80; implies --semantic data)")
