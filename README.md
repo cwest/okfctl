@@ -111,7 +111,7 @@ okfctl-search --embedder model2vec --model-path ~/models/potion-base-8M --semant
 ```
 
 The directory needs the standard model2vec layout: `config.json`, `model.safetensors`, and `tokenizer.json` (or `vocab.txt`). If no path is configured, `model2vec` fails with an actionable error rather than silently falling back to `hash` — a query answered by the wrong embedder is worse than one that refuses to run. An index records the model it was built with, so switching embedders requires a rebuild.
-- `lint <dir>` — report curation health findings (orphans, missing cross-references, coverage gaps, type-value hygiene). Advisory by default (exits 0 even with findings); `--strict` exits non-zero on any finding, `--coverage-threshold N` tunes the coverage-gap check (default 3). `lint` never mutates the bundle.
+- `lint <dir>` — report curation health findings (orphans, missing cross-references, broken internal links, coverage gaps, type-value hygiene). Advisory by default (exits 0 even with findings); `--strict` exits non-zero on any finding, `--coverage-threshold N` tunes the coverage-gap check (default 3). `lint` never mutates the bundle.
 - `lint <dir> --semantic` — add the two similarity-driven checks (see below). Requires an index built by `okfctl-search index build`; **no embedding model is needed to lint**, because core only ever *reads* an index.
 
 #### Semantic lint (`--semantic`)
