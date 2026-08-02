@@ -1,7 +1,7 @@
-# okfctl — Nested per-directory index.md conforming to OKF SPEC §6
+# okfctl — Nested per-directory index.md conforming to OKF SPEC §8
 
 **Status:** Approved (design) · **Owner:** Casey West · **License:** Apache-2.0
-**Source of truth:** OKF `SPEC.md` §6 (Index Files), §11 (Versioning marker).
+**Source of truth:** OKF `SPEC.md` §8 (Index Files), §12 (Versioning marker).
 **Base:** `main` @ `3daa7a8`  **Branch:** `topic/nested-per-dir-index`
 
 ## Problem
@@ -10,7 +10,7 @@
 every concept node in the bundle, grouped by top-level neighborhood, with
 **bundle-relative** links (`wine/tannin.md`) and a per-node **type** annotation.
 
-OKF SPEC §6 specifies a different model:
+OKF SPEC §8 specifies a different model:
 
 > An `index.md` file MAY appear in **any directory**, including the bundle root.
 > It enumerates **the directory's contents** to support progressive disclosure.
@@ -23,11 +23,11 @@ Its example links a subdirectory as `* [Subdirectory](subdir/)` — a
 The flat model therefore diverges from the spec three ways:
 
 1. It collapses N nested per-directory indexes into one, destroying the
-   progressive disclosure §6 exists to provide.
-2. It emits bundle-relative links (`wine/tannin.md`) where §6 is dir-relative
+   progressive disclosure §8 exists to provide.
+2. It emits bundle-relative links (`wine/tannin.md`) where §8 is dir-relative
    (`tannin.md`, `subdir/`).
 3. It annotates each entry with the node's `type` and omits the `description`,
-   where §6 says entries SHOULD carry the `description`.
+   where §8 says entries SHOULD carry the `description`.
 
 This is the same class of finding as the frontmatter fix already shipped: the
 spec is ground truth; okfctl is the divergent producer, and a producer of a
@@ -59,7 +59,7 @@ For directory `D` (bundle-relative, `""` = root), in two sorted sections:
 - **`## Concepts`** — each concept node that lives DIRECTLY in `D` (not in a
   subdirectory), as `* [Title](file.md) - description`, where `file.md` is the
   node's base name (dir-relative) and title/description come from its
-  frontmatter. The `description` is included per §6 when present; a node with no
+  frontmatter. The `description` is included per §8 when present; a node with no
   `description` renders `* [Title](file.md)` with no trailing ` - `.
 
 Both sections are emitted only when non-empty. Entries within each section are
@@ -67,16 +67,16 @@ sorted (subdirectories by directory name; concepts by base name) for
 byte-stable, deterministic output.
 
 Bullet form is `* ` and the title/description separator is ` - `, matching the
-SPEC §6 example grammar verbatim. Section heading TEXT is a producer choice per
-§6 ("one or more sections, each grouping … under a heading"); the retired
+SPEC §8 example grammar verbatim. Section heading TEXT is a producer choice per
+§8 ("one or more sections, each grouping … under a heading"); the retired
 `tools/okf_index.py`'s `# Subdirectories`/`# Concepts` h1 + `<!-- BEGIN
 GENERATED INDEX -->` marker block + em-dash + `type` annotation are that tool's
 LOCAL convention and are explicitly NOT targets — this design uses `##` sections
 and carries no marker block or boilerplate.
 
-### Frontmatter (§6 / §11)
+### Frontmatter (§8 / §12)
 
-No `index.md` carries frontmatter, with the single §11 carve-out: the
+No `index.md` carries frontmatter, with the single §12 carve-out: the
 **bundle-root** index MAY carry an `okf_version`-only block. That existing rule
 (and its marker-preservation semantics) is retained unchanged — only the
 bundle-root index may carry `okf_version`; every nested index carries no
@@ -91,7 +91,7 @@ In `internal/okf`:
   should carry an index (`""` for the root). The single source of truth for
   "which directories get an index," shared by build, check, and maintenance.
 - `RenderDirIndex(b *Bundle, dir string) string` — the index body for one
-  directory. The bundle-root case (`dir == ""`) carries the §11 okf_version
+  directory. The bundle-root case (`dir == ""`) carries the §12 okf_version
   frontmatter block when applicable; all others carry none.
 - `RenderIndex(b *Bundle) string` — retained as `RenderDirIndex(b, "")` (the
   bundle-root index) so existing call sites keep compiling.
@@ -116,7 +116,7 @@ unchanged — the nesting is entirely inside the model.
   missing, or orphaned.
 - Table-driven tests cover: nested emission, dir-relative link form,
   subdirectory entries (`child/`), description passthrough, bundle-root
-  `okf_version` retention, and the §6 no-frontmatter rule for non-root indexes.
+  `okf_version` retention, and the §8 no-frontmatter rule for non-root indexes.
 - A real-corpus smoke run against `~/src/knowledge-base/bundles/knowledge`
   produces nested indexes and `index check` exits 0.
 - `go test ./... -race -count=1` green; gofmt/vet clean.

@@ -21,7 +21,7 @@ import (
 	"testing"
 )
 
-// OKF §6: "Index files contain no frontmatter." OKF §11: the bundle-root
+// OKF §8: "Index files contain no frontmatter." OKF §12: the bundle-root
 // index.md may carry a frontmatter block containing okf_version — "the only
 // place frontmatter is permitted in an index.md" — and nothing else. These
 // tests pin `index build` output to that grammar so the tool that enforces the
@@ -68,7 +68,7 @@ func TestRenderIndex_NoFrontmatterWithoutOkfVersion(t *testing.T) {
 func TestRenderIndex_RootFrontmatterHasOnlyOkfVersion(t *testing.T) {
 	dir := t.TempDir()
 	// A .okf sidecar pins the bundle's okf_version, and the bundle-root index
-	// carries it — the sole sanctioned frontmatter key (§11).
+	// carries it — the sole sanctioned frontmatter key (§12).
 	if err := os.WriteFile(filepath.Join(dir, ".okf"), []byte("okf_version: 0.1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

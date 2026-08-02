@@ -42,7 +42,7 @@ func nodeTitle(n *Node) string {
 	return strings.TrimSuffix(path.Base(n.Path), ".md")
 }
 
-// nodeDescription returns the node's description frontmatter (OKF §6: entries
+// nodeDescription returns the node's description frontmatter (OKF §8: entries
 // SHOULD carry the linked concept's description), or "" when absent, blank, or
 // not a scalar string. A multi-line description is flattened to its first line
 // so an index entry stays a single well-formed bullet.
@@ -82,7 +82,7 @@ func dirTitle(dir string) string {
 }
 
 // IndexDirs returns the sorted bundle-relative directories that should carry an
-// index.md (OKF §6: an index MAY appear in any directory and enumerates that
+// index.md (OKF §8: an index MAY appear in any directory and enumerates that
 // directory's contents). A directory qualifies when it directly holds a concept
 // node OR is an ancestor of a directory that does — exactly the set a reader
 // traverses for progressive disclosure. The bundle root ("") is always included
@@ -116,7 +116,7 @@ func IndexDirs(b *Bundle) []string {
 // content-bearing child directory. When the child directory has its own
 // index.md node on disk with a title/description frontmatter, those are used;
 // otherwise the title falls back to a Title-cased directory name and the
-// description is omitted. (Nested indexes carry no frontmatter per §6, so in
+// description is omitted. (Nested indexes carry no frontmatter per §8, so in
 // practice this falls back to the derived title — but reading an existing
 // index's frontmatter keeps the door open for a curator-authored one.)
 func childDirIndexTitleDesc(b *Bundle, childDir string) (string, string) {
@@ -131,7 +131,7 @@ func childDirIndexTitleDesc(b *Bundle, childDir string) (string, string) {
 }
 
 // bundleRootOkfVersion resolves the okf_version to emit on the bundle-ROOT
-// index frontmatter, per the marker-compatibility contract (OKF §11):
+// index frontmatter, per the marker-compatibility contract (OKF §12):
 //
 //  1. If the on-disk bundle-root index.md already declares okf_version, that
 //     value is PRESERVED exactly (a curator-committed version is never bumped or
@@ -176,8 +176,8 @@ func scalarString(v any) string {
 	}
 }
 
-// rootFrontmatter emits the bundle-root index frontmatter block. Per OKF §6 an
-// index.md contains no frontmatter, with a single §11 carve-out: the bundle-root
+// rootFrontmatter emits the bundle-root index frontmatter block. Per OKF §8 an
+// index.md contains no frontmatter, with a single §12 carve-out: the bundle-root
 // index MAY carry a frontmatter block containing okf_version — "the only place
 // frontmatter is permitted in an index.md" — and nothing else. So this emits an
 // okf_version-only block when the marker-compatibility contract says the key
@@ -231,7 +231,7 @@ func conceptsIn(b *Bundle, dir string) []string {
 	return paths
 }
 
-// entry renders one OKF §6 index bullet: `* [Title](url) - description`, or
+// entry renders one OKF §8 index bullet: `* [Title](url) - description`, or
 // `* [Title](url)` when description is empty. The url is dir-relative.
 func entry(title, url, desc string) string {
 	if desc == "" {
@@ -242,12 +242,12 @@ func entry(title, url, desc string) string {
 
 // RenderDirIndex produces the deterministic index.md body for one directory of
 // the bundle (dir is bundle-relative slash form; "" is the bundle root), per OKF
-// §6: it enumerates ONLY that directory's own immediate contents — its
+// §8: it enumerates ONLY that directory's own immediate contents — its
 // content-bearing child directories (linked dir-relatively as `child/`) under a
 // "Subdirectories" section, and the concept nodes living directly in it (linked
 // by base name) under a "Concepts" section, each carrying the linked concept's
 // description from frontmatter. Links are relative to dir itself, never
-// bundle-relative. Only the bundle-root index carries frontmatter (the §11
+// bundle-relative. Only the bundle-root index carries frontmatter (the §12
 // okf_version carve-out); every nested index carries none. Output is byte-stable
 // (all ordering via sort) and passes Validate.
 func RenderDirIndex(b *Bundle, dir string) string {
@@ -299,7 +299,7 @@ func indexPathFor(root, dir string) string {
 	return filepath.Join(root, filepath.FromSlash(dir), "index.md")
 }
 
-// WriteIndex regenerates one index.md per content-bearing directory (OKF §6),
+// WriteIndex regenerates one index.md per content-bearing directory (OKF §8),
 // from the current bundle. It is the single writer for the reserved index (both
 // `index build` and the automatic create/edit/delete/rename maintenance call it)
 // so the two paths cannot diverge on how indexes are produced. Directories are
@@ -309,7 +309,7 @@ func indexPathFor(root, dir string) string {
 // WriteIndex also self-heals the tree: an index.md left behind in a directory
 // that is no longer content-bearing (e.g. after a node moved or was removed out
 // of it) is pruned, so a subsequent `index check` is clean. This is the stale
-// parent/sibling index class the pre-§6 flat model left behind.
+// parent/sibling index class the pre-§8 flat model left behind.
 func WriteIndex(b *Bundle) error {
 	want := map[string]bool{}
 	for _, dir := range IndexDirs(b) {

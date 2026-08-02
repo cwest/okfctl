@@ -82,7 +82,7 @@ func equalStringSlice(a, b []string) bool {
 	return true
 }
 
-// TestRenderDirIndex_DirRelativeConceptLinks pins §6: a concept living directly
+// TestRenderDirIndex_DirRelativeConceptLinks pins §8: a concept living directly
 // in the directory is linked by its BASE name (dir-relative), never a
 // bundle-relative path, and carries its description.
 func TestRenderDirIndex_DirRelativeConceptLinks(t *testing.T) {
@@ -107,9 +107,9 @@ func TestRenderDirIndex_DirRelativeConceptLinks(t *testing.T) {
 	if strings.Index(got, "acidity.md") > strings.Index(got, "tannin.md") {
 		t.Errorf("concepts not sorted within directory; got:\n%s", got)
 	}
-	// §6: nested index carries NO frontmatter.
+	// §8: nested index carries NO frontmatter.
 	if strings.HasPrefix(got, "---\n") {
-		t.Errorf("§6: non-root index must have no frontmatter; got:\n%s", got)
+		t.Errorf("§8: non-root index must have no frontmatter; got:\n%s", got)
 	}
 	// §6 says entries carry description, NOT a type annotation.
 	if strings.Contains(got, "Reference") {
@@ -117,7 +117,7 @@ func TestRenderDirIndex_DirRelativeConceptLinks(t *testing.T) {
 	}
 }
 
-// TestRenderDirIndex_SubdirectoryEntries pins §6's `* [Subdirectory](subdir/)`
+// TestRenderDirIndex_SubdirectoryEntries pins §8's `* [Subdirectory](subdir/)`
 // form: an index enumerates its immediate content-bearing child directories with
 // a trailing-slash dir-relative link, and does NOT reach into grandchildren.
 func TestRenderDirIndex_SubdirectoryEntries(t *testing.T) {
@@ -175,7 +175,7 @@ func TestRenderDirIndex_RootLinksToChildDirsAndOwnConcepts(t *testing.T) {
 	}
 }
 
-// TestRenderDirIndex_RootRetainsOkfVersion pins §11: the bundle-root index still
+// TestRenderDirIndex_RootRetainsOkfVersion pins §12: the bundle-root index still
 // carries the okf_version marker (Scaffold writes a .okf sidecar), and nothing
 // else.
 func TestRenderDirIndex_RootRetainsOkfVersion(t *testing.T) {
@@ -189,7 +189,7 @@ func TestRenderDirIndex_RootRetainsOkfVersion(t *testing.T) {
 	}
 	root := RenderDirIndex(b, "")
 	if !strings.HasPrefix(root, "---\nokf_version: ") {
-		t.Errorf("§11: root index must retain the okf_version marker; got:\n%s", root)
+		t.Errorf("§12: root index must retain the okf_version marker; got:\n%s", root)
 	}
 	if strings.Contains(root, "type:") {
 		t.Errorf("root frontmatter must carry only okf_version; got:\n%s", root)
@@ -197,7 +197,7 @@ func TestRenderDirIndex_RootRetainsOkfVersion(t *testing.T) {
 	// A nested index never carries the marker.
 	nested := RenderDirIndex(b, "wine")
 	if strings.HasPrefix(nested, "---\n") {
-		t.Errorf("§6/§11: nested index must have NO frontmatter (okf_version is bundle-root-only); got:\n%s", nested)
+		t.Errorf("§8/§12: nested index must have NO frontmatter (okf_version is bundle-root-only); got:\n%s", nested)
 	}
 }
 
