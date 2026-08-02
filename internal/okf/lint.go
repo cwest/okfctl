@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -127,19 +128,76 @@ func lintOrphans(b *Bundle) []LintFinding {
 	return out
 }
 
-// proseBody returns the node's prose body with any leading YAML frontmatter
-// fence removed. For a well-formed node the loader already stripped frontmatter,
-// so Body is prose-only and this is a no-op. But when a node's frontmatter fails
-// to parse, the loader preserves the whole file as Body (so validate can flag
-// it); this strips a leading `---` ... `---` fence from that raw text so the
-// lint checks scan PROSE only — frontmatter metadata (type/title/status/aliases
-// values) is never a concept mention. Uses the same splitter as the loader so
-// the fence detection can never diverge.
+// Non-prose span patterns stripped by proseBody. Ordered application (fenced
+// code -> inline code -> markdown links -> autolinks) below.
+var (
+	// A ```...``` (or ~~~...~~~) fenced code block, across lines.
+	fencedCodeRe = regexp.MustCompile("(?s)```.*?```|~~~.*?~~~")
+	// An inline `code span`. Non-greedy, single-line (a stray backtick won't eat
+	// the rest of the body).
+	inlineCodeRe = regexp.MustCompile("`[^`\n]*`")
+	// A markdown link/image: keep the visible TEXT, drop the destination. The
+	// text a reader sees is genuine prose; the URL is not. Applied as a
+	// replacement to $1 (the label), so `[Foo](http://x)` -> `Foo` and an image
+	// `![alt](src)` -> `alt` (harmless — alt is not a URL either way).
+	mdLinkStripRe = regexp.MustCompile(`!?\[([^\]]*)\]\([^)]*\)`)
+	// A bare autolink `<https://...>` — a URL the reader sees rendered as a link,
+	// never running prose.
+	autolinkRe = regexp.MustCompile(`<https?://[^>\s]*>`)
+	// A reference-style link DEFINITION line: `[label]: destination "optional
+	// title"`, with up to three leading spaces per CommonMark. The destination is
+	// a SINGLE link-destination token — either an angle-bracketed `<...>` run or a
+	// run of non-whitespace characters — optionally followed by a title in
+	// double quotes, single quotes, or parentheses. Constraining the destination
+	// this way is what distinguishes a real definition (never seen by a reader)
+	// from a prose FOOTNOTE line such as `[9]: Charlie provides the counterpoint`,
+	// whose text after `]:` is running prose a reader sees and must be preserved.
+	// Only the label of a real definition is ever a reader-visible identifier, and
+	// it is an internal handle, not prose; the destination and title are never
+	// seen. Strip the whole matched line. Multi-line via (?m) so `^`/`$` anchor
+	// each definition line.
+	refLinkDefRe = regexp.MustCompile(`(?m)^ {0,3}\[[^\]]+\]:[ 	]*(?:<[^>]*>|\S+)(?:[ 	]+(?:"[^"]*"|'[^']*'|\([^)]*\)))?[ 	]*$`)
+)
+
+// proseBody returns the node's prose body: the text a READER actually sees, with
+// non-prose spans removed. It strips (1) any leading YAML frontmatter fence, (2)
+// fenced and inline code, (3) inline markdown link DESTINATIONS while preserving
+// link TEXT, (4) bare autolink URLs, and (5) reference-style link DEFINITION
+// lines (`[label]: url "title"`) — their destinations are never seen while the
+// visible reference USAGE label (`[text][label]`) is left intact as prose. This
+// is the single seam every prose-matching check (missing-xref, coverage-gap
+// candidate terms, time-sensitive markers) must route through, so a title or
+// marker that appears only inside a URL, a code span, or frontmatter is never
+// mistaken for a concept a reader wrote.
+//
+// Link grammar covered: inline `[text](url)`/`![alt](url)`, bare autolinks
+// `<url>`, and reference DEFINITIONS `[label]: url` whose destination is a single
+// link-destination token (± an optional title). Reference USAGES keep their
+// visible label, and a `[n]: running prose` FOOTNOTE line — which is not a
+// definition because its text after `]:` is many words, not one destination
+// token — is preserved as the prose a reader sees. Nested-bracket and multi-line
+// definition edge cases are not handled; the corpus does not use them.
+//
+// The graph, dangling-link, and edge passes deliberately do NOT use this seam:
+// they need the raw link destinations and read n.Body directly via
+// scanNodeLinks / danglingTargets.
+//
+// For a well-formed node the loader already stripped frontmatter, so the fence
+// step is a no-op; when a node's frontmatter fails to parse, the loader
+// preserves the whole file as Body (so validate can flag it) and this strips the
+// leading `---` ... `---` fence from that raw text using the same splitter as
+// the loader, so the fence detection can never diverge.
 func proseBody(n *Node) string {
-	if s, ok := splitFrontmatter([]byte(n.Body)); ok {
-		return string(s.body)
+	body := n.Body
+	if s, ok := splitFrontmatter([]byte(body)); ok {
+		body = string(s.body)
 	}
-	return n.Body
+	body = fencedCodeRe.ReplaceAllString(body, " ")
+	body = inlineCodeRe.ReplaceAllString(body, " ")
+	body = refLinkDefRe.ReplaceAllString(body, " ")
+	body = mdLinkStripRe.ReplaceAllString(body, "$1")
+	body = autolinkRe.ReplaceAllString(body, " ")
+	return body
 }
 
 // linkedTargets returns the set of node paths a given node already links to.
