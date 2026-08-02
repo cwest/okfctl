@@ -246,6 +246,7 @@ func newNodeCmd() *cobra.Command {
 	node.AddCommand(editC)
 
 	node.AddCommand(newNodeRefreshCmd())
+	node.AddCommand(newNodePromoteCmd())
 	return node
 }
 
@@ -318,6 +319,87 @@ func newNodeRefreshCmd() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&dry, "dry-run", false, "list what would change and exit 0 without writing")
+	return c
+}
+
+// newNodePromoteCmd builds `node promote`, the bulk remediation for the
+// directory-as-concept shape validate reports: every NON-ROOT index.md that
+// carries frontmatter is moved to a sibling concept file (dir/<basename>.md;
+// basename defaults to the directory name, --name overrides it uniformly). The
+// body is preserved verbatim and `created` is immutable, matching node refresh.
+// Inbound links to the old directory-concept — in BOTH the dir/index.md and
+// dir/ spellings — are rewritten to the new concept path, then log.md/index.md
+// are maintained via the same derived-artifact paths as the other node verbs.
+// The bundle-root index is left alone (its §11 okf_version marker is legal).
+//
+//	okfctl node promote <bundle>                 # promote every dir-concept index
+//	okfctl node promote <bundle> --name overview # pick one basename convention
+//	okfctl node promote <bundle> --dry-run       # list moves + rewrites, write nothing
+//
+// --dry-run lists every move and inbound-link rewrite and writes ZERO bytes; it
+// exits non-zero only on a real failure, never on "found promotable indexes".
+func newNodePromoteCmd() *cobra.Command {
+	var dry bool
+	var name string
+	c := &cobra.Command{
+		Use:   "promote <bundle>",
+		Short: "Promote directory-as-concept index.md files to sibling concept files (bulk remediation)",
+		Long: "promote remediates the directory-as-concept shape validate reports: every " +
+			"non-root index.md that carries frontmatter is moved to a sibling concept file " +
+			"(dir/<basename>.md; basename defaults to the directory name, --name overrides it). " +
+			"The body is preserved verbatim and `created` is immutable, matching node refresh. " +
+			"Inbound links to the old directory-concept are rewritten (both the dir/index.md and " +
+			"dir/ spellings), the real index.md is regenerated with no frontmatter, and log.md is " +
+			"appended. The bundle-root index is left alone. --dry-run lists every move and rewrite " +
+			"and writes nothing.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dir := args[0]
+			b, err := okf.Load(dir)
+			if err != nil {
+				return fmt.Errorf("load bundle: %w", err)
+			}
+
+			plan, err := okf.PromotePlan(b, name)
+			if err != nil {
+				return err
+			}
+
+			out := cmd.OutOrStdout()
+			if len(plan) == 0 {
+				fmt.Fprintln(out, "No directory-as-concept indexes to promote.")
+				return nil
+			}
+
+			if dry {
+				for _, ch := range plan {
+					fmt.Fprintf(out, "would promote %s -> %s\n", ch.OldPath, ch.NewPath)
+					for _, rw := range ch.Rewrites {
+						fmt.Fprintf(out, "  rewrite %s: %s -> %s\n", rw.NodePath, rw.Old, rw.New)
+					}
+				}
+				fmt.Fprintf(out, "%d index(es) would be promoted (dry run; nothing written)\n", len(plan))
+				return nil
+			}
+
+			if err := okf.PromoteApply(dir, b, plan); err != nil {
+				return err
+			}
+			for _, ch := range plan {
+				fmt.Fprintf(out, "promoted %s -> %s (%d inbound link(s) rewritten)\n",
+					ch.OldPath, ch.NewPath, len(ch.Rewrites))
+				logOnPromote(cmd, dir, ch.OldPath, ch.NewPath)
+			}
+			// Regenerate index.md once after all promotions (not per node), so the
+			// old directory indexes are rebuilt as clean, frontmatter-free
+			// navigation surfaces.
+			maintainIndex(cmd, dir)
+			fmt.Fprintf(out, "%d index(es) promoted\n", len(plan))
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&dry, "dry-run", false, "list what would change and exit 0 without writing")
+	c.Flags().StringVar(&name, "name", "", "basename for every promoted concept file (default: the directory name)")
 	return c
 }
 

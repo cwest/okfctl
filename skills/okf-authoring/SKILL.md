@@ -200,6 +200,36 @@ remove concepts/mouthfeel.md
   orphaned: concepts/tannin.md
 ```
 
+### Migrating a directory-as-concept corpus with `node promote`
+
+Corpora imported from tools where a **directory is a concept** — Obsidian folder
+notes, Hugo `_index.md`, Jekyll collections, most wikis — put the concept's
+frontmatter and body in each directory's `index.md`. OKF models `index.md`
+differently: it is a generated navigation surface (§6), and only the bundle-root
+index may carry frontmatter (the §11 `okf_version` marker). So every non-root
+`index.md` with frontmatter fails `validate`, and on first contact that can be
+hundreds of identical findings.
+
+`node promote` is the one-command remediation. For every non-root `index.md`
+that carries frontmatter it moves the file to a sibling concept
+(`foo/index.md` → `foo/foo.md`), preserves the body verbatim and keeps `created`
+immutable, rewrites inbound links (both the `foo/` and `foo/index.md`
+spellings), regenerates the real `index.md` with no frontmatter, and appends to
+`log.md`. The bundle-root index is left alone. **Always `--dry-run` first** — it
+lists every move and link rewrite and writes nothing:
+
+```sh
+$ okfctl node promote mykb --dry-run
+would promote gke-pm-map/index.md -> gke-pm-map/gke-pm-map.md
+  rewrite overview.md: gke-pm-map/ -> gke-pm-map/gke-pm-map.md
+2 index(es) would be promoted (dry run; nothing written)
+
+$ okfctl node promote mykb --name overview   # one basename convention for all
+```
+
+Verify the migration broke no links: `okfctl lint mykb --strict` must report
+**zero** `broken-link` findings afterward (see `okf-curation-health`).
+
 ## 5. The reserved files: index.md and log.md
 
 `index.md` and `log.md` are **reserved** — they are structurally different from
