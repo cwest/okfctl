@@ -32,6 +32,7 @@ type RefreshChange struct {
 	AbsPath     string // absolute on-disk path to rewrite
 	OldModified string // current modified, "2006-01-02"
 	NewModified string // target modified, RFC3339 (e.g. "2026-07-20T00:00:00Z")
+	Commit      string // SHA of the git commit the drift comparison used
 }
 
 // driftPair holds a drifting node together with the git commit day the refresh
@@ -42,6 +43,7 @@ type driftPair struct {
 	path        string
 	oldModified time.Time
 	gitDay      time.Time // git last-commit instant, in its OWN recorded location
+	commit      string    // SHA of the commit gitDay came from (post walk-back)
 }
 
 // scanDrift walks the bundle once and returns every node whose frontmatter
@@ -49,7 +51,20 @@ type driftPair struct {
 // exactly like GitLastCommitDate: outside a git repo, without git, or for an
 // untracked file there is no source of truth and the node is skipped. A node
 // without a parseable `modified` cannot contradict anything and is skipped.
+//
+// Commits listed in `.okf-drift-ignore-revs` (§ bulk-mechanical-commit opt-out)
+// are walked past: when a node's last-touching commit is on the list, the
+// comparison falls through to the prior real commit, so a day-one migration
+// commit does not manufacture drift against every node it touched.
 func scanDrift(b *Bundle) []driftPair {
+	ignore, err := LoadDriftIgnoreRevs(b.Root)
+	if err != nil {
+		// A malformed/unreadable ignore file is a genuine caller-facing problem,
+		// but drift is advisory and must never crash a scan; degrade to no
+		// opt-outs (every commit counts) rather than failing the whole report.
+		ignore = nil
+	}
+
 	paths := make([]string, 0, len(b.Nodes))
 	for p := range b.Nodes {
 		paths = append(paths, p)
@@ -66,14 +81,14 @@ func scanDrift(b *Bundle) []driftPair {
 		if !ok {
 			continue // no reliable modified to compare
 		}
-		git, ok, err := GitLastCommitDate(b.Root, p)
+		git, sha, ok, err := GitLastCommitDateIgnoring(b.Root, p, ignore)
 		if err != nil || !ok {
 			continue // no git source of truth: degrade, do not report
 		}
 		if sameCalendarDay(mod, git) {
 			continue
 		}
-		out = append(out, driftPair{path: p, oldModified: mod, gitDay: git})
+		out = append(out, driftPair{path: p, oldModified: mod, gitDay: git, commit: sha})
 	}
 	return out
 }
@@ -100,6 +115,7 @@ func RefreshPlan(b *Bundle) []RefreshChange {
 			AbsPath:     filepath.Join(b.Root, filepath.FromSlash(dp.path)),
 			OldModified: dp.oldModified.Format("2006-01-02"),
 			NewModified: refreshStamp(dp.gitDay),
+			Commit:      dp.commit,
 		})
 	}
 	return out

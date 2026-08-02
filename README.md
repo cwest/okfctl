@@ -73,14 +73,38 @@ okfctl bundle info mykb
 - `node list --bundle <dir>` — list the concept nodes in a bundle
 - `node edit <path> --bundle <dir>` — open a node in `$EDITOR` (or `$OKFCTL_EDITOR`/`$VISUAL`), then re-validate the bundle on return
 - `node mv <old> <new> --bundle <dir> [--dry-run]` — move/rename a node and rewrite every inbound link, preserving each author's relative link form (path is identity, so a move is a graph operation)
-- `node refresh <bundle> [path] [--dry-run]` — bulk-fix stale `modified` timestamps: rewrite every drifting node's `modified` to its git last-commit day (the remediation for the git drift `validate` reports). `created` is immutable and never touched, the body is preserved verbatim, and `log.md`/`index.md` are maintained. A trailing path fixes a single node; `--dry-run` lists what would change and writes nothing. Degrades to a no-op outside a git repo, and exits non-zero only on real failure.
+- `node refresh <bundle> [path] [--dry-run] [--yes]` — bulk-fix stale `modified` timestamps: rewrite every drifting node's `modified` to its git last-commit day (the remediation for the git drift `validate` reports). `created` is immutable and never touched, the body is preserved verbatim, and `log.md`/`index.md` are maintained. A trailing path fixes a single node; `--dry-run` lists what would change and writes nothing. Degrades to a no-op outside a git repo, and exits non-zero only on real failure. **Guardrail:** a plan dominated by a single commit — the signature of a bulk mechanical commit, whose remediation would collapse the real authoring dates it touched into that one migration date — is **refused** unless `--yes` is given. The recommended fix in that case is to list the mechanical commit in `.okf-drift-ignore-revs` (see below), not to force the rewrite.
 - `node promote <bundle> [--name <basename>] [--dry-run]` — bulk-remediate the **directory-as-concept** shape (a corpus authored on the intuition that a directory *is* a concept and `index.md` is what it says, as Obsidian folder notes / Hugo `_index.md` / Jekyll collections do). Every **non-root** `index.md` that carries frontmatter is moved to a sibling concept file (`foo/index.md` → `foo/foo.md`; `--name overview` applies one basename convention uniformly), preserving the body verbatim and keeping `created` immutable. Inbound links to the old directory-concept are rewritten — both the `foo/` and `foo/index.md` spellings — the real `index.md` is regenerated with no frontmatter, and `log.md` is appended. The bundle-root index is left alone (its §11 `okf_version` marker is legal). `--dry-run` lists every move and rewrite and writes nothing.
 - `node rm <path> --bundle <dir> [--dry-run]` — remove a node and report any nodes orphaned as a result
 - `index build [dir]` — regenerate the reserved `index.md` files from the current bundle. Per OKF SPEC §6, one `index.md` is emitted in **each** directory that holds concepts or subdirectories, enumerating only that directory's own contents with **dir-relative** links (`concept.md` for a sibling concept, `subdir/` for a child directory) and each concept's `description`. Only the bundle-root index carries frontmatter (the §11 `okf_version` marker); every nested index carries none. Orphaned indexes left in a now-empty directory are pruned.
 - `index check [dir]` — verify every directory's `index.md` is current; nonzero exit if any nested index is stale, missing, or orphaned
 - `log append [dir] --message <text>` — append a dated entry to `log.md`
 - `log show [dir]` — print the change history
-- `validate <dir>` — validate a bundle against the OKF spec floor. It also reports **git drift** — any node whose frontmatter `modified` disagrees with its git last-commit date — as advisory warnings (read-only; run `node refresh` to fix them; degrades to nothing outside a git repo). With `--templates` it additionally runs the opt-in type-template overlay (§9.4), reporting **template drift** (a node missing a required field or body section its governing template declares) as warnings — advisory by default (exit 0), `--strict` exits non-zero on any drift. Spec-floor violations always fail regardless of `--templates`/`--strict`; the overlay never leaks into the floor (unknown type values still pass, §7.4).
+- `validate <dir>` — validate a bundle against the OKF spec floor. It also reports **git drift** — any node whose frontmatter `modified` disagrees with its git last-commit date — as advisory warnings (read-only; run `node refresh` to fix them; degrades to nothing outside a git repo). Commits listed in `.okf-drift-ignore-revs` (see below) are walked past, so a bulk mechanical commit does not manufacture drift against every node it touched. With `--templates` it additionally runs the opt-in type-template overlay (§9.4), reporting **template drift** (a node missing a required field or body section its governing template declares) as warnings — advisory by default (exit 0), `--strict` exits non-zero on any drift. Spec-floor violations always fail regardless of `--templates`/`--strict`; the overlay never leaks into the floor (unknown type values still pass, §7.4).
+
+### `.okf-drift-ignore-revs` — opt a bulk mechanical commit out of git drift
+
+Git drift infers a node's freshness from its last-touching commit's date. That is
+right for an incremental edit, but a **bulk mechanical commit** — a one-time
+migration that rewrites frontmatter across the whole corpus on day one — has no
+authoring intent, and treating its date as the node's `modified` collapses the
+real authoring history into the migration date. Git records *when* a commit
+landed, not *why*, so the tool cannot tell the two apart on its own.
+
+Declare the intent with a checked-in `.okf-drift-ignore-revs` at the bundle root,
+mirroring `git blame --ignore-revs-file` — a convention users already understand:
+
+```
+# Mechanical migration commits — opt these out of git drift.
+# One commit SHA per line; blank lines and #-comments are ignored.
+3f9a1c2e8b7d6a5c4e3f2a1b0c9d8e7f6a5b4c3d   # v0.2 frontmatter key sweep
+```
+
+When a node's last-touching commit is on the list, the drift comparison **walks
+back to the prior real commit** for that file. Incremental edits (commits *not*
+on the list) still drift normally — the check is not narrowed into uselessness.
+Full or abbreviated (≥7-char) SHAs both match. This is the recommended cure when
+`node refresh` refuses a bulk-dominated plan.
 - `template list [dir]` — list the type templates a bundle declares (target type, required-field and body-section counts). Templates are authored as ordinary OKF nodes (`type: Type Template`); nothing lives in tool config.
 - `template show <target-type> [dir]` — show one template's required/recommended fields and body sections.
 - `plugin list [--path <PATH>]` — list `okfctl-<name>` plugin executables discovered on `PATH` (sorted by name, first-on-PATH wins). Plugins extend okfctl `git`/`kubectl`-style: an unknown subcommand `okfctl foo bar` execs an `okfctl-foo` binary found on `PATH`, passing through `bar` plus the remaining flags and environment (with `OKFCTL` set to the core binary's path so a plugin can call back), and propagates the plugin's exit code. Built-in subcommands always take precedence; an unknown subcommand with no matching plugin produces the usual error plus a did-you-mean suggestion. Executable detection uses Unix permission bits (macOS/Linux); Windows is not yet supported.
