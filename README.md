@@ -151,6 +151,30 @@ Findings are only as meaningful as the embedder that built the index. With the d
 - `completion <bash|zsh|fish>` — generate a shell completion script
 - `version` — print the okfctl version (also `okfctl --version`); reports the release tag injected at build time, or `dev` for a plain source build
 
+## Skipping vendored and derived directories
+
+Every command that walks a bundle (`validate`, `lint`, `analyze`, `search`,
+`graph export`, `index build`/`check`) prunes vendored and derived directories
+by default — a Python virtualenv (`.venv`), `node_modules`, a `vendor/` tree, or
+a build-output dir (`dist`, `build`, `target`, …) sitting under the bundle root
+holds `.md` files nobody authored as knowledge, and walking them pollutes every
+report. The prune is by directory **base name** at any depth (see
+`DefaultSkipDirs`), applied once in the loader so all commands share identical
+scope, and it never touches the bundle root itself.
+
+Two guardrails keep this from silently eating your work:
+
+- **`--no-ignore`** restores the full walk on any of those commands, so a
+  directory whose name happens to match the skip list (real content you
+  deliberately authored there) is always recoverable.
+- The skip is **never silent**: when the walk prunes anything, the command
+  prints a note to **stderr** naming the skipped directories and pointing at
+  `--no-ignore`.
+
+This is a built-in default, not a policy read from config — `okfctl` deliberately
+does not consult `.gitignore` (curation scope and version-control scope are
+different questions) and needs no `.okfctlignore` to be usable on a real tree.
+
 ## What validate checks
 
 `validate` enforces the OKF spec floor only: every node must carry a

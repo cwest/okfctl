@@ -31,6 +31,7 @@ func newAnalyzeCmd() *cobra.Command {
 	var thinLines int
 	var clusterMin int
 	var coverageThreshold int
+	var noIgnore *bool
 	c := &cobra.Command{
 		Use:   "analyze [bundle-dir]",
 		Short: "Report where a bundle is WEAK: freshness, clusters, gaps, connectivity, structure",
@@ -50,9 +51,9 @@ func newAnalyzeCmd() *cobra.Command {
 			if len(args) == 1 {
 				dir = args[0]
 			}
-			b, err := okf.Load(dir)
+			b, err := loadBundleForCmd(cmd, dir, *noIgnore)
 			if err != nil {
-				return fmt.Errorf("load bundle: %w", err)
+				return err
 			}
 			rep := okf.Analyze(b, okf.AnalyzeOptions{
 				StaleDays:             staleDays,
@@ -79,6 +80,7 @@ func newAnalyzeCmd() *cobra.Command {
 	c.Flags().IntVar(&thinLines, "thin-lines", 0, "body line count below which a node is thin (default 15)")
 	c.Flags().IntVar(&clusterMin, "cluster-min", 0, "min nodes sharing a tag to flag a synthesis cluster (default 3)")
 	c.Flags().IntVar(&coverageThreshold, "coverage-threshold", 0, "min distinct nodes mentioning a term to report a coverage gap (default 3)")
+	noIgnore = addNoIgnoreFlag(c)
 	return c
 }
 

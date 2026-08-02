@@ -23,6 +23,7 @@ import (
 
 func newValidateCmd() *cobra.Command {
 	var templates, strict bool
+	var noIgnore *bool
 	c := &cobra.Command{
 		Use:   "validate [bundle-dir]",
 		Short: "Check a bundle for OKF spec-floor conformance (optionally overlay team type-templates)",
@@ -39,9 +40,9 @@ func newValidateCmd() *cobra.Command {
 			if len(args) == 1 {
 				dir = args[0]
 			}
-			b, err := okf.Load(dir)
+			b, err := loadBundleForCmd(cmd, dir, *noIgnore)
 			if err != nil {
-				return fmt.Errorf("load bundle: %w", err)
+				return err
 			}
 			out := cmd.OutOrStdout()
 			findings := okf.Validate(b)
@@ -89,5 +90,6 @@ func newValidateCmd() *cobra.Command {
 	}
 	c.Flags().BoolVar(&templates, "templates", false, "also run the opt-in type-template overlay (§9.4), reporting drift as warnings")
 	c.Flags().BoolVar(&strict, "strict", false, "exit non-zero on any drift (git drift and, with --templates, template drift); default: advisory, exit 0")
+	noIgnore = addNoIgnoreFlag(c)
 	return c
 }

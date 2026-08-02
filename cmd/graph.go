@@ -34,6 +34,7 @@ func newGraphCmd() *cobra.Command {
 
 func newGraphExportCmd() *cobra.Command {
 	var format string
+	var noIgnore *bool
 	c := &cobra.Command{
 		Use:   "export [bundle-dir]",
 		Short: "Export the graph in a machine format (json or dot)",
@@ -46,9 +47,9 @@ func newGraphExportCmd() *cobra.Command {
 			if len(args) == 1 {
 				dir = args[0]
 			}
-			b, err := okf.Load(dir)
+			b, err := loadBundleForCmd(cmd, dir, *noIgnore)
 			if err != nil {
-				return fmt.Errorf("load bundle: %w", err)
+				return err
 			}
 			g := okf.BuildGraph(b)
 			switch format {
@@ -70,6 +71,7 @@ func newGraphExportCmd() *cobra.Command {
 		},
 	}
 	c.Flags().StringVar(&format, "format", "json", "output format: json or dot")
+	noIgnore = addNoIgnoreFlag(c)
 	return c
 }
 
