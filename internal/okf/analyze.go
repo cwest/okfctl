@@ -407,7 +407,10 @@ func analyzeFreshness(b *Bundle, opts AnalyzeOptions) FreshnessReport {
 			out.Stale = append(out.Stale, StaleNode{Path: p, AgeDays: nil, Basis: "(none)"})
 		}
 		// Time-sensitive: marker present AND (undated OR aged past the gate).
-		if markers := timeSensitiveMarkers(n.Body); len(markers) > 0 {
+		// Route through proseBody so a marker that appears only inside a link URL
+		// or code span (text a reader never sees) is not mistaken for a genuine
+		// time-sensitive claim in the node's prose.
+		if markers := timeSensitiveMarkers(proseBody(n)); len(markers) > 0 {
 			if agePtr == nil || float64(*agePtr) >= gate {
 				out.TimeSensitive = append(out.TimeSensitive, TimeSensitiveNode{
 					Path: p, AgeDays: agePtr, Markers: markers,
