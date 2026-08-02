@@ -395,9 +395,13 @@ func lintCoverageGaps(b *Bundle, threshold int) []LintFinding {
 // titlePrefixTerms returns leading whole-word prefixes of a (lowercased) node
 // title, so a concept term that a title elaborates on is credited as covered.
 // A title like "block buzz vs. discord as the hermes channel" yields
-// {"block buzz vs", "block buzz", "block"} — the first run of words before a
-// hard boundary (sentence/clause punctuation or a comparison connective like
-// "vs"/"versus"), accumulated word by word. This credits a node whose title
+// {"block buzz"} — the first run of words before a hard boundary, accumulated
+// word by word. A boundary is sentence/clause punctuation, a comparison
+// connective ("vs"/"versus"/"and"/"or"), or a standalone dash separator
+// (em-dash "—", en-dash "–", or a spaced hyphen "-"): the words after it name a
+// different or contrasted concept, not the leading one. So "design systems —
+// the umbrella discipline" yields {"design", "design systems"}, not the trailing
+// "design systems — the umbrella" fragment. This credits a node whose title
 // leads with the concept it is about (so "Block Buzz" is covered by that node)
 // without crediting an unrelated tail phrase. Single-word prefixes are included
 // so a one-word concept declared as an alias and leading its own node's title
@@ -405,22 +409,37 @@ func lintCoverageGaps(b *Bundle, threshold int) []LintFinding {
 // against this set (see lintCoverageGaps / candidateTerms), so admitting the
 // single-word prefix here cannot resurface bare-prose noise.
 func titlePrefixTerms(title string) []string {
-	fields := strings.Fields(title)
+	// A dash separator — em-dash "—", en-dash "–", or a spaced/fused hyphen —
+	// ends the leading run. Normalize by giving every dash whitespace on both
+	// sides so a fused "systems—the" splits into distinct fields, then the run
+	// stops at the resulting standalone dash token.
+	norm := title
+	for _, d := range []string{"—", "–", "-"} {
+		norm = strings.ReplaceAll(norm, d, " "+d+" ")
+	}
+	fields := strings.Fields(norm)
 	var lead []string
 	for _, w := range fields {
 		trimmed := strings.Trim(w, ".,;:!?()[]\"'`*_")
-		// Stop at a clause/sentence boundary or a comparison connective: the
-		// words after it describe a different or contrasted concept, not the
-		// leading one this node is named for.
-		if trimmed == "" || trimmed == "vs" || trimmed == "versus" || trimmed == "and" || trimmed == "or" {
-			break
+		// Stop at a clause/sentence boundary, a comparison connective, or a
+		// standalone dash separator: the words after it describe a different or
+		// contrasted concept, not the leading one this node is named for.
+		switch trimmed {
+		case "", "—", "–", "-", "vs", "versus", "and", "or":
+			return prefixes(lead)
 		}
 		lead = append(lead, trimmed)
-		// A trailing punctuation mark on the original word ends the run.
+		// A trailing sentence/clause terminator on the original word ends the run.
 		if strings.ContainsAny(w[len(w)-1:], ".,;:!?") {
 			break
 		}
 	}
+	return prefixes(lead)
+}
+
+// prefixes returns every leading whole-phrase prefix of lead, shortest first:
+// {"a", "a b", "a b c", ...}.
+func prefixes(lead []string) []string {
 	var out []string
 	for i := 1; i <= len(lead); i++ {
 		out = append(out, strings.Join(lead[:i], " "))
