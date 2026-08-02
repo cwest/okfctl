@@ -47,7 +47,7 @@ is fully specified below:
 
 ## 2. Problem Statement
 
-The Open Knowledge Format (OKF v0.1) standardizes how knowledge is packaged for
+The Open Knowledge Format (OKF v0.2) standardizes how knowledge is packaged for
 humans and agents: a directory of Markdown files with YAML frontmatter, where the
 file path is the concept's identity, links form a traversable graph, and two
 reserved files—`index.md` for progressive disclosure and `log.md` for change
@@ -677,7 +677,7 @@ Design principles:
 
 ## 12. Cross-Cutting Requirements
 
-- **Conformance.** Strictly conformant to OKF v0.1; permissive per the spec's
+- **Conformance.** Strictly conformant to OKF v0.2; permissive per the spec's
   forgiveness requirement. The required `type` floor (§7.1) and the reserved-file
   rules are enforced; everything else is soft. The spec version is pinned and
   surfaced in `bundle info`.

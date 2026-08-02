@@ -20,7 +20,7 @@ import (
 )
 
 // SpecVersion is the OKF spec version this build targets.
-const SpecVersion = "0.1"
+const SpecVersion = "0.2"
 
 // logHeader is the leading header of a reserved log.md; logPlaceholder is the
 // empty-log hint the scaffold writes beneath it. AppendLog reconciles against
@@ -35,9 +35,9 @@ const (
 // log.md and an .okf spec pin. The result passes Validate with zero findings
 // (it has no concept nodes yet, so the type floor is vacuously satisfied).
 //
-// The scaffolded index.md carries NO frontmatter (OKF §6). The bundle's
+// The scaffolded index.md carries NO frontmatter (OKF §8). The bundle's
 // okf_version is pinned by the .okf sidecar; `okfctl index build` surfaces it as
-// the sole permitted index frontmatter key (§11) once the index is regenerated.
+// the sole permitted index frontmatter key (§12) once the index is regenerated.
 func Scaffold(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err

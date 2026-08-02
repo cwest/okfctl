@@ -182,12 +182,12 @@ func TestRenderIndex_IdempotentWithOkfVersion(t *testing.T) {
 	}
 }
 
-// TestWriteIndex_RegeneratesNonConformantNestedIndex asserts the OKF §6
+// TestWriteIndex_RegeneratesNonConformantNestedIndex asserts the OKF §8
 // nested-index contract: `index build` regenerates the index.md in EVERY
 // content-bearing directory, so a stale or non-conformant per-directory
 // index.md (here one carrying illegal `type: Index` frontmatter) is rewritten
 // into the spec-conformant, frontmatter-free nested form. (This inverts the
-// pre-§6 flat model, under which WriteIndex only ever touched the bundle-root
+// pre-§8 flat model, under which WriteIndex only ever touched the bundle-root
 // index and left a nested index untouched — that model was the divergence this
 // change fixes.)
 func TestWriteIndex_RegeneratesNonConformantNestedIndex(t *testing.T) {
@@ -198,7 +198,7 @@ func TestWriteIndex_RegeneratesNonConformantNestedIndex(t *testing.T) {
 	writeBundleRootIndex(t, dir, "---\nokf_version: \"0.1\"\n---\n\n# Knowledge Base\n")
 	writeNodeFM(t, dir, "wine/tannin.md", "Reference", "Tannin", "Astringent phenolics.")
 	subIndex := filepath.Join(dir, "wine", "index.md")
-	// A stale, non-conformant nested index (illegal frontmatter per §6).
+	// A stale, non-conformant nested index (illegal frontmatter per §8).
 	if err := os.WriteFile(subIndex, []byte("---\ntype: Index\n---\n\n# stale\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -216,9 +216,9 @@ func TestWriteIndex_RegeneratesNonConformantNestedIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The nested index must be regenerated to the conformant shape: no
-	// frontmatter (§6), and it enumerates its own concept dir-relatively.
+	// frontmatter (§8), and it enumerates its own concept dir-relatively.
 	if strings.HasPrefix(string(got), "---\n") {
-		t.Errorf("§6: regenerated nested index must carry no frontmatter; got:\n%s", got)
+		t.Errorf("§8: regenerated nested index must carry no frontmatter; got:\n%s", got)
 	}
 	if !strings.Contains(string(got), "* [Tannin](tannin.md) - Astringent phenolics.") {
 		t.Errorf("regenerated nested index must list its concept dir-relatively with description; got:\n%s", got)

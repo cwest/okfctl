@@ -60,7 +60,7 @@ func TestIndexBuild_EmitsNestedDirRelativeIndexes(t *testing.T) {
 	// wine/index.md: its own concept (base name) + its child dir; not the grandchild concept.
 	wine := readFileStr(t, filepath.Join(dir, "wine", "index.md"))
 	if strings.HasPrefix(wine, "---\n") {
-		t.Errorf("§6: nested wine/index.md must carry no frontmatter; got:\n%s", wine)
+		t.Errorf("§8: nested wine/index.md must carry no frontmatter; got:\n%s", wine)
 	}
 	if !strings.Contains(wine, "](tannin.md)") {
 		t.Errorf("wine/index.md must link its concept dir-relatively as `tannin.md`; got:\n%s", wine)

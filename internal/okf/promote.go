@@ -38,8 +38,8 @@ type PromoteChange struct {
 
 // PromotableIndexes returns the sorted bundle-relative paths of every NON-ROOT
 // index.md that carries a non-empty frontmatter block — the exact shape
-// validateReserved flags as "index files contain no frontmatter (§6)". The
-// bundle-root index.md is excluded (its §11 okf_version carve-out is legal), and
+// validateReserved flags as "index files contain no frontmatter (§8)". The
+// bundle-root index.md is excluded (its §12 okf_version carve-out is legal), and
 // a non-root index with no frontmatter is already conformant and excluded. A
 // non-root index whose frontmatter failed to parse (Frontmatter == nil) is a
 // different failure class and is not promotable — promote does not guess at
@@ -51,7 +51,7 @@ func PromotableIndexes(b *Bundle) []string {
 			continue
 		}
 		if rel == "index.md" {
-			continue // bundle-root index: §11 carve-out, never promoted
+			continue // bundle-root index: §12 carve-out, never promoted
 		}
 		if n.Frontmatter == nil || len(n.Frontmatter) == 0 {
 			continue // unparseable (different class) or conformant (nothing to do)

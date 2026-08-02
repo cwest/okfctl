@@ -86,7 +86,7 @@ func dirConceptIndex(title, created, body string) string {
 
 func TestPromotableIndexes_OnlyNonRootWithFrontmatter(t *testing.T) {
 	_, b := mkPromoteBundle(t, map[string]string{
-		// bundle-root index: §11 okf_version carve-out is legal, never promoted.
+		// bundle-root index: §12 okf_version carve-out is legal, never promoted.
 		"index.md": "---\nokf_version: \"0.1\"\n---\n\n# Knowledge Base\n",
 		// non-root index carrying frontmatter: PROMOTABLE.
 		"foo/index.md": dirConceptIndex("Foo", "2026-01-01", "# Foo\n\nFoo is a concept.\n"),

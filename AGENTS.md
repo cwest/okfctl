@@ -38,19 +38,19 @@ curl -sL https://raw.githubusercontent.com/GoogleCloudPlatform/knowledge-catalog
   | head -5    # expect: **Version 0.2**
 ```
 
-### Version state — v0.1 pinned, v0.2 shipped, gap open
+### Version state — v0.2 across the board
 
 | Where | Version |
 |---|---|
 | Upstream spec | **0.2** |
-| `SpecVersion` (`internal/okf/reserved.go`) | `0.1` |
-| Real corpus (`knowledge-base` `.okf`) | `0.1` |
+| `SpecVersion` (`internal/okf/reserved.go`) | `0.2` |
+| Real corpus (`knowledge-base` `.okf`) | `0.2` |
 
-The tool and the corpus are both still v0.1. **Closing that gap is tracked work —
-do not close it as a side effect of an unrelated change.** v0.2 is a minor bump
+The tool, the corpus, and the spec are all v0.2. v0.2 is a minor bump
 (§13) with two deliberate breaking renames: `timestamp` → `generated.at`, and the
 body `# Citations` list → frontmatter `sources`. Consumers MAY fall back to the
-legacy forms, so v0.1 bundles stay readable.
+legacy forms, so v0.1 bundles stay readable — a flip of the DEFAULT for new
+bundles, not the floor for existing ones.
 
 A bundle declares its own target via `okf_version` in the `.okf` sidecar; the tool
 reads it rather than assuming. Per §12, a consumer that does not understand a

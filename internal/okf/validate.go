@@ -29,14 +29,14 @@ type Finding struct {
 // Validate enforces the OKF spec floor (PRD §6.2, §7.1):
 //   - frontmatter must be parseable (nil frontmatter == parse failure);
 //   - every concept node has a non-empty `type` (§7 rule 2);
-//   - reserved index.md files carry no frontmatter, with the single §11
+//   - reserved index.md files carry no frontmatter, with the single §12
 //     carve-out for an okf_version-only block on the bundle-root index.
 //
 // It never enforces a taxonomy of type VALUES (§7.4): unknown types pass.
 // It returns findings; an empty slice means the bundle passes the floor.
 //
 // The index-frontmatter rule closes the loop: okfctl generates index.md, so
-// its own validator must reject an index that violates §6/§11 — otherwise a
+// its own validator must reject an index that violates §8/§12 — otherwise a
 // generator regression (e.g. re-introducing `type: Index`) passes validation
 // unnoticed, which is the exact defect this floor exists to catch.
 func Validate(b *Bundle) []Finding {
@@ -63,19 +63,19 @@ func Validate(b *Bundle) []Finding {
 	return out
 }
 
-// validateReserved enforces the §6/§11 frontmatter rule on reserved index.md
+// validateReserved enforces the §8/§12 frontmatter rule on reserved index.md
 // files. Log files are prose and carry no frontmatter constraint at the floor,
 // so only index.md is checked here. Findings are emitted in sorted path order
 // to keep validate's output stable for diffing.
 //
 // The rule per file:
-//   - index.md with no frontmatter block: conformant (§6).
+//   - index.md with no frontmatter block: conformant (§8).
 //   - bundle-root index.md ("index.md"): MAY carry a frontmatter block, but it
-//     must contain the okf_version key and NOTHING else (§11's version-only
+//     must contain the okf_version key and NOTHING else (§12's version-only
 //     carve-out). Any other key, or okf_version absent from a present block,
 //     is a violation.
 //   - any non-root index.md (e.g. wine/index.md): NO frontmatter is permitted
-//     at all — §11's carve-out is bundle-root-only, so any frontmatter block
+//     at all — §12's carve-out is bundle-root-only, so any frontmatter block
 //     there is a violation.
 func validateReserved(b *Bundle) []Finding {
 	paths := make([]string, 0, len(b.Reserved))
@@ -95,24 +95,24 @@ func validateReserved(b *Bundle) []Finding {
 			continue
 		}
 		if len(n.Frontmatter) == 0 {
-			continue // §6: no frontmatter — conformant.
+			continue // §8: no frontmatter — conformant.
 		}
 		if path != "index.md" {
-			// §11's carve-out is bundle-root-only; a non-root index may carry
+			// §12's carve-out is bundle-root-only; a non-root index may carry
 			// no frontmatter at all.
-			out = append(out, Finding{Path: path, Message: "index files contain no frontmatter (§6); frontmatter is permitted only on the bundle-root index and only for okf_version (§11)"})
+			out = append(out, Finding{Path: path, Message: "index files contain no frontmatter (§8); frontmatter is permitted only on the bundle-root index and only for okf_version (§12)"})
 			continue
 		}
 		// Bundle-root index: the block must be exactly {okf_version}.
 		for _, key := range extraIndexKeys(n.Frontmatter) {
-			out = append(out, Finding{Path: path, Message: "bundle-root index frontmatter may contain only okf_version (§11); found disallowed key: " + key})
+			out = append(out, Finding{Path: path, Message: "bundle-root index frontmatter may contain only okf_version (§12); found disallowed key: " + key})
 		}
 	}
 	return out
 }
 
 // extraIndexKeys returns the sorted frontmatter keys of a bundle-root index
-// that are NOT the sanctioned okf_version carve-out (§11). An empty result
+// that are NOT the sanctioned okf_version carve-out (§12). An empty result
 // means the block is conformant.
 func extraIndexKeys(fm map[string]any) []string {
 	var extra []string

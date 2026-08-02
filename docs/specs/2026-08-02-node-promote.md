@@ -1,7 +1,7 @@
 # okfctl — `node promote`: promote directory-as-concept index.md in bulk
 
 **Status:** Approved (design) · **Owner:** Casey West · **License:** Apache-2.0
-**Source of truth:** OKF `SPEC.md` §6 (Index Files), §11 (Versioning marker).
+**Source of truth:** OKF `SPEC.md` §8 (Index Files), §12 (Versioning marker).
 **Base:** `main` @ `59c22ac`  **Branch:** `topic/node-promote`
 
 ## Problem
@@ -10,8 +10,8 @@ Running `okfctl validate` against a real corpus authored on the intuition that a
 **directory is a concept** — where `index.md` carries the concept's frontmatter
 and body — produces one mechanical failure per non-root index:
 
-    FAIL: index files contain no frontmatter (§6); frontmatter is permitted only
-    on the bundle-root index and only for okf_version (§11)
+    FAIL: index files contain no frontmatter (§8); frontmatter is permitted only
+    on the bundle-root index and only for okf_version (§12)
 
 This is the OKF spec floor (`validateReserved`, `internal/okf/validate.go`)
 correctly rejecting a shape it does not model: for OKF, `index.md` is a
@@ -40,7 +40,7 @@ For every NON-ROOT `index.md` that carries frontmatter, move it to a sibling
 concept file, preserve its body verbatim and its `created` immutable, rewrite
 inbound links (both `foo/` and `foo/index.md` spellings), regenerate the real
 `index.md`, and append to `log.md`. The bundle-root index is left alone —
-root frontmatter (`okf_version`) is legal per §11.
+root frontmatter (`okf_version`) is legal per §12.
 
 ## Design
 
@@ -87,7 +87,7 @@ linking file's directory, points at the promoted directory in either spelling:
 
 - `foo/index.md` (explicit index file), and
 - `foo/` (directory-style, trailing slash) — the CommonMark spelling the OKF
-  §6 index itself uses for subdirectory links (`* [Foo](foo/)`).
+  §8 index itself uses for subdirectory links (`* [Foo](foo/)`).
 
 Both resolve to the same promoted directory. Each such link is rewritten to
 target the new concept path, **preserving the author's relative form**
@@ -115,7 +115,7 @@ After all moves and rewrites are applied:
 - `WriteIndex(b)` regenerates every content-bearing directory's `index.md` from
   the reloaded bundle. Because the promoted file is now a concept node in
   `foo/`, `WriteIndex` produces a fresh `foo/index.md` navigation surface with
-  NO frontmatter (§6) that lists the promoted concept.
+  NO frontmatter (§8) that lists the promoted concept.
 - `AppendLog` records one `promoted foo/index.md -> foo/foo.md` line per node.
 
 Both reuse the existing derived-artifact writers — promote adds no new index or

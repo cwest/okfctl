@@ -34,10 +34,10 @@ func writeNode(t *testing.T, dir, rel, typ, title string) {
 }
 
 // TestRenderIndex_RootEnumeratesOwnDirectoryDeterministically pins the
-// bundle-root index (OKF §6): it enumerates its OWN directory's contents —
+// bundle-root index (OKF §8): it enumerates its OWN directory's contents —
 // content-bearing child directories linked dir-relatively (`lifting/`, `wine/`)
 // and root-level concepts by base name — sorted deterministically, and carries
-// the §11 okf_version marker (Scaffold writes a .okf) and nothing else.
+// the §12 okf_version marker (Scaffold writes a .okf) and nothing else.
 func TestRenderIndex_RootEnumeratesOwnDirectoryDeterministically(t *testing.T) {
 	dir := t.TempDir()
 	if err := Scaffold(dir); err != nil {
@@ -53,14 +53,14 @@ func TestRenderIndex_RootEnumeratesOwnDirectoryDeterministically(t *testing.T) {
 	}
 	got := RenderIndex(b)
 
-	// §11: root carries the okf_version marker, never `type: Index` (§6).
+	// §12: root carries the okf_version marker, never `type: Index` (§8).
 	if !strings.HasPrefix(got, "---\nokf_version: ") {
 		t.Errorf("root index missing the okf_version frontmatter marker; got:\n%s", got)
 	}
 	if strings.Contains(got, "type: Index") {
 		t.Errorf("index must not emit `type: Index` frontmatter; got:\n%s", got)
 	}
-	// §6: child directories are linked dir-relatively, sorted.
+	// §8: child directories are linked dir-relatively, sorted.
 	li := strings.Index(got, "](lifting/)")
 	wi := strings.Index(got, "](wine/)")
 	if li < 0 || wi < 0 {
@@ -69,7 +69,7 @@ func TestRenderIndex_RootEnumeratesOwnDirectoryDeterministically(t *testing.T) {
 	if li > wi {
 		t.Errorf("child directories not sorted (lifting before wine); got:\n%s", got)
 	}
-	// §6: the root index does NOT enumerate nested concepts bundle-relatively.
+	// §8: the root index does NOT enumerate nested concepts bundle-relatively.
 	if strings.Contains(got, "wine/tannin.md") {
 		t.Errorf("root index must not list nested concepts bundle-relatively; got:\n%s", got)
 	}

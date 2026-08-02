@@ -74,7 +74,7 @@ func cliTreeHash(t *testing.T, root string) string {
 // promoteFixtureFiles is a multi-directory corpus authored in the
 // directory-as-concept shape: two non-root index.md files carry frontmatter,
 // inbound links use BOTH the foo/ and foo/index.md spellings, and the bundle
-// root index carries the legal §11 okf_version marker.
+// root index carries the legal §12 okf_version marker.
 func promoteFixtureFiles() map[string]string {
 	return map[string]string{
 		".okf":         "okf_version: 0.1\n",
@@ -147,7 +147,7 @@ func TestNodePromote_RealRunConformant(t *testing.T) {
 		t.Fatalf("dir-style inbound link to bar not rewritten:\n%s", alpha)
 	}
 
-	// Root index untouched (still the §11 okf_version marker).
+	// Root index untouched (still the §12 okf_version marker).
 	rootIndex := readFileStr(t, filepath.Join(dir, "index.md"))
 	if !strings.Contains(rootIndex, "okf_version") {
 		t.Fatalf("root index okf_version marker lost:\n%s", rootIndex)

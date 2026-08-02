@@ -20,12 +20,12 @@ import (
 	"testing"
 )
 
-// OKF §6: "Index files contain no frontmatter." OKF §11: the bundle-root
+// OKF §8: "Index files contain no frontmatter." OKF §12: the bundle-root
 // index.md MAY carry a frontmatter block containing okf_version — "the only
 // place frontmatter is permitted in an index.md" — and nothing else.
 //
 // okfctl is the tool that ENFORCES the spec, so its validator must FLAG an
-// index that violates §6/§11 rather than silently tolerate it. A validator
+// index that violates §8/§12 rather than silently tolerate it. A validator
 // that passes a frontmatter-bearing index is the same class of defect the
 // generator carried: the closed loop (produce → validate) never closes.
 //
@@ -46,7 +46,7 @@ func writeReserved(t *testing.T, dir, rel, content string) {
 
 func TestValidate_RootIndexOkfVersionOnlyPasses(t *testing.T) {
 	dir := t.TempDir()
-	// §11 carve-out: the bundle-root index MAY carry an okf_version-only block.
+	// §12 carve-out: the bundle-root index MAY carry an okf_version-only block.
 	writeReserved(t, dir, "index.md", "---\nokf_version: \"0.1\"\n---\n\n# Knowledge Base\n")
 	writeNode(t, dir, "wine/tannin.md", "Reference", "Tannin")
 
@@ -61,7 +61,7 @@ func TestValidate_RootIndexOkfVersionOnlyPasses(t *testing.T) {
 
 func TestValidate_RootIndexNoFrontmatterPasses(t *testing.T) {
 	dir := t.TempDir()
-	// §6: an index with no frontmatter at all is conformant.
+	// §8: an index with no frontmatter at all is conformant.
 	writeReserved(t, dir, "index.md", "# Knowledge Base\n\n- [Tannin](wine/tannin.md)\n")
 	writeNode(t, dir, "wine/tannin.md", "Reference", "Tannin")
 
@@ -76,7 +76,7 @@ func TestValidate_RootIndexNoFrontmatterPasses(t *testing.T) {
 
 func TestValidate_RootIndexExtraFrontmatterKeyFlagged(t *testing.T) {
 	dir := t.TempDir()
-	// §11: okf_version is "the only place frontmatter is permitted" — a
+	// §12: okf_version is "the only place frontmatter is permitted" — a
 	// `type: Index` key alongside it exceeds the carve-out.
 	writeReserved(t, dir, "index.md", "---\nokf_version: \"0.1\"\ntype: Index\n---\n\n# Knowledge Base\n")
 
@@ -92,7 +92,7 @@ func TestValidate_RootIndexExtraFrontmatterKeyFlagged(t *testing.T) {
 func TestValidate_RootIndexTypeOnlyFlagged(t *testing.T) {
 	dir := t.TempDir()
 	// The exact shape the pre-fix generator emitted: `type: Index` and no
-	// okf_version. This is a §6/§11 violation and validate must flag it.
+	// okf_version. This is a §8/§12 violation and validate must flag it.
 	writeReserved(t, dir, "index.md", "---\ntype: Index\n---\n\n# Knowledge Base\n")
 
 	b, err := Load(dir)
@@ -106,7 +106,7 @@ func TestValidate_RootIndexTypeOnlyFlagged(t *testing.T) {
 
 func TestValidate_NonRootIndexAnyFrontmatterFlagged(t *testing.T) {
 	dir := t.TempDir()
-	// §6 has NO carve-out for a non-root index: any frontmatter at all — even
+	// §8 has NO carve-out for a non-root index: any frontmatter at all — even
 	// okf_version — is a violation there.
 	writeReserved(t, dir, "index.md", "# Knowledge Base\n")
 	writeReserved(t, dir, "wine/index.md", "---\nokf_version: \"0.1\"\n---\n\n# Wine\n")

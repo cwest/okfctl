@@ -353,7 +353,7 @@ func newNodeRefreshCmd() *cobra.Command {
 // Inbound links to the old directory-concept — in BOTH the dir/index.md and
 // dir/ spellings — are rewritten to the new concept path, then log.md/index.md
 // are maintained via the same derived-artifact paths as the other node verbs.
-// The bundle-root index is left alone (its §11 okf_version marker is legal).
+// The bundle-root index is left alone (its §12 okf_version marker is legal).
 //
 //	okfctl node promote <bundle>                 # promote every dir-concept index
 //	okfctl node promote <bundle> --name overview # pick one basename convention
