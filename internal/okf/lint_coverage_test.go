@@ -123,6 +123,51 @@ func TestLint_CoverageGap_TitleMatchIsCovered(t *testing.T) {
 	}
 }
 
+func TestLint_CoverageGap_TitlePrefixCoversElaboratedTerm(t *testing.T) {
+	// Regression: a term T is covered by a node whose title LEADS with T and then
+	// elaborates (T is a whole-phrase prefix of the title), even though the title
+	// is not exactly T. Cross-linking T as prose from several other nodes must
+	// NOT report T as a coverage gap — the leading node IS T's home. (Real case:
+	// "Block Buzz" led the title "Block Buzz vs. Discord as the Hermes channel";
+	// referenced by 3+ nodes it was falsely flagged as an uncovered gap.)
+	b := mkLintBundle(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [A](a.md)\n- [B](b.md)\n- [C](c.md)\n- [BB](bb.md)\n",
+		"a.md":     lintDoc("Concept", "A", "We compared Block Buzz to alternatives."),
+		"b.md":     lintDoc("Concept", "B", "Block Buzz keeps coming up."),
+		"c.md":     lintDoc("Concept", "C", "Again, Block Buzz is relevant here."),
+		"bb.md":    aliasDoc("Research", "Block Buzz vs. Discord as the Hermes channel", []string{"Block Buzz"}, "The node covering the Block Buzz concept."),
+	})
+	for _, g := range findingsFor(Lint(b, LintOptions{}), "coverage-gap") {
+		if containsWord(lc(g.Message), "block buzz") {
+			t.Fatalf("Block Buzz leads bb.md's title; it is covered, not a coverage gap: %+v", g)
+		}
+	}
+}
+
+func TestLint_CoverageGap_AliasOnUnrelatedNodeStillGap(t *testing.T) {
+	// Boundary: a term declared only as an ALIAS of a node about a DIFFERENT
+	// concept (the title neither equals nor leads with the term) still has no
+	// home of its own and remains a real gap when referenced enough. This keeps
+	// the coverage-gap check meaningful — an alias marks a known concept, but a
+	// passing alias on an unrelated node is not a covering node.
+	b := mkLintBundle(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [A](a.md)\n- [B](b.md)\n- [C](c.md)\n- [Z](z.md)\n",
+		"a.md":     lintDoc("Concept", "A", "We used Card Sorting to structure the taxonomy."),
+		"b.md":     lintDoc("Concept", "B", "Card Sorting revealed the mental model."),
+		"c.md":     lintDoc("Concept", "C", "Run a Card Sorting study early."),
+		"z.md":     aliasDoc("Concept", "Information Architecture", []string{"Card Sorting"}, "IA basics."),
+	})
+	found := false
+	for _, g := range findingsFor(Lint(b, LintOptions{}), "coverage-gap") {
+		if containsWord(lc(g.Message), "card sorting") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("Card Sorting is aliased only by the unrelated Information Architecture node; it has no home and must remain a gap")
+	}
+}
+
 func TestLint_CoverageGap_BelowThresholdNoFinding(t *testing.T) {
 	// Referenced by only 2 distinct nodes (a.md mentions it, z.md declares it as
 	// an alias) — below the default threshold of 3, so not a gap.

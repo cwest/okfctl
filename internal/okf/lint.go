@@ -306,11 +306,25 @@ func lintBrokenLinks(b *Bundle) []LintFinding {
 // 2,276 findings dominated by stopwords, ALLCAPS status values, and proper
 // nouns; keying on declared concepts keeps only defensibly-real gaps.
 func lintCoverageGaps(b *Bundle, threshold int) []LintFinding {
-	// Node titles (lowercased) are covered: the concept has a node.
+	// A concept is "covered" when a node's TITLE names it: either the title
+	// equals the term, or the term is a whole-phrase prefix of the title. The
+	// prefix case is what credits a node whose title elaborates on the concept
+	// it is about — e.g. a node titled "Block Buzz vs. Discord as the Hermes
+	// channel" IS the home for "Block Buzz", so cross-linking "Block Buzz" from
+	// other nodes must not report it as an uncovered gap. Aliases remain a
+	// candidate/known-concept signal below (a term some node declares as an
+	// alias is a KNOWN concept), but do not by themselves confer a home node —
+	// an alias on an unrelated node still leaves the aliased concept without its
+	// own node, which is a real gap.
 	covered := map[string]bool{}
 	for _, n := range b.Nodes {
-		if t := strings.ToLower(strings.TrimSpace(nodeTitle(n))); t != "" {
-			covered[t] = true
+		t := strings.ToLower(strings.TrimSpace(nodeTitle(n)))
+		if t == "" {
+			continue
+		}
+		covered[t] = true
+		for _, term := range titlePrefixTerms(t) {
+			covered[term] = true
 		}
 	}
 
@@ -374,6 +388,42 @@ func lintCoverageGaps(b *Bundle, threshold int) []LintFinding {
 				Message: fmt.Sprintf("coverage-gap: %q is referenced by %d nodes but has no node of its own", declared[k], len(mentions[k])),
 			})
 		}
+	}
+	return out
+}
+
+// titlePrefixTerms returns leading whole-word prefixes of a (lowercased) node
+// title, so a concept term that a title elaborates on is credited as covered.
+// A title like "block buzz vs. discord as the hermes channel" yields
+// {"block buzz vs", "block buzz", "block"} — the first run of words before a
+// hard boundary (sentence/clause punctuation or a comparison connective like
+// "vs"/"versus"), accumulated word by word. This credits a node whose title
+// leads with the concept it is about (so "Block Buzz" is covered by that node)
+// without crediting an unrelated tail phrase. Single-word prefixes are included
+// so a one-word concept declared as an alias and leading its own node's title
+// is covered too. Only multi-word terms and declared aliases are ever matched
+// against this set (see lintCoverageGaps / candidateTerms), so admitting the
+// single-word prefix here cannot resurface bare-prose noise.
+func titlePrefixTerms(title string) []string {
+	fields := strings.Fields(title)
+	var lead []string
+	for _, w := range fields {
+		trimmed := strings.Trim(w, ".,;:!?()[]\"'`*_")
+		// Stop at a clause/sentence boundary or a comparison connective: the
+		// words after it describe a different or contrasted concept, not the
+		// leading one this node is named for.
+		if trimmed == "" || trimmed == "vs" || trimmed == "versus" || trimmed == "and" || trimmed == "or" {
+			break
+		}
+		lead = append(lead, trimmed)
+		// A trailing punctuation mark on the original word ends the run.
+		if strings.ContainsAny(w[len(w)-1:], ".,;:!?") {
+			break
+		}
+	}
+	var out []string
+	for i := 1; i <= len(lead); i++ {
+		out = append(out, strings.Join(lead[:i], " "))
 	}
 	return out
 }
