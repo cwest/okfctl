@@ -16,6 +16,7 @@ package okf
 
 import (
 	"fmt"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -25,7 +26,7 @@ import (
 // validate Finding (a spec-floor violation), a lint finding is curation
 // guidance — never a format failure.
 type LintFinding struct {
-	Check   string // "orphan" | "missing-xref" | "coverage-gap" | "type-hygiene"
+	Check   string // "orphan" | "missing-xref" | "coverage-gap" | "type-hygiene" | "broken-link"
 	Path    string // node path the finding is about ("" for bundle-level findings)
 	Message string
 }
@@ -51,6 +52,7 @@ func Lint(b *Bundle, opts LintOptions) []LintFinding {
 	var findings []LintFinding
 	findings = append(findings, lintOrphans(b)...)
 	findings = append(findings, lintMissingXrefs(b)...)
+	findings = append(findings, lintBrokenLinks(b)...)
 	findings = append(findings, lintCoverageGaps(b, threshold)...)
 	findings = append(findings, lintTypeHygiene(b)...)
 
@@ -230,6 +232,59 @@ func containsWord(haystack, needle string) bool {
 
 func isWordByte(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+}
+
+// lintBrokenLinks reports a dangling internal link ONLY when it looks like a
+// DEFECT rather than a genuine coverage gap. The discriminator: a node with the
+// same basename exists elsewhere in the bundle. That catches moved and mistyped
+// paths — the migration hazard behind any `node mv`, directory reorg, or
+// wikilink-to-Markdown rewrite — and stays quiet for a genuinely unwritten
+// concept (which has no node anywhere, so nothing shares its basename). The gap
+// case remains analyze's advisory coverage_gaps.dangling_links; this only ADDS a
+// gate, it does not move that signal.
+//
+// The finding names BOTH the bad target and the resolved candidate path, so the
+// fix is obvious without a second lookup. If several nodes share the basename,
+// all candidates are listed (sorted) rather than guessing one.
+func lintBrokenLinks(b *Bundle) []LintFinding {
+	// basename -> sorted node paths carrying that basename.
+	byBase := map[string][]string{}
+	for p := range b.Nodes {
+		base := path.Base(p)
+		byBase[base] = append(byBase[base], p)
+	}
+	for base := range byBase {
+		sort.Strings(byBase[base])
+	}
+
+	var out []LintFinding
+	for _, p := range sortedNodePaths(b) {
+		n := b.Nodes[p]
+		for _, tgt := range danglingTargets(b, p, n) {
+			// Strip any anchor, then take the basename of the target path.
+			link := tgt
+			if i := strings.IndexByte(link, '#'); i >= 0 {
+				link = link[:i]
+			}
+			base := path.Base(link)
+			candidates := byBase[base]
+			if len(candidates) == 0 {
+				continue // genuinely unwritten: a coverage gap, not a defect
+			}
+			var hint string
+			if len(candidates) == 1 {
+				hint = fmt.Sprintf("did you mean %s?", candidates[0])
+			} else {
+				hint = fmt.Sprintf("did you mean one of: %s?", strings.Join(candidates, ", "))
+			}
+			out = append(out, LintFinding{
+				Check:   "broken-link",
+				Path:    p,
+				Message: fmt.Sprintf("broken-link: %s links to %s which resolves to no node; %s", p, tgt, hint),
+			})
+		}
+	}
+	return out
 }
 
 // lintCoverageGaps reports KNOWN concept terms — terms some node declares as a

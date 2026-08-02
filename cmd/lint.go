@@ -69,10 +69,14 @@ func newLintCmd() *cobra.Command {
 	var isolationFloor float64
 	c := &cobra.Command{
 		Use:   "lint [bundle-dir]",
-		Short: "Report curation health findings for a bundle (orphans, missing cross-references, coverage gaps, type hygiene)",
+		Short: "Report curation health findings for a bundle (orphans, missing cross-references, broken internal links, coverage gaps, type hygiene)",
 		Long: "lint surfaces judgment-worthy curation findings, not spec-floor violations " +
 			"(use validate for those). It never mutates the bundle. By default it is advisory " +
 			"and exits 0 even with findings; pass --strict to exit non-zero on any finding.\n\n" +
+			"A broken-link finding reports an internal .md link that resolves to no node when a " +
+			"node with the same basename exists elsewhere — a moved or mistyped path (a defect), " +
+			"distinct from a genuinely unwritten concept (a coverage gap, which analyze reports " +
+			"advisorily and lint stays quiet on).\n\n" +
 			"--semantic adds similarity-driven checks (similar-but-unlinked pairs, nodes with " +
 			"no semantic neighbors) by reading the index built by 'okfctl-search index build'. " +
 			"Core only reads that index, so no embedding model is needed to lint.",

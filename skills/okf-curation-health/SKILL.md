@@ -1,6 +1,6 @@
 ---
 name: okf-curation-health
-description: Use when keeping an OKF bundle healthy with okfctl — running validate for spec-floor and type-template conformance, and lint for curation findings (orphans, missing cross-references, coverage gaps, type hygiene), including as a CI or pre-commit gate.
+description: Use when keeping an OKF bundle healthy with okfctl — running validate for spec-floor and type-template conformance, and lint for curation findings (orphans, missing cross-references, broken internal links, coverage gaps, type hygiene), including as a CI or pre-commit gate.
 version: 1.0.0
 author: okfctl
 license: Apache-2.0
@@ -20,8 +20,8 @@ Two okfctl commands keep a bundle healthy, and they answer different questions:
 - **`validate`** — *is this a conformant OKF bundle?* Spec-floor conformance
   (hard failures), plus an opt-in type-template overlay for team conventions.
 - **`lint`** — *is this a well-curated corpus?* Judgment-worthy findings
-  (orphans, missing cross-references, coverage gaps, type hygiene). Never a
-  format failure; `lint` never mutates the bundle.
+  (orphans, missing cross-references, broken internal links, coverage gaps, type
+  hygiene). Never a format failure; `lint` never mutates the bundle.
 
 **`lint` and structural `validate` require NO model and NO index.** They work on
 a fresh clone with zero setup — pure graph and text analysis. (The one exception,
@@ -110,6 +110,7 @@ $ echo $?
 |---|---|---|
 | `orphan` | a concept node no node (or `index.md`) links to — unreachable by traversal | link it from a relevant node, or from `index.md` via `index build` |
 | `missing-xref` | a node's prose names another node's title as a whole word but doesn't link it | add the `[Title](path.md)` link, or reword if the mention is incidental |
+| `broken-link` | a node links to a `.md` target that resolves to no node, **and a node with that basename exists elsewhere** — a moved or mistyped path (a defect, not an unwritten concept) | fix the path to the resolved candidate the finding names |
 | `coverage-gap` | a **known concept term** (declared as a title/alias) is referenced by ≥ threshold distinct nodes but has no node of its own | author the missing node — it's a real to-do, prioritized by mention count |
 | `type-hygiene` | two `type` values fold to the same canonical form (case / trailing-`s` plural), e.g. `Concept` vs `Concepts` | pick one spelling and normalize the drifting nodes |
 
@@ -123,6 +124,28 @@ Two accuracy notes that keep you from chasing ghosts:
   a sentence-initial "The") is deliberately *not* a candidate; this is what makes
   the check act on real gaps rather than noise. If you expect a gap and don't get
   one, the term probably isn't declared as an alias anywhere yet.
+
+### `broken-link` vs a dangling link — defect, not gap
+
+A `.md` link that resolves to no node is one of two very different things, and
+`lint` reports only the dangerous one:
+
+- **The concept doesn't exist yet** — a referenced-but-unwritten node. That's a
+  *coverage gap*: correctly advisory, and it stays out of `lint`. `analyze`
+  surfaces it under `coverage_gaps.dangling_links` where it belongs (a research
+  to-do, not a defect).
+- **The concept exists and the path is wrong** — a typo, a moved file, a bad
+  find-and-replace. That's a *defect*, and it's dangerous because it's silent:
+  everything still validates, nothing is orphaned, yet a link points nowhere.
+  `broken-link` is the gate for exactly this case.
+
+The discriminator is basename: `lint` reports a dangling target as `broken-link`
+**only when a node with the same basename lives elsewhere in the bundle** — the
+signature of a moved or mistyped path. This is the check to lean on before a bulk
+migration (`node mv`, a directory reorg, a wikilink→Markdown rewrite): those
+operations produce exactly the defect signature, and `lint --strict` will catch
+them in CI. `analyze`'s advisory dangling-link reporting is unchanged — this
+check only *adds* a gate.
 
 ### Tuning the coverage-gap threshold
 
