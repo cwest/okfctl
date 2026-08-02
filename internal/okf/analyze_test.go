@@ -203,6 +203,131 @@ func TestAnalyze_Freshness_TimeSensitiveAgeGated(t *testing.T) {
 	}
 }
 
+// genDoc builds a node whose freshness date lives in a spec field rather than
+// the okfctl-native modified/created. `generatedAt` populates `generated.at`
+// (§5.2); `timestamp` populates the legacy `timestamp` (§13.1). Either may be
+// "" to omit it. modified/created are intentionally never set here so a
+// resolved basis proves it came through the spec path.
+func genDoc(title, generatedAt, timestamp, body string) string {
+	fm := "---\ntype: Concept\ntitle: " + title + "\n"
+	if generatedAt != "" {
+		fm += "generated: { by: reference_agent/gemini-2.5-pro, at: " + generatedAt + " }\n"
+	}
+	if timestamp != "" {
+		fm += "timestamp: " + timestamp + "\n"
+	}
+	fm += "---\n\n# " + title + "\n\n" + body + "\n"
+	return fm
+}
+
+// §5.2 negative control: a node dated ONLY by the canonical generated.at
+// resolves a basis where before this change it reported "(none)". This is the
+// spec-conformant bundle the fix targets.
+func TestAnalyze_Freshness_ResolvesGeneratedAt_Section5_2(t *testing.T) {
+	pinClock(t, fixedNow)
+	// generated.at 2025-01-01 is > 180 days before 2026-07-26 -> stale, dated.
+	n := genDoc("G", "2025-01-01T00:00:00Z", "", "Body.")
+	b := mkLintBundle(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [G](g.md)\n",
+		"g.md":     n,
+	})
+	rep := Analyze(b, DefaultAnalyzeOptions())
+	if len(rep.Freshness.Stale) != 1 || rep.Freshness.Stale[0].Path != "g.md" {
+		t.Fatalf("want g.md stale via generated.at, got %+v", rep.Freshness.Stale)
+	}
+	if rep.Freshness.Stale[0].Basis == "(none)" {
+		t.Fatalf("want a resolved basis, got (none): %+v", rep.Freshness.Stale[0])
+	}
+	if rep.Freshness.Stale[0].AgeDays == nil || *rep.Freshness.Stale[0].AgeDays < 180 {
+		t.Fatalf("want age >= 180 from generated.at, got %+v", rep.Freshness.Stale[0])
+	}
+}
+
+// §13.1 legacy fallback: a node dated ONLY by the legacy `timestamp` resolves a
+// basis (this is the reporter's exact fixture — issue #39).
+func TestAnalyze_Freshness_ResolvesLegacyTimestamp_Section13_1(t *testing.T) {
+	pinClock(t, fixedNow)
+	n := genDoc("T", "", "2025-01-01T00:00:00Z", "Body.")
+	b := mkLintBundle(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [T](t.md)\n",
+		"t.md":     n,
+	})
+	rep := Analyze(b, DefaultAnalyzeOptions())
+	if len(rep.Freshness.Stale) != 1 || rep.Freshness.Stale[0].Path != "t.md" {
+		t.Fatalf("want t.md stale via legacy timestamp, got %+v", rep.Freshness.Stale)
+	}
+	if rep.Freshness.Stale[0].Basis == "(none)" {
+		t.Fatalf("want a resolved basis, got (none): %+v", rep.Freshness.Stale[0])
+	}
+	if rep.Freshness.Stale[0].AgeDays == nil {
+		t.Fatalf("want a non-nil age from timestamp, got %+v", rep.Freshness.Stale[0])
+	}
+}
+
+// §5.2 precedence: generated.at is the canonical basis and wins over the
+// okfctl-native modified/created compatibility fields when both are present.
+func TestAnalyze_Freshness_GeneratedAtBeatsModified_Section5_2(t *testing.T) {
+	pinClock(t, fixedNow)
+	// generated.at is OLD (stale); modified is FRESH. If precedence were wrong
+	// (modified first) the node would read fresh and not surface.
+	n := "---\ntype: Concept\ntitle: P\n" +
+		"generated: { by: reference_agent/gemini-2.5-pro, at: 2025-01-01T00:00:00Z }\n" +
+		"modified: 2026-07-20T00:00:00Z\n---\n\n# P\n\nBody.\n"
+	b := mkLintBundle(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [P](p.md)\n",
+		"p.md":     n,
+	})
+	rep := Analyze(b, DefaultAnalyzeOptions())
+	if len(rep.Freshness.Stale) != 1 || rep.Freshness.Stale[0].Path != "p.md" {
+		t.Fatalf("want p.md stale via generated.at precedence, got %+v", rep.Freshness.Stale)
+	}
+	if rep.Freshness.Stale[0].AgeDays == nil || *rep.Freshness.Stale[0].AgeDays < 180 {
+		t.Fatalf("want age >= 180 from generated.at, not modified, got %+v", rep.Freshness.Stale[0])
+	}
+}
+
+// Positive control (regression guard): the okfctl-native modified/created path
+// is unchanged — a node dated only by modified still resolves a basis.
+func TestAnalyze_Freshness_ModifiedStillResolves(t *testing.T) {
+	pinClock(t, fixedNow)
+	n := tsDoc("Concept", "M", nil, "", "2025-01-01T00:00:00Z", "Body.")
+	b := mkLintBundle(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [M](m.md)\n",
+		"m.md":     n,
+	})
+	rep := Analyze(b, DefaultAnalyzeOptions())
+	if len(rep.Freshness.Stale) != 1 || rep.Freshness.Stale[0].Path != "m.md" {
+		t.Fatalf("want m.md stale via modified, got %+v", rep.Freshness.Stale)
+	}
+	if rep.Freshness.Stale[0].Basis == "(none)" {
+		t.Fatalf("want a resolved basis from modified, got (none): %+v", rep.Freshness.Stale[0])
+	}
+}
+
+// §5.2/§13.1 zero-value guard: a `generated` mapping with no usable `at` and no
+// legacy timestamp and no modified/created must NOT read an empty string or a
+// zero time.Time as a valid basis — it stays undated, flagged softly.
+func TestAnalyze_Freshness_EmptyGeneratedIsUndated(t *testing.T) {
+	pinClock(t, fixedNow)
+	// generated has only `by`; no at, no timestamp, no modified/created.
+	n := "---\ntype: Concept\ntitle: E\n" +
+		"generated: { by: reference_agent/gemini-2.5-pro }\n---\n\n# E\n\nBody.\n"
+	b := mkLintBundle(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [E](e.md)\n",
+		"e.md":     n,
+	})
+	rep := Analyze(b, DefaultAnalyzeOptions())
+	if len(rep.Freshness.Stale) != 1 || rep.Freshness.Stale[0].Path != "e.md" {
+		t.Fatalf("want e.md flagged undated, got %+v", rep.Freshness.Stale)
+	}
+	if rep.Freshness.Stale[0].AgeDays != nil {
+		t.Fatalf("want nil age for undated node, got %v", *rep.Freshness.Stale[0].AgeDays)
+	}
+	if rep.Freshness.Stale[0].Basis != "(none)" {
+		t.Fatalf("want basis (none) for empty generated, got %q", rep.Freshness.Stale[0].Basis)
+	}
+}
+
 // --- Connectivity ----------------------------------------------------------
 
 func TestAnalyze_Connectivity_OrphanAndWeaklyLinked(t *testing.T) {
