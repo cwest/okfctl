@@ -16,7 +16,10 @@ package search
 
 import (
 	"bufio"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,9 +38,38 @@ type WordPiece struct {
 	maxChars int    // max_input_chars_per_word, 100
 }
 
-// LoadWordPiece reads dir/vocab.txt (line N == token id N) into a WordPiece with
-// the BERT defaults potion-base-8M's tokenizer.json declares.
+// LoadWordPiece builds a WordPiece tokenizer from a model2vec directory. It
+// prefers dir/vocab.txt (line N == token id N — the simplest, fastest form) and
+// falls back to dir/tokenizer.json (the standard model2vec / Hugging Face layout
+// the docs promise, in which the vocab lives inside the tokenizer JSON). The
+// BERT-default normalizer/WordPiece params (## prefix, 100 max chars) are
+// hard-defaulted and cross-checked against tokenizer.json when it supplies them.
 func LoadWordPiece(dir string) (*WordPiece, error) {
+	wp, err := loadWordPieceFromVocabTxt(dir)
+	if err == nil {
+		return wp, nil
+	}
+	// Only fall through to tokenizer.json when vocab.txt is simply absent; a
+	// vocab.txt that exists but is malformed is a real error, not a miss.
+	if !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+
+	tokPath := filepath.Join(dir, "tokenizer.json")
+	if wp, tokErr := loadWordPieceFromTokenizerJSON(tokPath); tokErr == nil {
+		return wp, nil
+	} else if !errors.Is(tokErr, fs.ErrNotExist) {
+		return nil, tokErr
+	}
+
+	// Neither file exists: name BOTH so the message does not send the user
+	// looking for a file the documentation never told them to create.
+	return nil, fmt.Errorf("wordpiece: no vocab found in %s: need vocab.txt or tokenizer.json", dir)
+}
+
+// loadWordPieceFromVocabTxt reads dir/vocab.txt (line N == token id N) with the
+// BERT defaults potion-base-8M's tokenizer.json declares.
+func loadWordPieceFromVocabTxt(dir string) (*WordPiece, error) {
 	f, err := os.Open(filepath.Join(dir, "vocab.txt"))
 	if err != nil {
 		return nil, err
@@ -63,6 +95,63 @@ func LoadWordPiece(dir string) (*WordPiece, error) {
 		return nil, fmt.Errorf("wordpiece: vocab.txt has no [UNK] token")
 	}
 	return &WordPiece{vocab: vocab, unkID: unk, prefix: "##", maxChars: 100}, nil
+}
+
+// tokenizerJSON is the subset of a Hugging Face tokenizer.json this loader reads:
+// the model section, which for a WordPiece tokenizer carries the vocab (a
+// token->id map, so ids come from the values, NOT line order) plus the
+// normalizer/WordPiece params. Same stdlib encoding/json approach the config
+// reader in model2vec.go uses — no new dependency.
+type tokenizerJSON struct {
+	Model struct {
+		Type                    string         `json:"type"`
+		UnkToken                string         `json:"unk_token"`
+		ContinuingSubwordPrefix *string        `json:"continuing_subword_prefix"`
+		MaxInputCharsPerWord    *int           `json:"max_input_chars_per_word"`
+		Vocab                   map[string]int `json:"vocab"`
+	} `json:"model"`
+}
+
+// loadWordPieceFromTokenizerJSON decodes a WordPiece tokenizer.json into a
+// WordPiece. A non-WordPiece model.type (e.g. BPE, Unigram) is rejected with a
+// named error rather than attempting a WordPiece parse on an incompatible vocab
+// shape. An absent file returns fs.ErrNotExist so the caller can distinguish
+// "not present" from "present but broken".
+func loadWordPieceFromTokenizerJSON(path string) (*WordPiece, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err // includes fs.ErrNotExist when absent
+	}
+	var tj tokenizerJSON
+	if err := json.Unmarshal(raw, &tj); err != nil {
+		return nil, fmt.Errorf("wordpiece: bad tokenizer.json: %w", err)
+	}
+	m := tj.Model
+	if m.Type != "" && m.Type != "WordPiece" {
+		return nil, fmt.Errorf("wordpiece: tokenizer type %q not supported (only WordPiece)", m.Type)
+	}
+	if len(m.Vocab) == 0 {
+		return nil, fmt.Errorf("wordpiece: tokenizer.json has an empty or missing model.vocab")
+	}
+
+	unkTok := m.UnkToken
+	if unkTok == "" {
+		unkTok = "[UNK]"
+	}
+	unk, ok := m.Vocab[unkTok]
+	if !ok {
+		return nil, fmt.Errorf("wordpiece: tokenizer.json vocab has no %s token", unkTok)
+	}
+
+	prefix := "##"
+	if m.ContinuingSubwordPrefix != nil {
+		prefix = *m.ContinuingSubwordPrefix
+	}
+	maxChars := 100
+	if m.MaxInputCharsPerWord != nil {
+		maxChars = *m.MaxInputCharsPerWord
+	}
+	return &WordPiece{vocab: m.Vocab, unkID: unk, prefix: prefix, maxChars: maxChars}, nil
 }
 
 // Tokenize turns text into content token ids: normalize, pre-tokenize into
