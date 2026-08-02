@@ -44,13 +44,15 @@ curl -sL https://raw.githubusercontent.com/GoogleCloudPlatform/knowledge-catalog
 |---|---|
 | Upstream spec | **0.2** |
 | `SpecVersion` (`internal/okf/reserved.go`) | `0.2` |
-| Real corpus (`knowledge-base` `.okf`) | `0.2` |
+| Real corpus (`knowledge-base` bundle-root `index.md` `okf_version`) | `0.2` |
 
 The tool, the corpus, and the spec are all v0.2. v0.2 is a minor bump
 (§13) with two deliberate breaking renames: `timestamp` → `generated.at`, and the
 body `# Citations` list → frontmatter `sources`. Consumers MAY fall back to the
 legacy forms, so v0.1 bundles stay readable — a flip of the DEFAULT for new
-bundles, not the floor for existing ones.
+bundles, not the floor for existing ones. The v0.1 fallbacks in `internal/okf`
+(legacy `timestamp` for `generated.at`, legacy body `# Citations` for `sources`)
+are load-bearing and MUST stay.
 
 A bundle declares its own target via `okf_version` in the `.okf` sidecar; the tool
 reads it rather than assuming. Per §12, a consumer that does not understand a
@@ -106,16 +108,19 @@ did — it is the control proving the change didn't silently start hiding findin
 
 ### 4. Conform against the version the bundle declares
 
-The corpus is v0.1 today, so a real-corpus run alone will never exercise v0.2.
-Any change touching frontmatter, provenance, or freshness must ALSO be run against
-a v0.2 fixture — otherwise "it passes" only means "v0.1 still passes."
+The corpus is v0.2 today, so a real-corpus run now exercises the v0.2 axes the
+tool understands (status lifecycle, epistemic distribution, bundle `okf_version`,
+`sources`-folded coverage). A v0.1 bundle stays consumable via the documented
+fallbacks, so any change touching frontmatter, provenance, or freshness must
+STILL be run against a v0.1 fixture too — otherwise "it passes" only proves the
+v0.2 path and silently breaks a legacy bundle.
 
-Permissiveness makes this trap quiet: a v0.2 bundle currently **validates clean and
-lints clean**, because §7.4's open `type` and unknown-key tolerance let every new
-v0.2 key through untouched. That is correct floor behavior and it is *not* support.
-**Passing is not the same as understanding** — no code path currently reads
-`sources`, `generated`, `verified`, `status`, `stale_after`, or the
-`Attested Computation` type. Never report "v0.2 works" off a green validate.
+Permissiveness is still the quiet trap in the other direction: an unrecognized
+future key or an unknown `type` MUST pass `validate` clean (§7.4 open `type`,
+§11 unknown-key tolerance). That is correct floor behavior and it is *not*
+license to enum-gate an optional or unknown field. `epistemic` (§11 unknown key)
+is surfaced by `analyze`, never rejected; `status` (§5.4 optional) is soft
+lint guidance, never a `validate` failure. Never turn a permissive clause strict.
 
 ### Both controls, every time
 

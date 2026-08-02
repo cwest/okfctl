@@ -133,6 +133,106 @@ func TestAnalyze_Coverage_UncitedAndSingleCitation(t *testing.T) {
 	}
 }
 
+// TestAnalyze_Coverage_FoldsSourcesFrontmatter proves the coverage signal reads
+// the v0.2 §5.1 `sources` frontmatter, not only the legacy body `# Citations`
+// list (§13.1). A node whose provenance lives entirely in frontmatter must not
+// be reported as uncited, and its source COUNT must drive the single-vs-multi
+// split the same way a body citation list would. Before the fold-in, analyze
+// counted only body citations, so a sources-only node false-reported as uncited.
+func TestAnalyze_Coverage_FoldsSourcesFrontmatter(t *testing.T) {
+	pinClock(t, fixedNow)
+	// two.md: two frontmatter sources, no body # Citations -> cited (neither
+	// uncited nor single). one.md: a single frontmatter source -> single. A
+	// body-only citation node (body.md) stays covered by the §13.1 fallback.
+	two := "---\ntype: Concept\ntitle: Two\nsources:\n" +
+		"  - resource: https://example.com/a\n" +
+		"  - resource: https://example.com/b\n" +
+		"---\n\n# Two\n\nBody with no citations section.\n"
+	one := "---\ntype: Concept\ntitle: One\nsources:\n" +
+		"  - resource: https://example.com/only\n" +
+		"---\n\n# One\n\nBody with no citations section.\n"
+	body := lintDoc("Concept", "Body", "Prose.\n\n# Citations\n\n[1] A body cite.")
+	none := lintDoc("Concept", "None", "No provenance at all.")
+	b := mkLintBundle(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [Two](two.md)\n- [One](one.md)\n- [Body](body.md)\n- [None](none.md)\n",
+		"two.md":   two,
+		"one.md":   one,
+		"body.md":  body,
+		"none.md":  none,
+	})
+	rep := Analyze(b, DefaultAnalyzeOptions())
+
+	uncited := map[string]bool{}
+	for _, r := range rep.Coverage.Uncited {
+		uncited[r.Path] = true
+	}
+	single := map[string]bool{}
+	for _, r := range rep.Coverage.SingleCitation {
+		single[r.Path] = true
+	}
+
+	if uncited["two.md"] {
+		t.Errorf("two.md has two frontmatter sources; must not be uncited, got %+v", rep.Coverage.Uncited)
+	}
+	if single["two.md"] {
+		t.Errorf("two.md has two sources; must not be single-citation, got %+v", rep.Coverage.SingleCitation)
+	}
+	if !single["one.md"] {
+		t.Errorf("one.md has exactly one frontmatter source; want single-citation, got %+v", rep.Coverage.SingleCitation)
+	}
+	if uncited["one.md"] {
+		t.Errorf("one.md has one source; must not be uncited")
+	}
+	if !single["body.md"] {
+		t.Errorf("body.md has one body citation (§13.1 fallback); want single-citation, got %+v", rep.Coverage.SingleCitation)
+	}
+	if !uncited["none.md"] {
+		t.Errorf("none.md has no provenance; want uncited, got %+v", rep.Coverage.Uncited)
+	}
+}
+
+// TestAnalyze_Epistemic_SurfacesValueDistribution proves analyze SURFACES the
+// distribution of the v0.2 `epistemic` grade key (a §11 unknown key: recognized
+// and reported, never enum-gated). The migration preserved the old conflated
+// grades verbatim, so analyze must report whatever values appear — sorted by
+// count descending, then value ascending — without inventing a closed
+// vocabulary or rejecting any value. Nodes with no epistemic key are not counted.
+func TestAnalyze_Epistemic_SurfacesValueDistribution(t *testing.T) {
+	pinClock(t, fixedNow)
+	mk := func(title, epistemic string) string {
+		return "---\ntype: Concept\ntitle: " + title + "\nepistemic: " + epistemic +
+			"\n---\n\n# " + title + "\n\nBody.\n"
+	}
+	b := mkLintBundle(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [A](a.md)\n- [B](b.md)\n- [C](c.md)\n- [D](d.md)\n- [E](e.md)\n",
+		"a.md":     mk("A", "verified"),
+		"b.md":     mk("B", "verified"),
+		"c.md":     mk("C", "documented"),
+		"d.md":     mk("D", "prior-art"),
+		"e.md":     lintDoc("Concept", "E", "No epistemic key."),
+	})
+	rep := Analyze(b, DefaultAnalyzeOptions())
+
+	got := rep.Epistemic.Distribution
+	want := []EpistemicCount{
+		{Value: "verified", Count: 2},
+		{Value: "documented", Count: 1},
+		{Value: "prior-art", Count: 1},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("epistemic distribution: want %d entries, got %+v", len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("epistemic distribution[%d]: want %+v, got %+v", i, want[i], got[i])
+		}
+	}
+	// A node with no epistemic key is never counted (nodes without the key = 1).
+	if rep.Epistemic.Untagged != 1 {
+		t.Errorf("untagged epistemic count: want 1, got %d", rep.Epistemic.Untagged)
+	}
+}
+
 // --- Freshness -------------------------------------------------------------
 
 func TestAnalyze_Freshness_StaleByModified(t *testing.T) {
@@ -459,6 +559,9 @@ func TestAnalyze_EmptyDimensionsAreEmptySlicesNotNil(t *testing.T) {
 	}
 	if rep.Clusters == nil {
 		t.Fatalf("Clusters must be non-nil")
+	}
+	if rep.Epistemic.Distribution == nil {
+		t.Fatalf("Epistemic.Distribution must be a non-nil slice for JSON stability")
 	}
 	if rep.Structure.DuplicateTitles == nil || rep.Structure.NearDuplicateSlugs == nil {
 		t.Fatalf("Structure slices must be non-nil")

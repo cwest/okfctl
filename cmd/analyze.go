@@ -133,6 +133,20 @@ func writeAnalyzeHuman(w io.Writer, rep okf.AnalyzeReport) {
 		}
 	})
 
+	// Epistemic grade distribution. Observational (§11 unknown key): recognized
+	// and surfaced, never enum-gated — so it does NOT count as an actionable
+	// signal. A curator reads it to spot an outlier or typo among the preserved
+	// grades.
+	fmt.Fprintln(w, "\n## Epistemic grade distribution (observational — not a gate)")
+	if len(rep.Epistemic.Distribution) == 0 {
+		fmt.Fprintln(w, "  ✓ no epistemic key present")
+	} else {
+		for _, e := range rep.Epistemic.Distribution {
+			fmt.Fprintf(w, "  - %s: %d\n", e.Value, e.Count)
+		}
+	}
+	fmt.Fprintf(w, "  (%d node(s) with no epistemic key)\n", rep.Epistemic.Untagged)
+
 	// Freshness.
 	fr := rep.Freshness
 	section("Freshness — stale / undated nodes (revalidate)", len(fr.Stale), func() {

@@ -21,6 +21,17 @@ import (
 	"testing"
 )
 
+// TestSpecVersion_TargetsV02 pins the build's targeted OKF spec version at 0.2.
+// The corpus migrated to v0.2 (§13), so the tool that consumes it must advertise
+// and scaffold against v0.2 — closing the version gap that AGENTS.md tracked. A
+// scaffolded bundle's .okf sidecar and any SpecVersion-sourced marker follow
+// this constant, so the assertion guards the whole version-pin surface.
+func TestSpecVersion_TargetsV02(t *testing.T) {
+	if SpecVersion != "0.2" {
+		t.Fatalf("SpecVersion = %q, want \"0.2\" (corpus is v0.2 per §13)", SpecVersion)
+	}
+}
+
 // okfVersionLine returns the `okf_version: ...` line from an index body, or ""
 // when absent. It matches only a top-level frontmatter key (a line that begins
 // with the key, ignoring the surrounding `---` fences).

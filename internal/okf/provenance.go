@@ -80,6 +80,18 @@ const (
 // StatusStable is the default lifecycle status when `status` is absent (§5.4).
 const StatusStable = "stable"
 
+// LifecycleStatuses is the §5.4 status lifecycle enum: the only values `status`
+// may hold. Absent ⇒ stable. This is a spec-DEFINED closed set, unlike the
+// open `type` vocabulary (§7.4) or the unknown `epistemic` key (§11): status is
+// named and enumerated by §5.4, so a value outside this set is a genuine defect.
+// It drives lint's status-lifecycle check (soft guidance), never a validate
+// floor rejection — §11 forbids rejecting a bundle for an optional field.
+var LifecycleStatuses = map[string]bool{
+	"draft":      true,
+	"stable":     true,
+	"deprecated": true,
+}
+
 // Sources returns the parsed `sources` list (§5.1). Entries missing the
 // REQUIRED `resource` are dropped — the reader surfaces only well-formed
 // sources. The shared `usage_window` sibling is framed onto every entry; an
@@ -190,6 +202,24 @@ func (n *Node) Status() string {
 		return v
 	}
 	return StatusStable // §5.4: absent status ⇒ stable.
+}
+
+// Epistemic returns the node's `epistemic` grade value, and whether the key is
+// present. `epistemic` is NOT an OKF-defined field: it is an unknown frontmatter
+// key (§11) the corpus carries to preserve the pre-v0.2 conflated grade verbatim
+// (migration 13.1). okfctl RECOGNIZES it — surfacing its value distribution in
+// analyze — but never enum-gates it, because §11 forbids rejecting a bundle for
+// an unknown key or its values. A non-string or empty value reports present=true
+// with the value rendered as text, so a typo is surfaced rather than dropped.
+func (n *Node) Epistemic() (string, bool) {
+	v, ok := n.Frontmatter["epistemic"]
+	if !ok {
+		return "", false
+	}
+	if s, ok := v.(string); ok {
+		return s, true
+	}
+	return scalarString(v), true
 }
 
 // StaleAfter returns the absolute stale-after date (§5.5, YYYY-MM-DD). ok is
