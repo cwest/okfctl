@@ -24,44 +24,48 @@ import (
 func newIndexCmd() *cobra.Command {
 	index := &cobra.Command{Use: "index", Short: "Manage the reserved index.md"}
 
-	index.AddCommand(&cobra.Command{
+	buildCmd := &cobra.Command{
 		Use:   "build [dir]",
 		Short: "Regenerate index.md from the current bundle",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			dir := bundleDirArg(args)
-			b, err := okf.Load(dir)
-			if err != nil {
-				return fmt.Errorf("load bundle: %w", err)
-			}
-			if err := okf.WriteIndex(b); err != nil {
-				return fmt.Errorf("write index.md: %w", err)
-			}
-			dirs := okf.IndexDirs(b)
-			fmt.Fprintf(cmd.OutOrStdout(), "Wrote %d index.md file(s) under %s\n", len(dirs), dir)
-			return nil
-		},
-	})
+	}
+	buildNoIgnore := addNoIgnoreFlag(buildCmd)
+	buildCmd.RunE = func(cmd *cobra.Command, args []string) error {
+		dir := bundleDirArg(args)
+		b, err := loadBundleForCmd(cmd, dir, *buildNoIgnore)
+		if err != nil {
+			return err
+		}
+		if err := okf.WriteIndex(b); err != nil {
+			return fmt.Errorf("write index.md: %w", err)
+		}
+		dirs := okf.IndexDirs(b)
+		fmt.Fprintf(cmd.OutOrStdout(), "Wrote %d index.md file(s) under %s\n", len(dirs), dir)
+		return nil
+	}
+	index.AddCommand(buildCmd)
 
-	index.AddCommand(&cobra.Command{
+	checkCmd := &cobra.Command{
 		Use:   "check [dir]",
 		Short: "Verify index.md is current (nonzero exit if stale)",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			dir := bundleDirArg(args)
-			b, err := okf.Load(dir)
-			if err != nil {
-				return fmt.Errorf("load bundle: %w", err)
-			}
-			ok, report := okf.IndexInSync(b)
-			if ok {
-				fmt.Fprintln(cmd.OutOrStdout(), "OK: index.md is current")
-				return nil
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), report)
-			return fmt.Errorf("index.md is out of date")
-		},
-	})
+	}
+	checkNoIgnore := addNoIgnoreFlag(checkCmd)
+	checkCmd.RunE = func(cmd *cobra.Command, args []string) error {
+		dir := bundleDirArg(args)
+		b, err := loadBundleForCmd(cmd, dir, *checkNoIgnore)
+		if err != nil {
+			return err
+		}
+		ok, report := okf.IndexInSync(b)
+		if ok {
+			fmt.Fprintln(cmd.OutOrStdout(), "OK: index.md is current")
+			return nil
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), report)
+		return fmt.Errorf("index.md is out of date")
+	}
+	index.AddCommand(checkCmd)
 	return index
 }
 

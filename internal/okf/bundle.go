@@ -20,6 +20,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -37,6 +38,46 @@ func IsReservedPath(rel string) bool {
 	return ReservedFiles[path.Base(rel)]
 }
 
+// DefaultSkipDirs is the base-name skip list applied to the bundle walk. These
+// are vendored (third-party, checked-in or installed) and derived (build/tool
+// output) directories whose .md files nobody authored as knowledge: a Python
+// virtualenv or a build-output tree sitting under the bundle root would
+// otherwise become part of the graph. The set is matched by directory BASE NAME
+// at any depth, so tool/.venv and web/node_modules are both skipped. It is a
+// default, not a policy: --no-ignore (WithNoIgnore) restores the full walk, and
+// the skip is never silent (Bundle.SkippedDirs records what was pruned so the
+// caller can announce it). The bundle root itself is never skipped even if its
+// own base name matches.
+//
+// This deliberately does NOT consult .gitignore (couples curation scope to
+// version-control scope, two different questions) and is a built-in default
+// rather than a required .okfctlignore (the tool must be usable on a real tree
+// with no config); a project-level ignore file composes cleanly on top later.
+var DefaultSkipDirs = map[string]bool{
+	".git":          true,
+	".hg":           true,
+	".svn":          true,
+	".okfctl":       true, // the tool's own index/state dir
+	"node_modules":  true,
+	".venv":         true,
+	"venv":          true,
+	"env":           true,
+	"__pycache__":   true,
+	".mypy_cache":   true,
+	".pytest_cache": true,
+	".tox":          true,
+	".ruff_cache":   true,
+	"site-packages": true,
+	"vendor":        true,
+	"target":        true, // Rust/JVM build output
+	"dist":          true,
+	"build":         true,
+	".next":         true,
+	".cache":        true,
+	".idea":         true,
+	".vscode":       true,
+}
+
 // Bundle is a loaded OKF bundle: concept nodes keyed by bundle-relative path,
 // plus the reserved files, plus the derived link graph.
 type Bundle struct {
@@ -44,24 +85,70 @@ type Bundle struct {
 	Nodes      map[string]*Node // concept nodes only (excludes reserved)
 	Reserved   map[string]*Node // index.md, log.md
 	OkfVersion string           // okf_version from the bundle's .okf, or SpecVersion if absent
-	edges      map[string][]string
+	// SkippedDirs holds the bundle-relative slash paths of directories pruned
+	// from the walk by the default skip list (see DefaultSkipDirs), sorted.
+	// Empty when WithNoIgnore was passed or nothing matched. The CLI announces
+	// these on stderr so an excluded subtree is never a silent omission.
+	SkippedDirs []string
+	edges       map[string][]string
+}
+
+// loadConfig holds the resolved options for a Load call.
+type loadConfig struct {
+	noIgnore bool
+}
+
+// LoadOption configures Load. The zero set of options is the default behavior:
+// the bundle walk skips vendored/derived directories (DefaultSkipDirs).
+type LoadOption func(*loadConfig)
+
+// WithNoIgnore restores the full walk: no directory is skipped, so the loaded
+// graph is byte-identical to the pre-skip-list behavior. It is the escape hatch
+// for a bundle that deliberately authored real content into a directory whose
+// name happens to match the skip list.
+func WithNoIgnore() LoadOption {
+	return func(c *loadConfig) { c.noIgnore = true }
 }
 
 var mdLinkRe = regexp.MustCompile(`\[[^\]]*\]\(([^)]+)\)`)
 
 // Load walks root, parses every .md file, and builds the in-memory graph.
-func Load(root string) (*Bundle, error) {
+//
+// By default the walk prunes vendored and derived directories (DefaultSkipDirs)
+// so content nobody authored as knowledge never enters the graph; pass
+// WithNoIgnore to restore the full walk. Applying the skip once here means every
+// consumer (lint, analyze, validate, search, graph, index) inherits identical
+// scope — divergent per-command scope would be its own bug class.
+func Load(root string, opts ...LoadOption) (*Bundle, error) {
+	cfg := loadConfig{}
+	for _, o := range opts {
+		o(&cfg)
+	}
 	b := &Bundle{
 		Root:     root,
 		Nodes:    map[string]*Node{},
 		Reserved: map[string]*Node{},
 		edges:    map[string][]string{},
 	}
+	skipped := map[string]bool{}
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || !strings.HasSuffix(d.Name(), ".md") {
+		if d.IsDir() {
+			// Prune vendored/derived subtrees before descending. The bundle
+			// root is never a skip candidate (p == root), even if its own base
+			// name matches — we skip subtrees, not the bundle itself.
+			if !cfg.noIgnore && p != root && DefaultSkipDirs[d.Name()] {
+				rel, relErr := filepath.Rel(root, p)
+				if relErr == nil {
+					skipped[filepath.ToSlash(rel)] = true
+				}
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(d.Name(), ".md") {
 			return nil
 		}
 		rel, err := filepath.Rel(root, p)
@@ -86,6 +173,13 @@ func Load(root string) (*Bundle, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+	if len(skipped) > 0 {
+		b.SkippedDirs = make([]string, 0, len(skipped))
+		for s := range skipped {
+			b.SkippedDirs = append(b.SkippedDirs, s)
+		}
+		sort.Strings(b.SkippedDirs)
 	}
 	b.OkfVersion = readOkfVersion(root)
 	b.buildEdges()

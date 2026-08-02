@@ -38,6 +38,7 @@ func newSearchCmd() *cobra.Command {
 		neighbors string
 		depth     int
 		asJSON    bool
+		noIgnore  bool
 	)
 
 	c := &cobra.Command{
@@ -64,7 +65,7 @@ func newSearchCmd() *cobra.Command {
 				if len(args) == 1 {
 					dir = args[0]
 				}
-				return runNeighbors(cmd, dir, neighbors, depth, asJSON)
+				return runNeighbors(cmd, dir, neighbors, depth, asJSON, noIgnore)
 			}
 
 			// Lexical mode: first positional is the query, optional second is dir.
@@ -76,24 +77,25 @@ func newSearchCmd() *cobra.Command {
 			if len(args) == 2 {
 				dir = args[1]
 			}
-			return runLexical(cmd, dir, query, field, asJSON)
+			return runLexical(cmd, dir, query, field, asJSON, noIgnore)
 		},
 	}
 	c.Flags().StringVar(&field, "field", "any", "lexical match surface: any|title|tag|type|body")
 	c.Flags().StringVar(&neighbors, "neighbors", "", "graph mode: node path to traverse from")
 	c.Flags().IntVar(&depth, "depth", 1, "neighborhood traversal depth (hops)")
 	c.Flags().BoolVar(&asJSON, "json", false, "emit results as JSON")
+	c.Flags().BoolVar(&noIgnore, "no-ignore", false, noIgnoreFlagUsage)
 	return c
 }
 
-func runLexical(cmd *cobra.Command, dir, query, field string, asJSON bool) error {
+func runLexical(cmd *cobra.Command, dir, query, field string, asJSON, noIgnore bool) error {
 	sf, ok := validFields[strings.ToLower(field)]
 	if !ok {
 		return fmt.Errorf("unknown --field %q (want any, title, tag, type, or body)", field)
 	}
-	b, err := okf.Load(dir)
+	b, err := loadBundleForCmd(cmd, dir, noIgnore)
 	if err != nil {
-		return fmt.Errorf("load bundle: %w", err)
+		return err
 	}
 	results := okf.Search(b, query, sf)
 	if asJSON {
@@ -106,10 +108,10 @@ func runLexical(cmd *cobra.Command, dir, query, field string, asJSON bool) error
 	return nil
 }
 
-func runNeighbors(cmd *cobra.Command, dir, node string, depth int, asJSON bool) error {
-	b, err := okf.Load(dir)
+func runNeighbors(cmd *cobra.Command, dir, node string, depth int, asJSON, noIgnore bool) error {
+	b, err := loadBundleForCmd(cmd, dir, noIgnore)
 	if err != nil {
-		return fmt.Errorf("load bundle: %w", err)
+		return err
 	}
 	results, ok := okf.Neighborhood(b, node, depth)
 	if !ok {

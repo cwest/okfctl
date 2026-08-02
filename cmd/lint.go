@@ -69,6 +69,7 @@ func newLintCmd() *cobra.Command {
 	var semantic bool
 	var similarityThreshold float64
 	var isolationFloor float64
+	var noIgnore *bool
 	c := &cobra.Command{
 		Use:   "lint [bundle-dir]",
 		Short: "Report curation health findings for a bundle (orphans, missing cross-references, broken internal links, coverage gaps, type hygiene)",
@@ -88,9 +89,9 @@ func newLintCmd() *cobra.Command {
 			if len(args) == 1 {
 				dir = args[0]
 			}
-			b, err := okf.Load(dir)
+			b, err := loadBundleForCmd(cmd, dir, *noIgnore)
 			if err != nil {
-				return fmt.Errorf("load bundle: %w", err)
+				return err
 			}
 			findings := okf.Lint(b, okf.LintOptions{CoverageThreshold: coverageThreshold})
 			if semantic {
@@ -147,5 +148,6 @@ func newLintCmd() *cobra.Command {
 	c.Flags().BoolVar(&semantic, "semantic", false, "also run similarity checks against the index built by 'okfctl-search index build'")
 	c.Flags().Float64Var(&similarityThreshold, "similarity-threshold", 0, "cosine score at/above which two unlinked nodes are reported (default 0.80; implies --semantic data)")
 	c.Flags().Float64Var(&isolationFloor, "isolation-floor", 0, "score a node's best neighbor must reach to count as connected (default 0.20)")
+	noIgnore = addNoIgnoreFlag(c)
 	return c
 }
