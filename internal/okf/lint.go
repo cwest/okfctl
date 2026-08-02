@@ -26,9 +26,9 @@ import (
 // validate Finding (a spec-floor violation), a lint finding is curation
 // guidance — never a format failure.
 type LintFinding struct {
-	Check   string // "orphan" | "missing-xref" | "coverage-gap" | "type-hygiene" | "broken-link"
-	Path    string // node path the finding is about ("" for bundle-level findings)
-	Message string
+	Check   string `json:"check"` // "orphan" | "missing-xref" | "coverage-gap" | "type-hygiene" | "broken-link"
+	Path    string `json:"path"`  // node path the finding is about ("" for bundle-level findings)
+	Message string `json:"message"`
 }
 
 // LintOptions configures the deterministic structural checks.

@@ -15,9 +15,13 @@
 package cmd
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/cwest/okfctl/internal/okf"
 )
 
 // writeLintFixture writes rel->content files under a temp dir, returns the dir.
@@ -103,15 +107,111 @@ func TestLintCmd_CoverageThresholdFlag(t *testing.T) {
 	}
 }
 
-func contains(haystack, needle string) bool {
-	return len(haystack) >= len(needle) && (indexOf(haystack, needle) >= 0)
+// jsonFindingBundle is a four-node fixture that yields exactly orphan x2 and
+// missing-xref x2 (the card's positive control). Titles are distinct multi-char
+// words so no title matches incidental prose:
+//   - index -> alpha (alpha has an inbound link)
+//   - alpha -> beta   (beta has an inbound link)
+//   - gamma, delta have no inbound links -> orphan x2
+//   - gamma mentions "Alpha" in prose without linking -> missing-xref
+//   - delta mentions "Beta" in prose without linking  -> missing-xref
+func jsonFindingBundle(t *testing.T) string {
+	return writeLintFixture(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [Alpha](alpha.md)\n",
+		"alpha.md": doc("Concept", "Alpha", "See [beta](beta.md)."),
+		"beta.md":  doc("Concept", "Beta", "Plain body with no mentions."),
+		"gamma.md": doc("Concept", "Gamma", "Gamma discusses Alpha at length."),
+		"delta.md": doc("Concept", "Delta", "Delta discusses Beta at length."),
+	})
 }
 
-func indexOf(h, n string) int {
-	for i := 0; i+len(n) <= len(h); i++ {
-		if h[i:i+len(n)] == n {
-			return i
+func TestLintCmd_JSONEmitsEveryFindingIntact(t *testing.T) {
+	stdout, _, err := runOKFSplit(t, "lint", "--json", jsonFindingBundle(t))
+	if err != nil {
+		t.Fatalf("lint --json without --strict should exit 0: %v", err)
+	}
+	var findings []okf.LintFinding
+	if err := json.Unmarshal([]byte(stdout), &findings); err != nil {
+		t.Fatalf("output must be a bare JSON array of findings; unmarshal failed: %v\n%s", err, stdout)
+	}
+	var orphans, xrefs int
+	for _, f := range findings {
+		switch f.Check {
+		case "orphan":
+			orphans++
+		case "missing-xref":
+			xrefs++
+		}
+		if f.Check == "" || f.Message == "" {
+			t.Fatalf("finding must carry Check and Message intact, got %+v", f)
 		}
 	}
-	return -1
+	if orphans != 2 || xrefs != 2 {
+		t.Fatalf("want orphan x2 and missing-xref x2, got orphan x%d missing-xref x%d in:\n%s", orphans, xrefs, stdout)
+	}
+}
+
+func TestLintCmd_JSONCleanBundleEmitsEmptyArray(t *testing.T) {
+	clean := writeLintFixture(t, map[string]string{
+		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [A](a.md)\n- [B](b.md)\n",
+		"a.md":     doc("Concept", "A", "See [b](b.md)."),
+		"b.md":     doc("Concept", "B", "See [a](a.md)."),
+	})
+	stdout, _, err := runOKFSplit(t, "lint", "--json", clean)
+	if err != nil {
+		t.Fatalf("clean bundle --json should exit 0: %v", err)
+	}
+	// Negative control: emit "[]", never the prose "OK: no lint findings".
+	if strings.Contains(stdout, "OK: no lint findings") {
+		t.Fatalf("JSON mode must not emit the human prose trailer:\n%s", stdout)
+	}
+	var findings []okf.LintFinding
+	if err := json.Unmarshal([]byte(stdout), &findings); err != nil {
+		t.Fatalf("clean bundle must emit a JSON array (\"[]\"), got:\n%s\nerr: %v", stdout, err)
+	}
+	if len(findings) != 0 {
+		t.Fatalf("clean bundle must emit an empty array, got %d findings", len(findings))
+	}
+}
+
+func TestLintCmd_JSONStrictExitsNonZeroWithCleanStream(t *testing.T) {
+	stdout, stderr, err := runOKFSplit(t, "lint", "--json", "--strict", jsonFindingBundle(t))
+	if err == nil {
+		t.Fatalf("lint --json --strict must exit non-zero when there are findings")
+	}
+	// The JSON must be on stdout, parseable, with no human trailer mixed in.
+	var findings []okf.LintFinding
+	if err := json.Unmarshal([]byte(stdout), &findings); err != nil {
+		t.Fatalf("stdout under --json --strict must be a clean JSON array; got:\n%s\nerr: %v", stdout, err)
+	}
+	if len(findings) == 0 {
+		t.Fatalf("expected findings in the JSON stream under --strict")
+	}
+	if strings.Contains(stdout, "lint finding(s)") {
+		t.Fatalf("no human-readable trailer may appear on the JSON stream:\n%s", stdout)
+	}
+	_ = stderr // strict's error message is Cobra's concern, not part of the JSON stream
+}
+
+func TestLintCmd_JSONOutputOrderIsPathThenCheck(t *testing.T) {
+	// Pin the documented ordering contract: path ascending, then check
+	// ascending — matching okf.Lint's existing stable sort.
+	stdout, _, err := runOKFSplit(t, "lint", "--json", jsonFindingBundle(t))
+	if err != nil {
+		t.Fatalf("lint --json should exit 0: %v", err)
+	}
+	var findings []okf.LintFinding
+	if err := json.Unmarshal([]byte(stdout), &findings); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, stdout)
+	}
+	for i := 1; i < len(findings); i++ {
+		prev, cur := findings[i-1], findings[i]
+		if prev.Path > cur.Path || (prev.Path == cur.Path && prev.Check > cur.Check) {
+			t.Fatalf("findings out of (path, check) order at %d: %+v then %+v", i, prev, cur)
+		}
+	}
+}
+
+func contains(haystack, needle string) bool {
+	return strings.Contains(haystack, needle)
 }
