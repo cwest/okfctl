@@ -83,6 +83,16 @@ func logOnRefresh(cmd *cobra.Command, dir, rel string) {
 	}
 }
 
+// logOnPromote records a single directory-concept promotion in log.md. Like
+// logOnRefresh it does NOT regenerate index.md — a bulk promote appends one log
+// line per node and regenerates the index once at the end. Best-effort:
+// reported, never fatal.
+func logOnPromote(cmd *cobra.Command, dir, oldRel, newRel string) {
+	if err := okf.AppendLog(dir, "promoted "+oldRel+" -> "+newRel); err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not update log.md: %v\n", err)
+	}
+}
+
 // maintainIndex regenerates index.md from the current bundle so it never
 // silently drifts after a node create/edit/delete/rename. A build step a human
 // must remember is a build step that drifts; okfctl maintains it automatically.
