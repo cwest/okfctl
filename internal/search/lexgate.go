@@ -200,9 +200,13 @@ func (g *LexicalGateOptions) degrades() bool {
 //
 //  1. Take the semantic BAND: the first WideN of ranked.
 //  2. Emit the intersection (band ∩ Match) in SEMANTIC order.
-//  3. APPEND the lexical hits the band missed, in LEXICAL (path) order, each
-//     carrying its own semantic score from the full ranking (so decay and the
-//     score column stay meaningful).
+//  3. APPEND the lexical hits the band missed, ordered by SEMANTIC SCORE
+//     descending (ties broken by path for determinism), each carrying its own
+//     semantic score from the full ranking. Score order — not path order —
+//     because the caller cuts to k AFTER this composition (cwest/okfctl#73): a
+//     path-ordered tail lets an alphabetic prefix decide which lexical hits
+//     survive a small k, dropping stronger matches. Recall is unchanged (the
+//     same set is preserved); only the order within the tail changes.
 //  4. The caller cuts to k.
 //
 // When the gate degrades (empty terms or over-broad match) this returns ranked
@@ -229,28 +233,34 @@ func applyLexicalGate(ranked []Result, g *LexicalGateOptions, k int) []Result {
 		}
 	}
 
-	// Lexical-only tail: matched nodes not already in the band, in path order,
-	// each carrying its semantic score looked up from the full ranking.
+	// Lexical-only tail: matched nodes not already in the band, each carrying its
+	// semantic score looked up from the full ranking. Ordered by score DESCENDING
+	// (ties by path) so the caller's top-k cut keeps the STRONGEST lexical hits,
+	// not an alphabetic prefix (cwest/okfctl#73).
 	scoreByPath := make(map[string]Result, len(ranked))
 	for _, r := range ranked {
 		scoreByPath[r.Path] = r
 	}
-	var tailPaths []string
+	var tail []Result
 	for path := range g.Match {
 		if inBand[path] {
 			continue
 		}
-		if _, ok := scoreByPath[path]; !ok {
+		r, ok := scoreByPath[path]
+		if !ok {
 			continue // matched a node absent from the index; nothing to rank
 		}
-		tailPaths = append(tailPaths, path)
+		tail = append(tail, r)
 	}
-	sort.Strings(tailPaths)
+	sort.Slice(tail, func(i, j int) bool {
+		if tail[i].Score != tail[j].Score {
+			return tail[i].Score > tail[j].Score // higher score first
+		}
+		return tail[i].Path < tail[j].Path // deterministic tie-break
+	})
 
-	out := make([]Result, 0, len(intersection)+len(tailPaths))
+	out := make([]Result, 0, len(intersection)+len(tail))
 	out = append(out, intersection...)
-	for _, p := range tailPaths {
-		out = append(out, scoreByPath[p])
-	}
+	out = append(out, tail...)
 	return out
 }
