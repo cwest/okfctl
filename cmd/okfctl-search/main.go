@@ -88,6 +88,8 @@ func newSearchCmd() *cobra.Command {
 		notType      []string
 		notTag       []string
 		halfLife     float64
+		decayFloor   float64
+		minRelevance float64
 	)
 
 	root := &cobra.Command{
@@ -133,12 +135,23 @@ func newSearchCmd() *cobra.Command {
 				}
 				opts.Meta = buildNodeMeta(b)
 			}
-			if halfLife > 0 {
-				// Recency decay is post-ranking and off by default; the relevance floor
-				// stays on RAW cosine inside QueryWith so a fresh-but-weak node can never
-				// be promoted above a relevant older one. Floor 0 admits everything the
-				// ranker already returned; decay only reorders survivors.
-				opts.Decay = &search.DecayOptions{HalfLifeDays: halfLife, Now: time.Now(), MinRelevance: 0}
+			if halfLife > 0 || minRelevance > 0 {
+				// Recency decay is post-ranking and off by default. Two independent
+				// bounds keep it honest: MinRelevance is a floor on RAW cosine (a
+				// sub-floor node is dropped before decay can reorder anything), and
+				// DecayFloor clamps the recency multiplier itself so an old-but-relevant
+				// node can be demoted but never crushed to zero below a mediocre fresh
+				// one (#65). MinRelevance stands alone — with half-life 0 the multiplier
+				// is a no-op (factor 1) and this is a pure relevance cut. Its default
+				// stays 0: raw cosine distributions differ sharply between embedders
+				// (hash dim 64 vs model2vec dim 256), so any non-zero default is right
+				// for one and wrong for the other. DecayFloor defaults to scale-free 0.25.
+				opts.Decay = &search.DecayOptions{
+					HalfLifeDays: halfLife,
+					Now:          time.Now(),
+					MinRelevance: minRelevance,
+					DecayFloor:   decayFloor,
+				}
 			}
 
 			res, err := search.QueryWith(s, e, semantic, k, opts)
@@ -167,8 +180,21 @@ func newSearchCmd() *cobra.Command {
 	root.Flags().StringArrayVar(&notPath, "not-path", nil, "exclude nodes whose path starts with this prefix (repeatable)")
 	root.Flags().StringArrayVar(&notType, "not-type", nil, "exclude nodes with this §4.1 type (repeatable)")
 	root.Flags().StringArrayVar(&notTag, "not-tag", nil, "exclude nodes carrying this §4.1 tag (repeatable)")
-	// §5.2/§13.1 recency decay, post-ranking, off by default (0 = no decay).
-	root.Flags().Float64Var(&halfLife, "half-life", 0, "recency half-life in days (0 = no decay); reorders survivors, never promotes an irrelevant-but-fresh node")
+	// §5.2/§13.1 recency decay, post-ranking, off by default (0 = no decay). The
+	// help text describes what the command actually guarantees once bounded: decay
+	// reorders on cosine×recency, MinRelevance drops sub-floor nodes before that
+	// reorder, and DecayFloor clamps the multiplier so recency cannot erase a
+	// still-relevant node.
+	root.Flags().Float64Var(&halfLife, "half-life", 0, "recency half-life in days (0 = no decay); combine with --min-relevance and --decay-floor to bound how far recency reorders results")
+	// #65: clamp the recency multiplier so an old-but-relevant node can be demoted
+	// but never crushed below a mediocre fresh one. Scale-free, so it assumes
+	// nothing about the embedder's cosine distribution; 0 restores unbounded decay.
+	root.Flags().Float64Var(&decayFloor, "decay-floor", 0.25, "lower clamp on the recency multiplier 0.5^(age/half-life) (0 = unbounded decay)")
+	// #65: raw-cosine floor applied BEFORE decay reorders, so a sub-floor fresh
+	// node is dropped rather than promoted. Default 0 (admit everything) because
+	// raw cosine distributions differ sharply between embedders, so a non-zero
+	// default is right for one and wrong for another.
+	root.Flags().Float64Var(&minRelevance, "min-relevance", 0, "drop results whose RAW cosine is below this before decay reorders (0 = admit everything)")
 
 	root.AddCommand(newIndexCmd(&embedderName, &modelPath))
 	root.AddCommand(newRelatedCmd(&k))

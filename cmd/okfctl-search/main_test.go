@@ -16,6 +16,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -402,9 +403,160 @@ func TestPlugin_HalfLifeAcceptedAndUnsetUnchanged(t *testing.T) {
 	}
 }
 
+// parseTopPaths extracts the ranked bundle-relative paths from plugin output, in
+// order. Each result line is "SCORE\tPATH"; snippet lines are indented and skipped.
+func parseTopPaths(out string) []string {
+	var paths []string
+	for _, ln := range strings.Split(out, "\n") {
+		if ln == "" || strings.HasPrefix(ln, "\t") {
+			continue
+		}
+		fields := strings.Split(ln, "\t")
+		if len(fields) >= 2 {
+			paths = append(paths, fields[1])
+		}
+	}
+	return paths
+}
+
+// writeDecayReproBundle lays down the issue's exact two-node repro: a strong OLD
+// exact match (2023) and a weak FRESH near-noise node (2026) sharing incidental
+// query words. With decay and no clamp, an aggressive half-life inverts them.
+func writeDecayReproBundle(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	files := map[string]string{
+		"docs/old-exact.md":  "---\ntype: Concept\ntitle: Bloom Filter Sizing\ngenerated:\n  by: synthetic\n  at: 2023-01-01T00:00:00Z\n---\n\n# Bloom Filter Sizing\n\n## Bloom Filter False Positive Bits Hashes Sizing\n\nBloom filter sizing bits hashes false positive rate bloom filter sizing bits\nhashes false positive rate bloom filter sizing bits hashes false positive rate.\n",
+		"docs/fresh-weak.md": "---\ntype: Concept\ntitle: Weekly Status Roundup\ngenerated:\n  by: synthetic\n  at: 2026-08-01T00:00:00Z\n---\n\n# Weekly Status Roundup\n\n## Agenda Recap\n\nFilter positive agenda recap status roundup attendees followup parked owner\naction pending review draft revision comment summary snapshot digest triage\nboard column swimlane retro sprint cadence checkpoint readout brief rollup.\n",
+	}
+	for rel, c := range files {
+		p := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(c), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+const decayReproQuery = "bloom filter sizing false positive bits hashes"
+
+// TestPlugin_DecayFloorPositiveControl is the card's POSITIVE control on the CLI:
+// the issue's two-node repro at --half-life 90 with the DEFAULT --decay-floor
+// (0.25). old-exact.md MUST rank above fresh-weak.md and MUST NOT score 0.0000.
+// Assert the ordering, not just the score.
+func TestPlugin_DecayFloorPositiveControl(t *testing.T) {
+	dir := writeDecayReproBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", decayReproQuery, "--half-life", "90", dir)
+	if err != nil {
+		t.Fatalf("--half-life 90 (default decay-floor): %v", err)
+	}
+	paths := parseTopPaths(out)
+	if len(paths) < 2 || paths[0] != "docs/old-exact.md" {
+		t.Fatalf("default --decay-floor 0.25 must keep old-exact.md on top at half-life 90; got order %v\noutput=%q", paths, out)
+	}
+	for _, ln := range strings.Split(out, "\n") {
+		if strings.Contains(ln, "docs/old-exact.md") && strings.HasPrefix(ln, "0.0000\t") {
+			t.Fatalf("old-exact.md scored 0.0000 even with the default clamp: %q", ln)
+		}
+	}
+}
+
+// TestPlugin_DecayFloorNegativeControl is the card's second NEGATIVE control on
+// the CLI: --decay-floor 0 must restore today's exact unbounded behavior — the
+// inversion returns (fresh-weak.md on top at half-life 90). Backward
+// compatibility is opt-out-able and must be provable.
+func TestPlugin_DecayFloorNegativeControl(t *testing.T) {
+	dir := writeDecayReproBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", decayReproQuery, "--half-life", "90", "--decay-floor", "0", dir)
+	if err != nil {
+		t.Fatalf("--decay-floor 0: %v", err)
+	}
+	paths := parseTopPaths(out)
+	if len(paths) < 2 || paths[0] != "docs/fresh-weak.md" {
+		t.Fatalf("--decay-floor 0 must restore the unbounded inversion (fresh-weak.md on top); got order %v\noutput=%q", paths, out)
+	}
+}
+
+// TestPlugin_MinRelevanceBothDirections is the card's --min-relevance control:
+// a value above the weak node's raw cosine DROPS it entirely (positive); the
+// default (--min-relevance 0) admits everything the ranker returned (negative).
+func TestPlugin_MinRelevanceBothDirections(t *testing.T) {
+	dir := writeDecayReproBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	// Learn the raw cosines (no decay) so the threshold is grounded, not guessed.
+	raw, err := runPlugin(t, "--semantic", decayReproQuery, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var weakRaw float64
+	for _, ln := range strings.Split(raw, "\n") {
+		if strings.Contains(ln, "docs/fresh-weak.md") {
+			if _, e := fmt.Sscanf(ln, "%f", &weakRaw); e != nil {
+				t.Fatalf("could not parse fresh-weak raw score from %q", ln)
+			}
+		}
+	}
+	if weakRaw <= 0 {
+		t.Fatalf("test premise broken: fresh-weak raw cosine should be > 0; got %.4f (raw=%q)", weakRaw, raw)
+	}
+
+	// Negative direction: default --min-relevance 0 admits BOTH nodes, unchanged.
+	def, err := runPlugin(t, "--semantic", decayReproQuery, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := parseTopPaths(def); len(got) != 2 {
+		t.Fatalf("default --min-relevance 0 must admit everything; got %v", got)
+	}
+
+	// Positive direction: a floor just above the weak node's raw cosine drops it.
+	floor := fmt.Sprintf("%.4f", weakRaw+0.01)
+	dropped, err := runPlugin(t, "--semantic", decayReproQuery, "--min-relevance", floor, dir)
+	if err != nil {
+		t.Fatalf("--min-relevance %s: %v", floor, err)
+	}
+	for _, p := range parseTopPaths(dropped) {
+		if p == "docs/fresh-weak.md" {
+			t.Fatalf("--min-relevance %s should DROP the sub-floor weak node; it survived. output=%q", floor, dropped)
+		}
+	}
+	if !strings.Contains(dropped, "docs/old-exact.md") {
+		t.Fatalf("--min-relevance %s dropped the strong node too; output=%q", floor, dropped)
+	}
+}
+
+// TestPlugin_HelpTextDescribesClampedGuarantee pins that the --half-life help
+// text no longer claims the un-clampable guarantee ("never promotes an
+// irrelevant-but-fresh node") and instead points at the two bounds that actually
+// deliver it (--decay-floor, --min-relevance).
+func TestPlugin_HelpTextDescribesClampedGuarantee(t *testing.T) {
+	out, err := runPlugin(t, "--help")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "never promotes an irrelevant-but-fresh node") {
+		t.Errorf("--half-life help still makes the unreachable guarantee; got:\n%s", out)
+	}
+	for _, want := range []string{"--decay-floor", "--min-relevance"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("help output should document %s; got:\n%s", want, out)
+		}
+	}
+}
+
 // TestSnippetPreview_TruncatesOnRuneBoundary pins that a snippet longer than the
 // preview cap is truncated without splitting a multi-byte UTF-8 rune. The KB
-// carries non-ASCII text (curly quotes, em-dashes, accented names), so a
 // byte-boundary cut would emit a mangled partial byte before the ellipsis.
 func TestSnippetPreview_TruncatesOnRuneBoundary(t *testing.T) {
 	// 198 ASCII runes then an em-dash (3 bytes: 0xE2 0x80 0x94). A byte-boundary
