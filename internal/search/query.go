@@ -177,13 +177,24 @@ type DecayOptions struct {
 	// MinRelevance is the raw-cosine floor. A result whose UNDECAYED cosine is
 	// below this is dropped before decay reorders the rest. Zero admits everything.
 	MinRelevance float64
+	// DecayFloor is the scale-free lower clamp on the recency multiplier itself
+	// (distinct from MinRelevance, which is a floor on RAW cosine). Without it,
+	// 0.5^(age/halfLife) tends to zero as age grows, so an old-but-perfect match
+	// can be multiplied into irrelevance below a mediocre fresh one (#65: 0.0000
+	// at half-life 90). Clamping the multiplier at DecayFloor bounds how far
+	// recency can demote a still-relevant node, and it assumes nothing about the
+	// cosine distribution of whichever embedder is loaded. Zero disables the clamp
+	// (exact unbounded 0.5^x, byte-for-byte today's behavior).
+	DecayFloor float64
 }
 
-// factor returns the multiplicative recency factor in (0, 1] for a node generated
-// at gen. A node with no usable date (hasGen false) gets factor 1 (no penalty):
-// absence of a date is not a reason to demote a node. Half-life decay:
-// factor = 0.5 ^ (ageDays / halfLife). §5.2: generated.at marks the content's
-// last meaningful change, the signal that tells a recent edit from a stale fact.
+// factor returns the multiplicative recency factor in [DecayFloor, 1] for a node
+// generated at gen. A node with no usable date (hasGen false) gets factor 1 (no
+// penalty): absence of a date is not a reason to demote a node. Half-life decay:
+// factor = 0.5 ^ (ageDays / halfLife), clamped below by DecayFloor so recency can
+// bound but never erase a still-relevant node (#65). §5.2: generated.at marks the
+// content's last meaningful change, the signal that tells a recent edit from a
+// stale fact.
 func (d *DecayOptions) factor(gen time.Time, hasGen bool) float64 {
 	if d.HalfLifeDays <= 0 || !hasGen {
 		return 1
@@ -192,7 +203,9 @@ func (d *DecayOptions) factor(gen time.Time, hasGen bool) float64 {
 	if ageDays <= 0 {
 		return 1 // future or same-instant content gets no penalty
 	}
-	return math.Pow(0.5, ageDays/d.HalfLifeDays)
+	// DecayFloor 0 is a no-op (0.5^x >= 0), so this restores the exact unbounded
+	// multiplier digit-for-digit; a positive floor bounds how far decay can demote.
+	return math.Max(math.Pow(0.5, ageDays/d.HalfLifeDays), d.DecayFloor)
 }
 
 // QueryOptions bundles the additive scoping controls. The zero value (empty

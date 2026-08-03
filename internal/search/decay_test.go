@@ -15,6 +15,7 @@
 package search
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -197,5 +198,121 @@ func TestQuery_Decay_UndatedNodeSurvives(t *testing.T) {
 	}
 	if !sawUndated {
 		t.Errorf("undated node was dropped by decay; absence of a date must not exclude a node. res=%+v", res)
+	}
+}
+
+// TestDecayFactor_ClampedToFloor is the card's load-bearing fix: the recency
+// multiplier 0.5^(age/halfLife) tends to zero as age grows, which can crush an
+// old-but-perfect match into irrelevance (issue #65: 0.0000 at half-life 90).
+// DecayFloor sets a scale-free lower clamp so the multiplier can never fall
+// below it, independent of the embedder's cosine distribution.
+func TestDecayFactor_ClampedToFloor(t *testing.T) {
+	now := time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC)
+	// A node ~1310 days old at half-life 90 would otherwise decay to ~4e-5.
+	gen := now.AddDate(0, 0, -1310)
+	d := &DecayOptions{HalfLifeDays: 90, Now: now, DecayFloor: 0.25}
+	got := d.factor(gen, true)
+	if got < 0.25 {
+		t.Fatalf("factor %.6f fell below DecayFloor 0.25 — clamp not applied", got)
+	}
+	if got != 0.25 {
+		t.Fatalf("deeply-decayed factor should clamp exactly to the floor 0.25, got %.6f", got)
+	}
+}
+
+// TestDecayFactor_FloorZeroIsUnbounded is the card's second negative control at
+// the library layer: DecayFloor 0 must restore today's exact unbounded behavior,
+// digit-for-digit. math.Max(0.5^x, 0) == 0.5^x since the raw factor is always
+// >= 0, so backward compatibility is opt-out-able and provable.
+func TestDecayFactor_FloorZeroIsUnbounded(t *testing.T) {
+	now := time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC)
+	gen := now.AddDate(0, 0, -1310)
+	unbounded := math.Pow(0.5, 1310.0/365.0)
+	d := &DecayOptions{HalfLifeDays: 365, Now: now, DecayFloor: 0}
+	got := d.factor(gen, true)
+	if got != unbounded {
+		t.Fatalf("DecayFloor 0 must be unbounded: got %.17g, want %.17g", got, unbounded)
+	}
+}
+
+// TestQuery_DecayFloor_KeepsStrongOldAboveFreshWeak is the card's POSITIVE
+// control end-to-end: the issue's two-node inversion. A strong OLD match and a
+// weak FRESH one; under an aggressive half-life the UNCLAMPED multiplier crushes
+// the strong-old below the fresh-weak (the bug). With a DecayFloor the strong-old
+// match stays on top and MUST NOT score 0. Assert the ORDERING, not just the score.
+func TestQuery_DecayFloor_KeepsStrongOldAboveFreshWeak(t *testing.T) {
+	b, _ := writeBundle(t, map[string]string{
+		"old-exact.md":  node("Concept", "Tannin", "tannin structure astringency mouthfeel bitterness in wine tannin structure astringency"),
+		"fresh-weak.md": node("Concept", "Zebra", "tannin savanna migration stripes herd grasslands unrelated agenda recap"),
+	})
+	e := NewHashEmbedder()
+	s := BuildIndex(b, e, nil)
+
+	q := "tannin structure astringency mouthfeel bitterness"
+	now := time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC)
+	meta := map[string]NodeMeta{
+		"old-exact.md":  {Type: "Concept", Generated: now.AddDate(0, 0, -1310), HasGenerated: true}, // old
+		"fresh-weak.md": {Type: "Concept", Generated: now, HasGenerated: true},                      // fresh
+	}
+
+	// First prove the BUG exists without a clamp (DecayFloor 0): fresh-weak wins.
+	buggy, err := QueryWith(s, e, q, 10, QueryOptions{Meta: meta, Decay: &DecayOptions{HalfLifeDays: 90, Now: now, DecayFloor: 0}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(buggy) == 0 || buggy[0].Path != "fresh-weak.md" {
+		t.Fatalf("test premise broken: without a clamp the inversion should occur (fresh-weak on top); got %+v", buggy)
+	}
+
+	// Now with the default DecayFloor 0.25: old-exact must rank first and score > 0.
+	fixed, err := QueryWith(s, e, q, 10, QueryOptions{Meta: meta, Decay: &DecayOptions{HalfLifeDays: 90, Now: now, DecayFloor: 0.25}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fixed) == 0 {
+		t.Fatal("clamped decay query returned nothing")
+	}
+	if fixed[0].Path != "old-exact.md" {
+		t.Fatalf("clamp failed to fix the inversion: top = %q, want old-exact.md; res=%+v", fixed[0].Path, fixed)
+	}
+	for _, r := range fixed {
+		if r.Path == "old-exact.md" && r.Score == 0 {
+			t.Fatalf("old-exact.md scored 0.0000 even with the clamp; res=%+v", fixed)
+		}
+	}
+}
+
+// TestQuery_DecayFloor_StillReordersComparableSurvivors is the card's
+// load-bearing NEGATIVE control: a clamp that makes decay a no-op is a broken
+// clamp. Two nodes of COMPARABLE relevance (cosines within ~20%), one genuinely
+// stale and one genuinely fresh, must STILL reorder in favor of the fresh one at
+// the default DecayFloor 0.25.
+func TestQuery_DecayFloor_StillReordersComparableSurvivors(t *testing.T) {
+	// Identical bodies => identical raw cosine (0% apart, well within ~20%).
+	b, _ := writeBundle(t, map[string]string{
+		"stale.md": node("Concept", "Tannin", "tannin structure astringency mouthfeel in wine"),
+		"fresh.md": node("Concept", "Tannin", "tannin structure astringency mouthfeel in wine"),
+	})
+	e := NewHashEmbedder()
+	s := BuildIndex(b, e, nil)
+
+	q := "tannin structure astringency mouthfeel"
+	now := time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC)
+	meta := map[string]NodeMeta{
+		"stale.md": {Type: "Concept", Generated: now.AddDate(0, 0, -180), HasGenerated: true}, // stale
+		"fresh.md": {Type: "Concept", Generated: now, HasGenerated: true},                     // fresh
+	}
+	// Half-life 180: the stale node is exactly one half-life old, so its factor
+	// is 0.5 — ABOVE the 0.25 floor, so the clamp does not neutralize the decay
+	// and the reorder must still happen.
+	res, err := QueryWith(s, e, q, 10, QueryOptions{Meta: meta, Decay: &DecayOptions{HalfLifeDays: 180, Now: now, DecayFloor: 0.25}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res) < 2 {
+		t.Fatalf("want both comparable nodes, got %+v", res)
+	}
+	if res[0].Path != "fresh.md" {
+		t.Fatalf("clamp neutralized decay: top = %q, want fresh.md (decay must still reorder comparable survivors); res=%+v", res[0].Path, res)
 	}
 }
