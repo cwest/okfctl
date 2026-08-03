@@ -35,6 +35,8 @@ import (
 
 	"github.com/cwest/okfctl/internal/apiserver"
 	"github.com/cwest/okfctl/internal/okf"
+	"github.com/cwest/okfctl/internal/okfconfig"
+	"github.com/cwest/okfctl/internal/search"
 	"github.com/spf13/cobra"
 )
 
@@ -57,15 +59,20 @@ func newAPICmd() *cobra.Command {
 }
 
 func newServeCmd() *cobra.Command {
-	var addr string
+	var (
+		addr         string
+		embedderName string
+		modelPath    string
+	)
 	c := &cobra.Command{
 		Use:   "serve [bundle-dir]",
-		Short: "Serve /api/v1/stats and /api/v1/graph over HTTP for a bundle",
+		Short: "Serve /api/v1/stats, /api/v1/graph, and /api/v1/search over HTTP for a bundle",
 		Long: "serve starts a read-only HTTP API over an OKF bundle. It binds loopback " +
 			"by default and REFUSES a non-loopback --addr: on this deployment the tailnet " +
 			"+ loopback bind + Caddy boundary is the security model, so a misconfigured " +
 			"0.0.0.0 must never accidentally expose the corpus. Every endpoint is a GET; " +
-			"the bundle is treated as strictly read-only.",
+			"the bundle is treated as strictly read-only. /api/v1/search holds the loaded " +
+			"index + embedder for the process lifetime and reloads on index change.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// §5: refuse a non-loopback bind BEFORE touching the filesystem or
@@ -81,12 +88,58 @@ func newServeCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("load bundle: %w", err)
 			}
+			// Resolve the embedder /api/v1/search encodes queries with. It MUST
+			// match the embedder the on-disk index was built under; the store's
+			// model guard rejects a mismatch at query time rather than returning
+			// silently-wrong vectors. Resolving fails fast at startup so a
+			// misconfigured --embedder model2vec (no model path) is a clear error,
+			// not a per-request 503.
+			embedder, err := resolveEmbedder(embedderName, modelPath)
+			if err != nil {
+				return err
+			}
 			fmt.Fprintf(cmd.OutOrStdout(), "okfctl-api: http://%s/api/v1 (Ctrl-C to stop)\n", addr)
-			return http.ListenAndServe(addr, apiserver.NewHandler(b))
+			return http.ListenAndServe(addr, apiserver.NewHandler(b, embedder))
 		},
 	}
 	c.Flags().StringVar(&addr, "addr", "127.0.0.1:8931", "address to bind (loopback only; non-loopback is refused)")
+	c.Flags().StringVar(&embedderName, "embedder", "hash", "embedder for /api/v1/search: hash (offline default) | model2vec (local static model); MUST match the index's model")
+	c.Flags().StringVar(&modelPath, "model-path", "", "model2vec model directory (overrides the model_path config key)")
 	return c
+}
+
+// resolveEmbedder returns the embedder named by --embedder, mirroring
+// cmd/okfctl-search/main.go's resolver so the API and the search CLI agree on
+// which embedder answers a query. "hash" is the zero-config offline default;
+// "model2vec" loads a real static model from a local directory resolved
+// flag-first, then config (`okfctl config set model_path`). okfctl never
+// downloads a model at runtime, so an unset path is a clear, actionable error
+// rather than a silent fallback to hash — a query answered by the wrong embedder
+// is worse than one that refuses to run.
+func resolveEmbedder(name, modelPath string) (search.Embedder, error) {
+	switch name {
+	case "hash":
+		return search.NewHashEmbedder(), nil
+	case "model2vec":
+		dir := modelPath
+		if dir == "" {
+			cfg, err := okfconfig.Load()
+			if err != nil {
+				return nil, fmt.Errorf("reading okfctl config: %w", err)
+			}
+			dir = cfg["model_path"]
+		}
+		if dir == "" {
+			return nil, fmt.Errorf("--embedder model2vec needs a local model directory: run `okfctl config set model_path <dir>` or pass --model-path <dir>")
+		}
+		e, err := search.LoadModel2VecEmbedder(dir)
+		if err != nil {
+			return nil, fmt.Errorf("loading model2vec model from %s: %w", dir, err)
+		}
+		return e, nil
+	default:
+		return nil, fmt.Errorf("unknown embedder %q (available: hash, model2vec)", name)
+	}
 }
 
 // isLoopback reports whether addr (host:port) binds only the loopback

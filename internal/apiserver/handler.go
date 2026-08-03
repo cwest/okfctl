@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/cwest/okfctl/internal/okf"
+	"github.com/cwest/okfctl/internal/search"
 )
 
 // nameCount is one {name, count} row in a stats aggregation (types,
@@ -110,10 +111,26 @@ var now = time.Now
 //	GET /api/v1/graph  -> okf.BuildGraph(b) as JSON (the EXACT serializer graph
 //	                      export and serve's /graph.json use, so the API's graph
 //	                      view can never disagree with the CLI's — §2.4)
+//	GET /api/v1/search -> semantic query over the bundle's .okfctl/index.db,
+//	                      returning the same score/path/snippet triple the CLI
+//	                      prints. Registered only when embedder is non-nil.
+//
+// The embedder is what /search uses to encode the query; it MUST be the same
+// embedder the on-disk index was built under (the store's model guard rejects a
+// mismatch). A nil embedder disables /search entirely and leaves /stats and
+// /graph byte-identical — the search route is purely additive (the negative
+// control the acceptance criteria require).
 //
 // The bundle is treated as strictly read-only: every route is a GET and no
 // handler writes bundle source files (§5).
-func NewHandler(b *okf.Bundle) http.Handler {
+func NewHandler(b *okf.Bundle, embedder search.Embedder) http.Handler {
+	return newHandlerWithLoader(b, embedder, search.Load)
+}
+
+// newHandlerWithLoader is NewHandler with an injectable index loader so tests
+// can count disk loads (the "unchanged index loads exactly once" negative
+// control). Production always passes search.Load.
+func newHandlerWithLoader(b *okf.Bundle, embedder search.Embedder, load storeLoader) http.Handler {
 	mux := http.NewServeMux()
 
 	// Go 1.22+ method-and-path mux patterns: an exact "GET /api/v1/stats"
@@ -126,6 +143,15 @@ func NewHandler(b *okf.Bundle) http.Handler {
 	mux.HandleFunc("GET /api/v1/graph", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, buildGraph(b))
 	})
+
+	// /search holds the loaded index + embedder for the process lifetime and
+	// stat-and-reloads on index change (§2.7). Registered only when an embedder
+	// is available; without one, GET /api/v1/search 404s like any other unknown
+	// route, keeping /stats and /graph untouched.
+	if embedder != nil {
+		s := newSearchService(b.Root, embedder, load)
+		mux.HandleFunc("GET /api/v1/search", s.handle)
+	}
 
 	return mux
 }
