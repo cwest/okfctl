@@ -210,6 +210,10 @@ var searchParams = []string{
 	"path", "type", "tag",
 	"not-path", "not-type", "not-tag",
 	"half_life", "decay_floor", "min_relevance",
+	// lexical_gate (#81): the query-time lexical gate. Only the canonical
+	// underscore spelling is listed; canonicalParam normalizes '-' to '_', so
+	// this one entry also accepts the lexical-gate alias lookupGateParam reads.
+	"lexical_gate",
 }
 
 // canonicalParam maps any accepted spelling (hyphen or underscore separator) of
