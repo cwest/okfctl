@@ -73,7 +73,7 @@ func loadBundle(t *testing.T, dir string) *okf.Bundle {
 func TestStats_Shape(t *testing.T) {
 	dir := writeBundle(t)
 	b := loadBundle(t, dir)
-	h := NewHandler(b)
+	h := NewHandler(b, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil)
 	rec := httptest.NewRecorder()
@@ -127,7 +127,7 @@ func TestStats_StatusLifecycleDistribution_Section5_4(t *testing.T) {
 	}
 	writeFiles(t, dir, files)
 	b := loadBundle(t, dir)
-	h := NewHandler(b)
+	h := NewHandler(b, nil)
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil))
@@ -151,7 +151,7 @@ func TestStats_StatusLifecycleDistribution_Section5_4(t *testing.T) {
 func TestStats_StatusDefaultsToStableForV01Bundle_Section5_4(t *testing.T) {
 	dir := writeBundle(t) // the v0.1 fixture: 3 nodes, none carry `status`.
 	b := loadBundle(t, dir)
-	h := NewHandler(b)
+	h := NewHandler(b, nil)
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil))
@@ -184,7 +184,7 @@ func TestStats_EpistemicDistributionObservational_Section11(t *testing.T) {
 	}
 	writeFiles(t, dir, files)
 	b := loadBundle(t, dir)
-	h := NewHandler(b)
+	h := NewHandler(b, nil)
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil))
@@ -214,7 +214,7 @@ func TestStats_EpistemicDistributionObservational_Section11(t *testing.T) {
 func TestStats_TypesAndNeighborhoodsSortedWithCounts(t *testing.T) {
 	dir := writeBundle(t)
 	b := loadBundle(t, dir)
-	h := NewHandler(b)
+	h := NewHandler(b, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil)
 	rec := httptest.NewRecorder()
@@ -251,7 +251,7 @@ func TestStats_TypesAndNeighborhoodsSortedWithCounts(t *testing.T) {
 func TestStats_IndexHealthyReflectsIndexPresence(t *testing.T) {
 	dir := writeBundle(t)
 	b := loadBundle(t, dir)
-	h := NewHandler(b)
+	h := NewHandler(b, nil)
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil))
@@ -271,7 +271,7 @@ func TestStats_IndexHealthyReflectsIndexPresence(t *testing.T) {
 		t.Fatal(err)
 	}
 	b2 := loadBundle(t, dir)
-	h2 := NewHandler(b2)
+	h2 := NewHandler(b2, nil)
 	rec2 := httptest.NewRecorder()
 	h2.ServeHTTP(rec2, httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil))
 	var present statsResponse
@@ -288,7 +288,7 @@ func TestStats_IndexHealthyReflectsIndexPresence(t *testing.T) {
 func TestStats_DoesNotPromoteAuthority(t *testing.T) {
 	dir := writeBundle(t)
 	b := loadBundle(t, dir)
-	h := NewHandler(b)
+	h := NewHandler(b, nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil))
 	// Inspect the top-level JSON keys, not a substring of the whole body: the
@@ -308,7 +308,7 @@ func TestStats_DoesNotPromoteAuthority(t *testing.T) {
 func TestGraph_EmbedsBuildGraphNodesAndEdges(t *testing.T) {
 	dir := writeBundle(t)
 	b := loadBundle(t, dir)
-	h := NewHandler(b)
+	h := NewHandler(b, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/graph", nil)
 	rec := httptest.NewRecorder()
@@ -370,7 +370,7 @@ func TestGraph_PerNodeGeneratedAt_Section5_2And13_1(t *testing.T) {
 	}
 	writeFiles(t, dir, files)
 	b := loadBundle(t, dir)
-	h := NewHandler(b)
+	h := NewHandler(b, nil)
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/graph", nil))
@@ -402,7 +402,7 @@ func TestGraph_PerNodeGeneratedAt_Section5_2And13_1(t *testing.T) {
 func TestGeneratedAt_NoKeyCollisionAcrossSurfaces(t *testing.T) {
 	dir := writeBundle(t)
 	b := loadBundle(t, dir)
-	h := NewHandler(b)
+	h := NewHandler(b, nil)
 
 	// /stats has a top-level generated_at (the response clock) and NO per-node
 	// generated_at.
@@ -432,7 +432,7 @@ func TestGeneratedAt_NoKeyCollisionAcrossSurfaces(t *testing.T) {
 func TestHandler_UnknownPath404(t *testing.T) {
 	dir := writeBundle(t)
 	b := loadBundle(t, dir)
-	h := NewHandler(b)
+	h := NewHandler(b, nil)
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/nope", nil))
@@ -444,7 +444,7 @@ func TestHandler_UnknownPath404(t *testing.T) {
 func TestHandler_Deterministic(t *testing.T) {
 	dir := writeBundle(t)
 	b := loadBundle(t, dir)
-	h := NewHandler(b)
+	h := NewHandler(b, nil)
 
 	body := func(path string) string {
 		rec := httptest.NewRecorder()
