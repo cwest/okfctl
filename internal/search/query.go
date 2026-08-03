@@ -209,7 +209,8 @@ func (d *DecayOptions) factor(gen time.Time, hasGen bool) float64 {
 }
 
 // QueryOptions bundles the additive scoping controls. The zero value (empty
-// Filter, nil Meta, nil Decay) makes QueryWith behave identically to Query.
+// Filter, nil Meta, nil Decay, nil LexicalGate) makes QueryWith behave
+// identically to Query.
 type QueryOptions struct {
 	// Meta maps node path -> metadata for filters and decay. Nil disables both
 	// (a filter with no metadata to resolve against can constrain nothing).
@@ -218,6 +219,11 @@ type QueryOptions struct {
 	Filter Filter
 	// Decay, when non-nil, applies post-ranking recency decay.
 	Decay *DecayOptions
+	// LexicalGate, when non-nil, gates the semantic result list against a
+	// term-wise lexical match set and preserves the lexical tail (#66). It is
+	// applied AFTER ranking and decay, before the top-k cut, and degrades to a
+	// pure no-op for an all-stopword or over-broad query.
+	LexicalGate *LexicalGateOptions
 }
 
 // Query embeds q with e (which MUST match the store's model), computes cosine
@@ -253,6 +259,12 @@ func QueryWith(s *Store, e Embedder, q string, k int, opts QueryOptions) ([]Resu
 	if opts.Decay != nil {
 		ranked = applyDecay(ranked, opts.Decay, opts.Meta)
 	}
+
+	// Lexical gate (#66): applied after ranking+decay, before the top-k cut, so
+	// the intersection is drawn from the fully-ranked band and the preserved
+	// lexical tail carries real semantic scores. Nil or a degrading gate leaves
+	// ranked untouched — the default path is byte-identical to plain Query.
+	ranked = applyLexicalGate(ranked, opts.LexicalGate, k)
 
 	if k > 0 && len(ranked) > k {
 		ranked = ranked[:k]
