@@ -81,9 +81,12 @@ func newSearchCmd() *cobra.Command {
 		modelPath    string
 		semantic     string
 		k            int
-		pathPrefix   string
-		typeFilter   string
-		tagFilter    string
+		pathPrefix   []string
+		typeFilter   []string
+		tagFilter    []string
+		notPath      []string
+		notType      []string
+		notTag       []string
 		halfLife     float64
 	)
 
@@ -109,7 +112,14 @@ func newSearchCmd() *cobra.Command {
 			}
 
 			opts := search.QueryOptions{
-				Filter: search.Filter{PathPrefix: pathPrefix, Type: typeFilter, Tag: tagFilter},
+				Filter: search.Filter{
+					PathPrefixes:    nonEmpty(pathPrefix),
+					Types:           nonEmpty(typeFilter),
+					Tags:            nonEmpty(tagFilter),
+					NotPathPrefixes: nonEmpty(notPath),
+					NotTypes:        nonEmpty(notType),
+					NotTags:         nonEmpty(notTag),
+				},
 			}
 			// Filters (§4.1 type/tag) and recency decay (§5.2/§13.1) resolve against
 			// the LIVE bundle at query time, not off the index: contentHash keys only
@@ -143,17 +153,44 @@ func newSearchCmd() *cobra.Command {
 	root.PersistentFlags().StringVar(&modelPath, "model-path", "", "model2vec model directory (overrides the model_path config key)")
 	root.Flags().StringVar(&semantic, "semantic", "", "semantic query string")
 	root.PersistentFlags().IntVar(&k, "k", 5, "max results")
-	// §4.1 scoping filters, applied pre-ranking, composed with AND. Empty = no
-	// constraint (the query is unchanged).
-	root.Flags().StringVar(&pathPrefix, "path", "", "restrict to nodes whose path starts with this prefix")
-	root.Flags().StringVar(&typeFilter, "type", "", "restrict to nodes with this §4.1 type")
-	root.Flags().StringVar(&tagFilter, "tag", "", "restrict to nodes carrying this §4.1 tag")
+	// §4.1 scoping filters, applied pre-ranking. Each flag is repeatable: repeats
+	// of the SAME flag compose with OR; the three dimensions compose with AND.
+	// Empty = no constraint (the query is unchanged). No comma-separated values —
+	// commas are legal in paths, titles and tags, so repeated flags are the
+	// unambiguous idiomatic cobra form.
+	root.Flags().StringArrayVar(&pathPrefix, "path", nil, "restrict to nodes whose path starts with this prefix (repeatable; repeats OR together)")
+	root.Flags().StringArrayVar(&typeFilter, "type", nil, "restrict to nodes with this §4.1 type (repeatable; repeats OR together)")
+	root.Flags().StringArrayVar(&tagFilter, "tag", nil, "restrict to nodes carrying this §4.1 tag (repeatable; repeats OR together)")
+	// Negating filters, applied AFTER the positive set (exclusion beats inclusion).
+	// An empty positive set still means "all nodes," so --not-path research/ alone
+	// is a complete query. Repeatable, each repeat OR-excludes.
+	root.Flags().StringArrayVar(&notPath, "not-path", nil, "exclude nodes whose path starts with this prefix (repeatable)")
+	root.Flags().StringArrayVar(&notType, "not-type", nil, "exclude nodes with this §4.1 type (repeatable)")
+	root.Flags().StringArrayVar(&notTag, "not-tag", nil, "exclude nodes carrying this §4.1 tag (repeatable)")
 	// §5.2/§13.1 recency decay, post-ranking, off by default (0 = no decay).
 	root.Flags().Float64Var(&halfLife, "half-life", 0, "recency half-life in days (0 = no decay); reorders survivors, never promotes an irrelevant-but-fresh node")
 
 	root.AddCommand(newIndexCmd(&embedderName, &modelPath))
 	root.AddCommand(newRelatedCmd(&k))
 	return root
+}
+
+// nonEmpty drops empty-string values from a repeatable flag's slice. An empty
+// filter value (e.g. `--type ""`) is not a real constraint and must behave as the
+// no-op path, identical to omitting the flag — this preserves the pre-repeatable
+// contract that empty-string flags equal a bare query. Returns nil for an
+// all-empty (or nil) input so the Filter dimension reads as unset.
+func nonEmpty(vs []string) []string {
+	out := vs[:0:0] // fresh backing array; never alias the flag's slice
+	for _, v := range vs {
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // buildNodeMeta resolves the per-node metadata the filters and recency decay key

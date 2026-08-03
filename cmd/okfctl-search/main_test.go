@@ -245,6 +245,133 @@ func TestPlugin_UnfilteredUnchanged(t *testing.T) {
 	}
 }
 
+// TestPlugin_FilterPathOR pins the CLI OR contract: repeating --path unions the
+// roots. --path wine/ --path coffee/ surfaces both, and is a superset of either
+// prefix alone.
+func TestPlugin_FilterPathOR(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", "structure acidity", "--path", "wine/", "--path", "coffee/", dir)
+	if err != nil {
+		t.Fatalf("semantic --path OR: %v", err)
+	}
+	if !strings.Contains(out, "wine/") {
+		t.Errorf("--path wine/ --path coffee/ dropped wine results: %q", out)
+	}
+	if !strings.Contains(out, "coffee/") {
+		t.Errorf("--path wine/ --path coffee/ dropped coffee results: %q", out)
+	}
+}
+
+// TestPlugin_FilterTypeOR pins that repeating --type unions the types.
+func TestPlugin_FilterTypeOR(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", "structure acidity", "--type", "Concept", "--type", "Playbook", dir)
+	if err != nil {
+		t.Fatalf("semantic --type OR: %v", err)
+	}
+	// Playbook (wine/pairing.md) and Concept (wine/tannin.md, coffee/roast.md) both survive.
+	if !strings.Contains(out, "wine/pairing.md") {
+		t.Errorf("--type Concept --type Playbook dropped the Playbook node: %q", out)
+	}
+	if !strings.Contains(out, "wine/tannin.md") && !strings.Contains(out, "coffee/roast.md") {
+		t.Errorf("--type Concept --type Playbook dropped all Concept nodes: %q", out)
+	}
+}
+
+// TestPlugin_NotPath is the headline negation at the CLI: --not-path research/
+// removes an entire root. Here --not-path coffee/ must drop the coffee node while
+// keeping the wine nodes, with no positive flag at all (empty positive = all).
+func TestPlugin_NotPath(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", "structure acidity", "--not-path", "coffee/", dir)
+	if err != nil {
+		t.Fatalf("semantic --not-path: %v", err)
+	}
+	if strings.Contains(out, "coffee/") {
+		t.Errorf("--not-path coffee/ leaked a coffee result: %q", out)
+	}
+	if !strings.Contains(out, "wine/") {
+		t.Errorf("--not-path coffee/ dropped the wine results too: %q", out)
+	}
+}
+
+// TestPlugin_NotType and NotTag exclude by the other two §4.1 dimensions.
+func TestPlugin_NotType(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", "structure acidity", "--not-type", "Playbook", dir)
+	if err != nil {
+		t.Fatalf("semantic --not-type: %v", err)
+	}
+	if strings.Contains(out, "wine/pairing.md") {
+		t.Errorf("--not-type Playbook leaked the Playbook node: %q", out)
+	}
+}
+
+func TestPlugin_NotTag(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", "structure astringency", "--not-tag", "red", dir)
+	if err != nil {
+		t.Fatalf("semantic --not-tag: %v", err)
+	}
+	if strings.Contains(out, "wine/tannin.md") {
+		t.Errorf("--not-tag red leaked the tag:[red] node: %q", out)
+	}
+}
+
+// TestPlugin_ExclusionBeatsInclusion pins the specified positive-then-exclude
+// order at the CLI: --path wine/ --not-path wine/pairing.md keeps wine/tannin.md
+// but drops the excluded sub-path.
+func TestPlugin_ExclusionBeatsInclusion(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", "structure acidity", "--path", "wine/", "--not-path", "wine/pairing.md", dir)
+	if err != nil {
+		t.Fatalf("semantic --path + --not-path: %v", err)
+	}
+	if strings.Contains(out, "wine/pairing.md") {
+		t.Errorf("exclusion did not beat inclusion; wine/pairing.md survived: %q", out)
+	}
+	if strings.Contains(out, "coffee/") {
+		t.Errorf("--path wine/ leaked a coffee result: %q", out)
+	}
+	if !strings.Contains(out, "wine/tannin.md") {
+		t.Errorf("exclusion over-reached and dropped wine/tannin.md too: %q", out)
+	}
+}
+
+// TestPlugin_NotPathCoveringEveryRoot: a negative filter covering every root
+// returns no results with a clean exit (empty is not an error).
+func TestPlugin_NotPathCoveringEveryRoot(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", "structure acidity", "--not-path", "wine/", "--not-path", "coffee/", dir)
+	if err != nil {
+		t.Fatalf("negative filter covering every root must exit 0, got %v", err)
+	}
+	if strings.TrimSpace(out) != "" {
+		t.Errorf("negative filter covering every root must return empty output, got %q", out)
+	}
+}
+
 // TestPlugin_HalfLifeAcceptedAndUnsetUnchanged pins that --half-life is a real
 // flag, and that WITHOUT it the ranking is unchanged (decay is off by default).
 func TestPlugin_HalfLifeAcceptedAndUnsetUnchanged(t *testing.T) {

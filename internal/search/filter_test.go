@@ -73,7 +73,7 @@ func TestQuery_Filter_PathPrefix(t *testing.T) {
 
 	res, err := QueryWith(s, e, "acidity structure", 10, QueryOptions{
 		Meta:   metaFromBundle(b),
-		Filter: Filter{PathPrefix: "wine/"},
+		Filter: Filter{PathPrefixes: []string{"wine/"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +100,7 @@ func TestQuery_Filter_Type(t *testing.T) {
 
 	res, err := QueryWith(s, e, "wine structure", 10, QueryOptions{
 		Meta:   metaFromBundle(b),
-		Filter: Filter{Type: "Playbook"},
+		Filter: Filter{Types: []string{"Playbook"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -121,7 +121,7 @@ func TestQuery_Filter_Tag(t *testing.T) {
 
 	res, err := QueryWith(s, e, "wine", 10, QueryOptions{
 		Meta:   metaFromBundle(b),
-		Filter: Filter{Tag: "red"},
+		Filter: Filter{Tags: []string{"red"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +141,7 @@ func TestQuery_Filter_ZeroMatchIsEmptyNotError(t *testing.T) {
 
 	res, err := QueryWith(s, e, "wine", 10, QueryOptions{
 		Meta:   metaFromBundle(b),
-		Filter: Filter{Type: "NoSuchType"},
+		Filter: Filter{Types: []string{"NoSuchType"}},
 	})
 	if err != nil {
 		t.Fatalf("zero-match filter must not error, got %v", err)
@@ -165,7 +165,7 @@ func TestQuery_Filter_AppliesToPasslessFallback(t *testing.T) {
 
 	res, err := QueryWith(s, e, "wine", 10, QueryOptions{
 		Meta:   metaFromBundle(b),
-		Filter: Filter{PathPrefix: "wine/"},
+		Filter: Filter{PathPrefixes: []string{"wine/"}},
 	})
 	if err != nil {
 		t.Fatal(err)

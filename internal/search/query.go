@@ -47,42 +47,109 @@ type NodeMeta struct {
 }
 
 // Filter narrows a semantic query to a subset of nodes BEFORE ranking. Empty
-// fields impose no constraint; set fields compose with AND. PathPrefix keeps only
-// nodes whose bundle-relative path starts with the prefix; Type keeps only nodes
-// whose §4.1 type matches exactly; Tag keeps only nodes carrying that §4.1 tag.
+// fields impose no constraint. The filter has two halves applied in order:
+//
+//  1. Positive inclusion. Within a dimension, repeated values compose with OR
+//     (a node matches if it satisfies ANY value); the three dimensions compose
+//     with AND (a node must satisfy every populated dimension). An empty positive
+//     set for a dimension imposes no constraint on that dimension, so an entirely
+//     empty positive set means "all nodes."
+//  2. Negative exclusion, applied AFTER the positive set. A node is dropped if it
+//     matches ANY value in ANY negative dimension. Exclusion beats inclusion:
+//     --path research/ --not-path research/agents/ keeps research/ nodes except
+//     those under research/agents/.
+//
+// PathPrefixes keep nodes whose bundle-relative path starts with any prefix;
+// Types keep nodes whose §4.1 type matches any value exactly; Tags keep nodes
+// carrying any of the §4.1 tags. The Not* sets mirror them for exclusion.
 // A filter that matches zero nodes yields an empty result, never an error and
 // never a silent fall-back to the unfiltered set (consistent with lexical
 // Search's null-query behavior).
 type Filter struct {
-	PathPrefix string
-	Type       string
-	Tag        string
+	PathPrefixes []string
+	Types        []string
+	Tags         []string
+
+	NotPathPrefixes []string
+	NotTypes        []string
+	NotTags         []string
 }
 
-// IsEmpty reports whether the filter imposes no constraint at all.
+// IsEmpty reports whether the filter imposes no constraint at all. It MUST
+// account for the negative sets: a negative-only filter (e.g. --not-path
+// research/) is a real constraint, and if IsEmpty read it as empty the CLI's
+// needBundle short-circuit would skip the metadata walk and silently no-op every
+// exclusion.
 func (f Filter) IsEmpty() bool {
-	return f.PathPrefix == "" && f.Type == "" && f.Tag == ""
+	return len(f.PathPrefixes) == 0 && len(f.Types) == 0 && len(f.Tags) == 0 &&
+		len(f.NotPathPrefixes) == 0 && len(f.NotTypes) == 0 && len(f.NotTags) == 0
 }
 
-// keep reports whether the node at path (with metadata m) passes every set
-// constraint. A node with no metadata entry fails any set Type/Tag constraint —
-// we cannot assert a match we cannot see — but PathPrefix is checked on the path
-// itself and needs no metadata.
+// keep reports whether the node at path (with metadata m) passes the filter:
+// every populated POSITIVE dimension must OR-match, then the node must NOT match
+// any NEGATIVE dimension. A node with no metadata entry cannot satisfy a positive
+// Type/Tag constraint (we cannot assert a match we cannot see); for exclusion,
+// absence of metadata simply means the node matches no Type/Tag value and so is
+// not excluded on those dimensions. PathPrefix checks the path itself and needs
+// no metadata in either direction.
 func (f Filter) keep(path string, m NodeMeta, hasMeta bool) bool {
-	if f.PathPrefix != "" && !strings.HasPrefix(path, f.PathPrefix) {
+	// --- Positive inclusion: each populated dimension must OR-match. ---
+	if len(f.PathPrefixes) > 0 && !hasAnyPrefix(path, f.PathPrefixes) {
 		return false
 	}
-	if f.Type != "" {
-		if !hasMeta || m.Type != f.Type {
+	if len(f.Types) > 0 {
+		if !hasMeta || !containsString(f.Types, m.Type) {
 			return false
 		}
 	}
-	if f.Tag != "" {
-		if !hasMeta || !containsTag(m.Tags, f.Tag) {
+	if len(f.Tags) > 0 {
+		if !hasMeta || !anyTag(m.Tags, f.Tags) {
 			return false
 		}
+	}
+	// --- Negative exclusion, applied after the positive set. ---
+	if hasAnyPrefix(path, f.NotPathPrefixes) {
+		return false
+	}
+	if hasMeta && containsString(f.NotTypes, m.Type) {
+		return false
+	}
+	if hasMeta && anyTag(m.Tags, f.NotTags) {
+		return false
 	}
 	return true
+}
+
+// hasAnyPrefix reports whether path starts with any of the prefixes. An empty
+// prefix list matches nothing (used by exclusion, where "no negatives" excludes
+// no node).
+func hasAnyPrefix(path string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if strings.HasPrefix(path, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// containsString reports whether want is in xs.
+func containsString(xs []string, want string) bool {
+	for _, x := range xs {
+		if x == want {
+			return true
+		}
+	}
+	return false
+}
+
+// anyTag reports whether the node carries any of the wanted tags.
+func anyTag(nodeTags, want []string) bool {
+	for _, w := range want {
+		if containsTag(nodeTags, w) {
+			return true
+		}
+	}
+	return false
 }
 
 func containsTag(tags []string, want string) bool {
