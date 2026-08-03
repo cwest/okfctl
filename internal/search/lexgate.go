@@ -18,6 +18,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/cwest/okfctl/internal/okf"
 )
 
 // This file implements the term-wise lexical matcher behind --lexical-gate
@@ -176,6 +178,62 @@ type LexicalGateOptions struct {
 	// lexical hits that are semantically mid-ranked in the intersection rather
 	// than the tail.
 	WideN int
+}
+
+// Lexical-gate tuning constants (cwest/okfctl#66), the single source of truth for
+// BOTH search surfaces (the okfctl-search CLI and the /api/v1/search HTTP handler)
+// so the two agree by construction rather than by duplicated literals. WideN is
+// the semantic band width the lexical set is intersected against — comfortably
+// above the default k so a lexically-relevant node ranked mid-band still lands in
+// the intersection rather than the tail. OverBroadFraction is the degrade
+// threshold: a term matching MORE than this fraction of the bundle carries no
+// discriminating signal and makes the gate a no-op. Calibrated against the real
+// corpus (234 nodes): the common question-word content terms match a small
+// minority, while `agent` at 172/234 = 73% is the canonical over-broad case the
+// issue names — 0.60 sits comfortably below 0.73 and above the discriminating
+// terms, so it degrades the noise cases without disabling the useful ones.
+const (
+	LexicalGateWideN             = 50
+	LexicalGateOverBroadFraction = 0.60
+)
+
+// BundleTexts maps each node's path to the prose the lexical gate matches
+// against: its frontmatter title plus body — the SAME surface embedText feeds the
+// vector index, so the lexical and semantic sides agree on what a node "says". A
+// nil bundle yields an empty map (the gate then matches nothing and the engine
+// degrades). This is the single builder both surfaces call so they cannot drift.
+func BundleTexts(b *okf.Bundle) map[string]string {
+	if b == nil {
+		return nil
+	}
+	m := make(map[string]string, len(b.Nodes))
+	for path, n := range b.Nodes {
+		title, _ := n.Frontmatter["title"].(string)
+		m[path] = title + " " + n.Body
+	}
+	return m
+}
+
+// BuildLexicalGate assembles the LexicalGateOptions for a --lexical-gate query
+// over a live bundle: it reduces the query to its stemmed content terms, resolves
+// the term-wise match set against the bundle prose, and wires the shared WideN /
+// OverBroadFraction constants and the bundle's node count. Both search surfaces
+// call THIS constructor, so a gated query cannot rank differently on the CLI than
+// over HTTP for the same bundle. A nil bundle yields a gate that matches nothing
+// and degrades to pure semantic (the safe no-op).
+func BuildLexicalGate(b *okf.Bundle, query string) *LexicalGateOptions {
+	terms := LexTerms(query)
+	total := 0
+	if b != nil {
+		total = len(b.Nodes)
+	}
+	return &LexicalGateOptions{
+		Terms:             terms,
+		Match:             LexicalMatchSet(BundleTexts(b), terms),
+		OverBroadFraction: LexicalGateOverBroadFraction,
+		TotalNodes:        total,
+		WideN:             LexicalGateWideN,
+	}
 }
 
 // degrades reports whether the gate should behave as a pure no-op: no content

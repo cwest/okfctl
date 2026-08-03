@@ -79,6 +79,7 @@ type searchService struct {
 	loaded  bool                       // whether store/meta are populated
 	store   *search.Store              // resident index
 	meta    map[string]search.NodeMeta // live-bundle metadata for filters/decay
+	bundle  *okf.Bundle                // live bundle, retained for the lexical gate's query-time prose match
 }
 
 func newSearchService(root string, e search.Embedder, load storeLoader) *searchService {
@@ -98,9 +99,10 @@ var errNoIndex = errors.New("no index")
 
 // ensureFresh loads the index + live-bundle meta if not yet loaded, or reloads
 // both when the index file's modtime has changed since the cache was built. It
-// returns the resident store and meta and the index modtime. A missing index
-// returns errNoIndex. Holding s.mu makes concurrent requests share one reload.
-func (s *searchService) ensureFresh() (*search.Store, map[string]search.NodeMeta, time.Time, error) {
+// returns the resident store, meta, the live bundle (retained for the lexical
+// gate's query-time prose match), and the index modtime. A missing index returns
+// errNoIndex. Holding s.mu makes concurrent requests share one reload.
+func (s *searchService) ensureFresh() (*search.Store, map[string]search.NodeMeta, *okf.Bundle, time.Time, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -111,49 +113,50 @@ func (s *searchService) ensureFresh() (*search.Store, map[string]search.NodeMeta
 		s.loaded = false
 		s.store = nil
 		s.meta = nil
-		return nil, nil, time.Time{}, errNoIndex
+		s.bundle = nil
+		return nil, nil, nil, time.Time{}, errNoIndex
 	}
 
 	// Cache hit: the resident index is still current. This is the hot path the
 	// resident-server feature exists for — N requests against an unchanged index
-	// do exactly one disk load (the load-bearing negative control).
+	// do exactly one disk load (the load-bearing negative control). The gate
+	// reads s.bundle from this same cache, so a gated request adds NO extra load.
 	if s.loaded && fi.ModTime().Equal(s.modTime) {
-		return s.store, s.meta, s.modTime, nil
+		return s.store, s.meta, s.bundle, s.modTime, nil
 	}
 
 	// First load, or the index changed on disk: reload the store AND re-walk the
-	// live bundle for filter/decay metadata, invalidating both on the same
-	// signal (§2.7). Filters and recency decay resolve against the LIVE bundle,
-	// not the index, so a frontmatter-only edit is reflected too.
+	// live bundle for filter/decay metadata AND the gate's prose, invalidating
+	// all on the same signal (§2.7). Filters, recency decay, and the lexical gate
+	// resolve against the LIVE bundle, not the index, so a frontmatter-only edit
+	// is reflected too.
 	store, err := s.load(s.indexPath())
 	if err != nil {
 		s.loaded = false
 		s.store = nil
 		s.meta = nil
-		return nil, nil, time.Time{}, errNoIndex
+		s.bundle = nil
+		return nil, nil, nil, time.Time{}, errNoIndex
 	}
-	meta, err := s.buildMeta()
+	b, err := okf.Load(s.root)
 	if err != nil {
-		return nil, nil, time.Time{}, err
+		return nil, nil, nil, time.Time{}, err
 	}
 	s.store = store
-	s.meta = meta
+	s.bundle = b
+	s.meta = metaFromBundle(b)
 	s.modTime = fi.ModTime()
 	s.loaded = true
-	return s.store, s.meta, s.modTime, nil
+	return s.store, s.meta, s.bundle, s.modTime, nil
 }
 
-// buildMeta resolves the per-node metadata the §4.1 filters and §5.2/§13.1
-// recency decay key on from the live bundle — the exact query-time resolution
+// metaFromBundle resolves the per-node metadata the §4.1 filters and §5.2/§13.1
+// recency decay key on from a loaded bundle — the exact query-time resolution
 // cmd/okfctl-search/main.go's buildNodeMeta performs, so the API's filtered and
 // decayed rankings match the CLI's. Resolving against the bundle (not the index)
 // is deliberate: contentHash keys only title+body, so a type/tag/generated-only
 // edit does not re-embed and a value denormalized onto the index would go stale.
-func (s *searchService) buildMeta() (map[string]search.NodeMeta, error) {
-	b, err := okf.Load(s.root)
-	if err != nil {
-		return nil, err
-	}
+func metaFromBundle(b *okf.Bundle) map[string]search.NodeMeta {
 	m := make(map[string]search.NodeMeta, len(b.Nodes))
 	for path, n := range b.Nodes {
 		nm := search.NodeMeta{Type: n.Type(), Tags: n.Tags()}
@@ -163,7 +166,7 @@ func (s *searchService) buildMeta() (map[string]search.NodeMeta, error) {
 		}
 		m[path] = nm
 	}
-	return m, nil
+	return m
 }
 
 // handle answers GET /api/v1/search. The scope grammar mirrors #68's CLI
@@ -378,7 +381,25 @@ func (s *searchService) handle(w http.ResponseWriter, r *http.Request) {
 		minRelevance = mr
 	}
 
-	store, meta, modTime, err := s.ensureFresh()
+	// lexical_gate: the #66 term-wise lexical gate (--lexical-gate on the CLI),
+	// off by default. It accepts BOTH separator spellings — lexical_gate and
+	// lexical-gate — from the start: #77 (the unknown-parameter card that settles
+	// the separator convention) has not merged, and the card mandates supporting
+	// both so parity holds whichever way #77 lands. A present value must be a
+	// boolean (strconv.ParseBool: 1/t/true/0/f/false, etc.); a non-boolean is a
+	// 400 in the house wording, never a silently-ignored 200. When both spellings
+	// are present the underscore form wins (the canonical name), then the dash.
+	var lexicalGate bool
+	if v, ok := lookupGateParam(r); ok {
+		g, err := strconv.ParseBool(v)
+		if err != nil {
+			http.Error(w, `"lexical_gate" must be a boolean`, http.StatusBadRequest)
+			return
+		}
+		lexicalGate = g
+	}
+
+	store, meta, bundle, modTime, err := s.ensureFresh()
 	if err != nil {
 		if errors.Is(err, errNoIndex) {
 			// Fail closed with an actionable message, exactly the CLI's guidance.
@@ -408,11 +429,25 @@ func (s *searchService) handle(w http.ResponseWriter, r *http.Request) {
 		NotTags:         nonEmptyQuery(query["not-tag"]),
 	}
 	opts := search.QueryOptions{Filter: filter}
-	// Filters and decay resolve against the live-bundle meta; pass it only when
-	// something actually needs it, matching the CLI's needBundle guard so the
-	// unfiltered/undecayed path is byte-for-byte Query().
-	if !filter.IsEmpty() || halfLife > 0 || minRelevance > 0 {
+	// Filters, decay, and the lexical gate resolve against the live-bundle
+	// meta/prose; pass meta only when something actually needs it, matching the
+	// CLI's needBundle guard (cmd/okfctl-search/main.go) so the
+	// unfiltered/undecayed/ungated path is byte-for-byte Query(). The gate term is
+	// the one the card flags as missing here: the CLI's needBundle already
+	// includes `|| lexicalGate`, and without it a gated request would build the
+	// gate against nil meta and silently no-op.
+	if !filter.IsEmpty() || halfLife > 0 || minRelevance > 0 || lexicalGate {
 		opts.Meta = meta
+	}
+	if lexicalGate {
+		// #66 lexical gate: built via the shared search.BuildLexicalGate over the
+		// resident live bundle, the SAME constructor the CLI calls, so a gated
+		// query cannot rank differently over HTTP than on the CLI for the same
+		// bundle (the cross-surface parity the card mandates). The engine degrades
+		// to pure semantic on an all-stopword or over-broad query, so the gated
+		// body is byte-identical to the ungated one on exactly the query shapes the
+		// CLI degrades on.
+		opts.LexicalGate = search.BuildLexicalGate(bundle, q)
 	}
 	if halfLife > 0 || minRelevance > 0 {
 		// Post-ranking recency decay, mirroring the exact DecayOptions the CLI
@@ -450,6 +485,24 @@ func (s *searchService) handle(w http.ResponseWriter, r *http.Request) {
 		out.Results = append(out.Results, searchResult{Score: rr.Score, Path: rr.Path, Snippet: rr.Snippet})
 	}
 	writeJSON(w, out)
+}
+
+// lookupGateParam returns the raw value of the lexical-gate query param and
+// whether it was present, accepting BOTH separator spellings — lexical_gate
+// (canonical) and lexical-gate — so parity holds regardless of the separator
+// convention #77 eventually settles. The underscore form wins when both are
+// present. An empty-string value (e.g. `?lexical_gate=`) is treated as PRESENT so
+// it is validated as a (non-)boolean rather than silently ignored, matching the
+// loud-failure discipline the other params follow.
+func lookupGateParam(r *http.Request) (string, bool) {
+	q := r.URL.Query()
+	if q.Has("lexical_gate") {
+		return q.Get("lexical_gate"), true
+	}
+	if q.Has("lexical-gate") {
+		return q.Get("lexical-gate"), true
+	}
+	return "", false
 }
 
 // nonEmptyQuery drops empty-string values from a repeated query param, the HTTP
