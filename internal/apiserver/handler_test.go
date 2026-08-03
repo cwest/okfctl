@@ -43,6 +43,13 @@ func writeBundle(t *testing.T) string {
 		"wine/b.md":   "---\ntype: Concept\ntitle: Beta\n---\n\n# Beta\n\nBody.\n",
 		"method/p.md": "---\ntype: Playbook\ntitle: Play\n---\n\n# Play\n\nBody.\n",
 	}
+	writeFiles(t, dir, files)
+	return dir
+}
+
+// writeFiles lays down each rel->content file under dir, creating parent dirs.
+func writeFiles(t *testing.T, dir string, files map[string]string) {
+	t.Helper()
 	for rel, content := range files {
 		p := filepath.Join(dir, filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -52,7 +59,6 @@ func writeBundle(t *testing.T) string {
 			t.Fatalf("write: %v", err)
 		}
 	}
-	return dir
 }
 
 func loadBundle(t *testing.T, dir string) *okf.Bundle {
@@ -102,6 +108,106 @@ func TestStats_Shape(t *testing.T) {
 	// (from a) are reachable.
 	if got.OrphanCount != 1 {
 		t.Errorf("orphan_count = %d, want 1 (method/p.md)", got.OrphanCount)
+	}
+}
+
+// §5.4: /stats surfaces the status lifecycle distribution. A v0.2 bundle with
+// explicit draft/deprecated statuses reports them alongside stable; nodes with
+// no status default to stable (§5.4 absent ⇒ stable). Sorted by name ascending,
+// like types/neighborhoods.
+func TestStats_StatusLifecycleDistribution_Section5_4(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		".okf":        "okf_version: 0.2\n",
+		"index.md":    "---\nokf_version: \"0.2\"\n---\n\n# Index\n\n- [D](wine/d.md)\n- [Dep](wine/dep.md)\n- [S](wine/s.md)\n",
+		"wine/d.md":   "---\ntype: Concept\ntitle: D\nstatus: draft\n---\n\n# D\n\nBody.\n",
+		"wine/dep.md": "---\ntype: Concept\ntitle: Dep\nstatus: deprecated\n---\n\n# Dep\n\nBody.\n",
+		// no status -> stable (§5.4 default).
+		"wine/s.md": "---\ntype: Concept\ntitle: S\n---\n\n# S\n\nBody.\n",
+	}
+	writeFiles(t, dir, files)
+	b := loadBundle(t, dir)
+	h := NewHandler(b)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil))
+	var got statsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("body not valid JSON: %v", err)
+	}
+	want := []nameCount{{Name: "deprecated", Count: 1}, {Name: "draft", Count: 1}, {Name: "stable", Count: 1}}
+	if len(got.Status) != len(want) {
+		t.Fatalf("status = %+v, want %+v", got.Status, want)
+	}
+	for i := range want {
+		if got.Status[i] != want[i] {
+			t.Errorf("status[%d] = %+v, want %+v", i, got.Status[i], want[i])
+		}
+	}
+}
+
+// Negative control (§5.4): a v0.1 bundle with no status key anywhere still
+// serves correctly — every node counts as stable, nothing is rejected.
+func TestStats_StatusDefaultsToStableForV01Bundle_Section5_4(t *testing.T) {
+	dir := writeBundle(t) // the v0.1 fixture: 3 nodes, none carry `status`.
+	b := loadBundle(t, dir)
+	h := NewHandler(b)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil))
+	var got statsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("body not valid JSON: %v", err)
+	}
+	want := []nameCount{{Name: "stable", Count: 3}}
+	if len(got.Status) != len(want) || got.Status[0] != want[0] {
+		t.Errorf("status = %+v, want %+v (all stable)", got.Status, want)
+	}
+}
+
+// §11: /stats surfaces the epistemic value distribution OBSERVATIONALLY —
+// ordered count desc then value asc, matching analyze. `epistemic` is an unknown
+// key; an out-of-any-enum value is REPORTED, never rejected. Untagged counts
+// nodes with no epistemic key.
+func TestStats_EpistemicDistributionObservational_Section11(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		".okf":       "okf_version: 0.2\n",
+		"index.md":   "---\nokf_version: \"0.2\"\n---\n\n# Index\n\n- [V1](wine/v1.md)\n- [V2](wine/v2.md)\n- [D1](wine/d1.md)\n- [X1](wine/x1.md)\n- [U1](wine/u1.md)\n",
+		"wine/v1.md": "---\ntype: Concept\ntitle: V1\nepistemic: verified\n---\n\n# V1\n\nBody.\n",
+		"wine/v2.md": "---\ntype: Concept\ntitle: V2\nepistemic: verified\n---\n\n# V2\n\nBody.\n",
+		"wine/d1.md": "---\ntype: Concept\ntitle: D1\nepistemic: documented\n---\n\n# D1\n\nBody.\n",
+		// an unknown/typo epistemic value must be surfaced, never rejected (§11).
+		"wine/x1.md": "---\ntype: Concept\ntitle: X1\nepistemic: made-up-grade\n---\n\n# X1\n\nBody.\n",
+		// no epistemic key -> untagged.
+		"wine/u1.md": "---\ntype: Concept\ntitle: U1\n---\n\n# U1\n\nBody.\n",
+	}
+	writeFiles(t, dir, files)
+	b := loadBundle(t, dir)
+	h := NewHandler(b)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil))
+	var got statsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("body not valid JSON: %v", err)
+	}
+	// count desc, then value asc: verified(2), then documented(1), made-up-grade(1).
+	want := []epistemicCount{
+		{Value: "verified", Count: 2},
+		{Value: "documented", Count: 1},
+		{Value: "made-up-grade", Count: 1},
+	}
+	if len(got.Epistemic.Distribution) != len(want) {
+		t.Fatalf("epistemic distribution = %+v, want %+v", got.Epistemic.Distribution, want)
+	}
+	for i := range want {
+		if got.Epistemic.Distribution[i] != want[i] {
+			t.Errorf("epistemic[%d] = %+v, want %+v", i, got.Epistemic.Distribution[i], want[i])
+		}
+	}
+	if got.Epistemic.Untagged != 1 {
+		t.Errorf("epistemic untagged = %d, want 1 (u1.md)", got.Epistemic.Untagged)
 	}
 }
 
@@ -199,7 +305,7 @@ func TestStats_DoesNotPromoteAuthority(t *testing.T) {
 	}
 }
 
-func TestGraph_MatchesBuildGraphSerializer(t *testing.T) {
+func TestGraph_EmbedsBuildGraphNodesAndEdges(t *testing.T) {
 	dir := writeBundle(t)
 	b := loadBundle(t, dir)
 	h := NewHandler(b)
@@ -215,23 +321,111 @@ func TestGraph_MatchesBuildGraphSerializer(t *testing.T) {
 		t.Fatalf("Content-Type = %q, want application/json", ct)
 	}
 
-	// The API graph view must be the EXACT same serialization as
-	// okf.BuildGraph, so it can never disagree with `graph export` (§2.4).
-	var got okf.Graph
+	// The API graph view enriches okf.BuildGraph with a per-node §5.2
+	// generated.at, but its node identity/type/orphan fields and its edges must
+	// still be the EXACT same derivation as okf.BuildGraph — so the API can never
+	// disagree with `graph export` about the shape of the graph itself.
+	var got graphResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("body not valid JSON: %v\n%s", err, rec.Body.String())
 	}
 	want := okf.BuildGraph(b)
-	wantJSON, _ := json.Marshal(want)
-	gotJSON, _ := json.Marshal(got)
-	if string(gotJSON) != string(wantJSON) {
-		t.Errorf("graph does not match BuildGraph serializer\n got: %s\nwant: %s", gotJSON, wantJSON)
+	if len(got.Nodes) != len(want.Nodes) {
+		t.Fatalf("graph nodes = %d, want %d", len(got.Nodes), len(want.Nodes))
+	}
+	for i := range want.Nodes {
+		if got.Nodes[i].GraphNode != want.Nodes[i] {
+			t.Errorf("node[%d] embedded GraphNode = %+v, want %+v", i, got.Nodes[i].GraphNode, want.Nodes[i])
+		}
+	}
+	wantEdges, _ := json.Marshal(want.Edges)
+	gotEdges, _ := json.Marshal(got.Edges)
+	if string(gotEdges) != string(wantEdges) {
+		t.Errorf("graph edges do not match BuildGraph\n got: %s\nwant: %s", gotEdges, wantEdges)
 	}
 	if len(got.Nodes) != 3 {
 		t.Errorf("graph nodes = %d, want 3", len(got.Nodes))
 	}
 	if len(got.Edges) != 1 {
 		t.Errorf("graph edges = %d, want 1", len(got.Edges))
+	}
+}
+
+// §5.2 / §13.1: each /graph node carries the node's own generated.at, distinct
+// from the /stats response-clock generated_at. Positive control: a node with a
+// `generated: {by, at}` mapping surfaces that instant. §13.1 fallback: a v0.1
+// node with a legacy `timestamp` surfaces it. Absent both -> empty string
+// (served, never an error).
+func TestGraph_PerNodeGeneratedAt_Section5_2And13_1(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		".okf":     "okf_version: 0.2\n",
+		"index.md": "---\nokf_version: \"0.2\"\n---\n\n# Index\n\n- [Gen](wine/gen.md)\n- [Legacy](wine/legacy.md)\n- [Bare](wine/bare.md)\n",
+		// v0.2 provenance: real §5.2 generated.at.
+		"wine/gen.md": "---\ntype: Concept\ntitle: Gen\ngenerated:\n  by: human:casey\n  at: 2026-03-04T00:00:00Z\n---\n\n# Gen\n\nBody.\n",
+		// v0.1 §13.1 legacy timestamp fallback.
+		"wine/legacy.md": "---\ntype: Concept\ntitle: Legacy\ntimestamp: 2025-11-02T00:00:00Z\n---\n\n# Legacy\n\nBody.\n",
+		// no provenance at all -> empty generated.at, still served.
+		"wine/bare.md": "---\ntype: Concept\ntitle: Bare\n---\n\n# Bare\n\nBody.\n",
+	}
+	writeFiles(t, dir, files)
+	b := loadBundle(t, dir)
+	h := NewHandler(b)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/graph", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/graph = %d, want 200", rec.Code)
+	}
+	var got graphResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("body not valid JSON: %v\n%s", err, rec.Body.String())
+	}
+	gen := map[string]string{}
+	for _, n := range got.Nodes {
+		gen[n.Path] = n.GeneratedAt
+	}
+	if got, want := gen["wine/gen.md"], "2026-03-04T00:00:00Z"; got != want {
+		t.Errorf("gen.md generated_at = %q, want %q (§5.2)", got, want)
+	}
+	if got, want := gen["wine/legacy.md"], "2025-11-02T00:00:00Z"; got != want {
+		t.Errorf("legacy.md generated_at = %q, want %q (§13.1 timestamp fallback)", got, want)
+	}
+	if got := gen["wine/bare.md"]; got != "" {
+		t.Errorf("bare.md generated_at = %q, want empty (no provenance)", got)
+	}
+}
+
+// The per-node §5.2 generated.at and the /stats response-clock generated_at must
+// be unambiguous: they never share a JSON object (one is a /graph node field,
+// the other a /stats top-level field), so there is no key collision.
+func TestGeneratedAt_NoKeyCollisionAcrossSurfaces(t *testing.T) {
+	dir := writeBundle(t)
+	b := loadBundle(t, dir)
+	h := NewHandler(b)
+
+	// /stats has a top-level generated_at (the response clock) and NO per-node
+	// generated_at.
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/stats", nil))
+	var stats map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &stats); err != nil {
+		t.Fatalf("stats not valid JSON: %v", err)
+	}
+	if _, ok := stats["generated_at"]; !ok {
+		t.Errorf("stats missing top-level generated_at (response clock)")
+	}
+
+	// /graph nodes carry generated_at; the /graph body has NO top-level
+	// generated_at, so the two meanings never collide in one object.
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, httptest.NewRequest(http.MethodGet, "/api/v1/graph", nil))
+	var graph map[string]json.RawMessage
+	if err := json.Unmarshal(rec2.Body.Bytes(), &graph); err != nil {
+		t.Fatalf("graph not valid JSON: %v", err)
+	}
+	if _, ok := graph["generated_at"]; ok {
+		t.Errorf("/graph must not carry a top-level generated_at (that is the /stats response clock)")
 	}
 }
 

@@ -48,16 +48,57 @@ type nameCount struct {
 // read straight from the bundle's own .okf sidecar so a future v0.2 corpus
 // reports itself correctly without a code change here.
 type statsResponse struct {
-	Schema        int         `json:"schema"`
-	BundleRoot    string      `json:"bundle_root"`
-	OkfVersion    string      `json:"okf_version"`
-	NodeCount     int         `json:"node_count"`
-	EdgeCount     int         `json:"edge_count"`
-	OrphanCount   int         `json:"orphan_count"`
-	Neighborhoods []nameCount `json:"neighborhoods"`
-	Types         []nameCount `json:"types"`
-	GeneratedAt   string      `json:"generated_at"`
-	IndexHealthy  bool        `json:"index_healthy"`
+	Schema        int             `json:"schema"`
+	BundleRoot    string          `json:"bundle_root"`
+	OkfVersion    string          `json:"okf_version"`
+	NodeCount     int             `json:"node_count"`
+	EdgeCount     int             `json:"edge_count"`
+	OrphanCount   int             `json:"orphan_count"`
+	Neighborhoods []nameCount     `json:"neighborhoods"`
+	Types         []nameCount     `json:"types"`
+	Status        []nameCount     `json:"status"`
+	Epistemic     epistemicReport `json:"epistemic"`
+	GeneratedAt   string          `json:"generated_at"`
+	IndexHealthy  bool            `json:"index_healthy"`
+}
+
+// epistemicReport surfaces the observed distribution of the `epistemic` grade
+// key. `epistemic` is a §11 UNKNOWN key (not an OKF-defined field): the API
+// RECOGNIZES it and reports whatever values appear so a curator can spot an
+// outlier or typo, but it NEVER enum-gates or rejects a value — over-conformance
+// on an unknown key is a spec violation (AGENTS.md; §11). This mirrors the
+// treatment analyze landed in okf.EpistemicReport. Untagged counts nodes with
+// no epistemic key.
+type epistemicReport struct {
+	Distribution []epistemicCount `json:"distribution"`
+	Untagged     int              `json:"untagged"`
+}
+
+// epistemicCount is one observed epistemic value and how many nodes carry it.
+type epistemicCount struct {
+	Value string `json:"value"`
+	Count int    `json:"count"`
+}
+
+// graphResponse is the GET /api/v1/graph body. It EMBEDS the shared
+// okf.BuildGraph derivation (nodes + edges) and enriches each node with its own
+// §5.2 generated.at, so the API's graph shape can never disagree with
+// `graph export` while still surfacing per-node provenance the CLI graph omits.
+type graphResponse struct {
+	Nodes []graphNode     `json:"nodes"`
+	Edges []okf.GraphEdge `json:"edges"`
+}
+
+// graphNode is one /graph node: the shared okf.GraphNode plus the node's real
+// §5.2 generated.at (with the §13.1 legacy `timestamp` fallback). This
+// generated_at is the NODE's last-meaningful-change instant — DISTINCT from the
+// /stats top-level response-clock generated_at. The two never share a JSON
+// object (one is a /graph node field, the other a /stats top-level field), so
+// there is no key collision and no silent overload. Empty when the node carries
+// no §5.2 generated and no legacy timestamp.
+type graphNode struct {
+	okf.GraphNode
+	GeneratedAt string `json:"generated_at"`
 }
 
 // now is the clock stats reads for generated_at; overridable in tests.
@@ -83,7 +124,7 @@ func NewHandler(b *okf.Bundle) http.Handler {
 	})
 
 	mux.HandleFunc("GET /api/v1/graph", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, okf.BuildGraph(b))
+		writeJSON(w, buildGraph(b))
 	})
 
 	return mux
@@ -92,18 +133,26 @@ func NewHandler(b *okf.Bundle) http.Handler {
 // buildStats derives the stats summary from the loaded bundle. Counts,
 // orphan-ness, types, and neighborhoods all come from okf.BuildGraph — the same
 // derivation lint and graph export use — so stats can never diverge from the
-// graph view of the same bundle.
+// graph view of the same bundle. The §5.4 status lifecycle and the §11
+// epistemic distribution are read from the same concept-node set (b.Nodes) the
+// graph nodes are built from, so all four distributions cover identical nodes.
 func buildStats(b *okf.Bundle) statsResponse {
 	g := okf.BuildGraph(b)
 
 	typeCounts := map[string]int{}
 	hoodCounts := map[string]int{}
+	statusCounts := map[string]int{}
 	orphans := 0
 	for _, n := range g.Nodes {
 		typeCounts[n.Type]++
 		hoodCounts[n.Neighborhood]++
 		if n.Orphan {
 			orphans++
+		}
+		// §5.4: lifecycle status; absent ⇒ stable. Read from the underlying
+		// node, which the graph node is derived from (b.Nodes keys by path).
+		if node, ok := b.Nodes[n.Path]; ok {
+			statusCounts[node.Status()]++
 		}
 	}
 
@@ -116,9 +165,65 @@ func buildStats(b *okf.Bundle) statsResponse {
 		OrphanCount:   orphans,
 		Neighborhoods: sortedNameCounts(hoodCounts),
 		Types:         sortedNameCounts(typeCounts),
+		Status:        sortedNameCounts(statusCounts),
+		Epistemic:     epistemicDistribution(b),
 		GeneratedAt:   now().UTC().Format(time.RFC3339),
 		IndexHealthy:  indexHealthy(b.Root),
 	}
+}
+
+// epistemicDistribution counts the observed values of the §11 unknown
+// `epistemic` key across concept nodes, ordered count DESCENDING then value
+// ASCENDING — the exact treatment analyze landed (okf.analyzeEpistemic), so the
+// API and analyze report the same distribution for the same bundle. The key is
+// surfaced OBSERVATIONALLY and never enum-gated (over-conformance on an unknown
+// key is a spec violation). Untagged counts nodes with no epistemic key.
+func epistemicDistribution(b *okf.Bundle) epistemicReport {
+	counts := map[string]int{}
+	untagged := 0
+	for _, n := range b.Nodes {
+		if v, ok := n.Epistemic(); ok {
+			counts[v]++
+		} else {
+			untagged++
+		}
+	}
+	dist := make([]epistemicCount, 0, len(counts))
+	for v, c := range counts {
+		dist = append(dist, epistemicCount{Value: v, Count: c})
+	}
+	sort.Slice(dist, func(i, j int) bool {
+		if dist[i].Count != dist[j].Count {
+			return dist[i].Count > dist[j].Count // count descending
+		}
+		return dist[i].Value < dist[j].Value // then value ascending
+	})
+	return epistemicReport{Distribution: dist, Untagged: untagged}
+}
+
+// buildGraph enriches the shared okf.BuildGraph derivation with each node's own
+// §5.2 generated.at (with the §13.1 legacy `timestamp` fallback). The node
+// identity/type/orphan fields and the edges are byte-for-byte the shared
+// serializer's output, so /graph can never disagree with `graph export` about
+// the graph itself; the per-node generated.at is the only addition.
+func buildGraph(b *okf.Bundle) graphResponse {
+	g := okf.BuildGraph(b)
+	out := graphResponse{
+		Nodes: make([]graphNode, 0, len(g.Nodes)),
+		Edges: g.Edges,
+	}
+	for _, gn := range g.Nodes {
+		gen := ""
+		// §5.2 generated.at (with §13.1 timestamp fallback). Empty when the
+		// node carries neither — served, never an error.
+		if node, ok := b.Nodes[gn.Path]; ok {
+			if generation, dated := node.Generated(); dated {
+				gen = generation.At.UTC().Format(time.RFC3339)
+			}
+		}
+		out.Nodes = append(out.Nodes, graphNode{GraphNode: gn, GeneratedAt: gen})
+	}
+	return out
 }
 
 // sortedNameCounts turns a name->count map into a name-sorted slice, so the
