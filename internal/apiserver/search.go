@@ -16,10 +16,13 @@ package apiserver
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -187,8 +190,138 @@ func (s *searchService) buildMeta() (map[string]search.NodeMeta, error) {
 //	half_life     §5.2/§13.1 recency half-life in days, scalar (the CLI --half-life)
 //	decay_floor   §5.2/#65 lower clamp on the recency multiplier, [0,1] (the CLI --decay-floor)
 //	min_relevance §5.2/#65 raw-cosine floor applied before decay, >= 0 (the CLI --min-relevance)
+//
+// Separator aliasing: filters take hyphens (not-path) while scoring params take
+// underscores (half_life), a split a caller cannot infer, so BOTH separators are
+// accepted for every parameter and canonicalized before use. An unknown key is a
+// 400 (never a silent 200 applying nothing), with a did-you-mean when it is close
+// to a real one — the accepted set is small and closed, so suggestion is cheap.
+//
+// searchParams is the closed set of accepted parameter names, in canonical
+// spelling. canonicalParam resolves an incoming key (in either separator) to its
+// canonical name; an unrecognized key resolves to "". The canonical spelling is
+// the one the code below reads and the one every value-validation error quotes,
+// so a caller using an alias gets guidance in the documented name.
+var searchParams = []string{
+	"q", "k",
+	"path", "type", "tag",
+	"not-path", "not-type", "not-tag",
+	"half_life", "decay_floor", "min_relevance",
+}
+
+// canonicalParam maps any accepted spelling (hyphen or underscore separator) of
+// a known parameter to its canonical name, or "" if the key is not accepted.
+// Both separators normalize to a single form for the lookup, so not_path and
+// not-path (and half-life and half_life) resolve to the same canonical key.
+func canonicalParam(key string) string {
+	norm := func(s string) string { return strings.ReplaceAll(s, "-", "_") }
+	target := norm(key)
+	for _, p := range searchParams {
+		if norm(p) == target {
+			return p
+		}
+	}
+	return ""
+}
+
+// canonicalizeQuery resolves every incoming query key to its canonical
+// parameter name, merging separator aliases into the same dimension (so
+// not-path and not_path OR together), and rejects any unknown key with a 400.
+// It returns the canonicalized values on success; on an unknown key it writes
+// the 400 (with a did-you-mean when the key is close to a real one) and returns
+// ok=false so the caller stops. An empty-valued param is preserved as-is: the
+// downstream nonEmptyQuery/Get contract already treats "" as unset, so ?type=
+// stays a no-op rather than an "unknown key".
+func canonicalizeQuery(w http.ResponseWriter, raw url.Values) (url.Values, bool) {
+	out := make(url.Values, len(raw))
+	for key, vals := range raw {
+		canon := canonicalParam(key)
+		if canon == "" {
+			msg := fmt.Sprintf("unknown query parameter %q", key)
+			if s := suggestParam(key); s != "" {
+				msg += fmt.Sprintf(`; did you mean %q?`, s)
+			}
+			http.Error(w, msg, http.StatusBadRequest)
+			return nil, false
+		}
+		out[canon] = append(out[canon], vals...)
+	}
+	return out, true
+}
+
+// suggestParam returns the accepted parameter (canonical spelling) nearest to an
+// unknown key by Levenshtein distance, or "" when nothing is close enough. The
+// closeness bound scales with the key length so a short typo suggests but a
+// wholly unrelated word (nonsense_param) does not. Comparison is separator-
+// insensitive, so notpath suggests not-path.
+func suggestParam(key string) string {
+	norm := func(s string) string { return strings.ReplaceAll(s, "-", "_") }
+	nk := norm(key)
+	best, bestDist := "", 1<<30
+	for _, p := range searchParams {
+		d := levenshtein(nk, norm(p))
+		if d < bestDist {
+			best, bestDist = p, d
+		}
+	}
+	// Only suggest a genuinely near miss: within a third of the key length,
+	// floor of 2 for very short keys. A distant word gets no suggestion.
+	bound := len(nk) / 3
+	if bound < 2 {
+		bound = 2
+	}
+	if bestDist <= bound {
+		return best
+	}
+	return ""
+}
+
+// levenshtein is the standard edit distance between two ASCII-ish strings, used
+// only for the small closed did-you-mean set (never a hot path).
+func levenshtein(a, b string) int {
+	ra, rb := []rune(a), []rune(b)
+	prev := make([]int, len(rb)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(ra); i++ {
+		cur := make([]int, len(rb)+1)
+		cur[0] = i
+		for j := 1; j <= len(rb); j++ {
+			cost := 1
+			if ra[i-1] == rb[j-1] {
+				cost = 0
+			}
+			cur[j] = min3(cur[j-1]+1, prev[j]+1, prev[j-1]+cost)
+		}
+		prev = cur
+	}
+	return prev[len(rb)]
+}
+
+func min3(a, b, c int) int {
+	m := a
+	if b < m {
+		m = b
+	}
+	if c < m {
+		m = c
+	}
+	return m
+}
+
 func (s *searchService) handle(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query().Get("q")
+	// Canonicalize and validate keys BEFORE reading any value: an unknown query
+	// param is a 400 (fail closed), and hyphen/underscore separators are aliased
+	// so a caller cannot guess the wrong one. All value reads below come from the
+	// canonicalized set, so an alias is honoured with the documented behavior and
+	// its errors quote the canonical name.
+	query, ok := canonicalizeQuery(w, r.URL.Query())
+	if !ok {
+		return
+	}
+
+	q := query.Get("q")
 	if q == "" {
 		// Missing/empty q is a client error, never a 200 with everything: an
 		// empty query is "no query", not "match all".
@@ -197,7 +330,7 @@ func (s *searchService) handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	k := 5 // CLI default (--k)
-	if v := r.URL.Query().Get("k"); v != "" {
+	if v := query.Get("k"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
 			http.Error(w, `"k" must be a non-negative integer`, http.StatusBadRequest)
@@ -207,7 +340,7 @@ func (s *searchService) handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var halfLife float64
-	if v := r.URL.Query().Get("half_life"); v != "" {
+	if v := query.Get("half_life"); v != "" {
 		hl, err := strconv.ParseFloat(v, 64)
 		if err != nil || hl < 0 {
 			http.Error(w, `"half_life" must be a non-negative number of days`, http.StatusBadRequest)
@@ -223,7 +356,7 @@ func (s *searchService) handle(w http.ResponseWriter, r *http.Request) {
 	// "lower clamp" into a flat gain; a floor < 0 re-enables the #65 inversion);
 	// out of range is a 400, never a silently-ignored 200.
 	decayFloor := search.DefaultDecayFloor
-	if v := r.URL.Query().Get("decay_floor"); v != "" {
+	if v := query.Get("decay_floor"); v != "" {
 		df, err := strconv.ParseFloat(v, 64)
 		if err != nil || df < 0 || df > 1 {
 			http.Error(w, `"decay_floor" must be in [0, 1]`, http.StatusBadRequest)
@@ -236,7 +369,7 @@ func (s *searchService) handle(w http.ResponseWriter, r *http.Request) {
 	// Default 0 (admit everything). A present value is validated non-negative and
 	// out-of-range is a 400, never silently ignored.
 	var minRelevance float64
-	if v := r.URL.Query().Get("min_relevance"); v != "" {
+	if v := query.Get("min_relevance"); v != "" {
 		mr, err := strconv.ParseFloat(v, 64)
 		if err != nil || mr < 0 {
 			http.Error(w, `"min_relevance" must be a non-negative number`, http.StatusBadRequest)
@@ -263,15 +396,16 @@ func (s *searchService) handle(w http.ResponseWriter, r *http.Request) {
 	// ordering dependency says to mirror that grammar here rather than invent one:
 	// each param repeats and repeats OR together (Go's url.Query returns every
 	// occurrence), matching the CLI exactly. nonEmptyQuery drops empty-string
-	// values so `?type=` reads as unset, the CLI's nonEmpty contract.
-	q4 := r.URL.Query()
+	// values so `?type=` reads as unset, the CLI's nonEmpty contract. Reads come
+	// from the canonicalized `query`, so a hyphen/underscore alias (e.g. not_path)
+	// has already been merged into its canonical dimension.
 	filter := search.Filter{
-		PathPrefixes:    nonEmptyQuery(q4["path"]),
-		Types:           nonEmptyQuery(q4["type"]),
-		Tags:            nonEmptyQuery(q4["tag"]),
-		NotPathPrefixes: nonEmptyQuery(q4["not-path"]),
-		NotTypes:        nonEmptyQuery(q4["not-type"]),
-		NotTags:         nonEmptyQuery(q4["not-tag"]),
+		PathPrefixes:    nonEmptyQuery(query["path"]),
+		Types:           nonEmptyQuery(query["type"]),
+		Tags:            nonEmptyQuery(query["tag"]),
+		NotPathPrefixes: nonEmptyQuery(query["not-path"]),
+		NotTypes:        nonEmptyQuery(query["not-type"]),
+		NotTags:         nonEmptyQuery(query["not-tag"]),
 	}
 	opts := search.QueryOptions{Filter: filter}
 	// Filters and decay resolve against the live-bundle meta; pass it only when
