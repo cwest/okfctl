@@ -95,7 +95,7 @@ func TemplateDrift(b *Bundle) []DriftFinding {
 			continue
 		}
 		for _, field := range t.RequiredFields {
-			if !hasNonEmptyField(n.Frontmatter, field) {
+			if !hasNonEmptyField(n, field) {
 				out = append(out, DriftFinding{
 					Path:       path,
 					TargetType: typ,
@@ -136,16 +136,93 @@ func sortedNodePaths(b *Bundle) []string {
 	return paths
 }
 
-// hasNonEmptyField reports whether fm carries key with a non-blank string value.
-func hasNonEmptyField(fm map[string]any, key string) bool {
+// hasNonEmptyField reports whether n satisfies a template's required field. It
+// resolves v0.2 nested shapes the flat frontmatter lookup could not express
+// (§5.1, §5.2), with the §13.1 legacy fallback wired BIDIRECTIONALLY so a
+// v0.1-authored template does not false-positive drift a migrated v0.2 node,
+// and a v0.1 node still satisfies a v0.2-authored template:
+//
+//   - `sources` / the dotted head `sources` → Node.SourceCitations() > 0
+//     (frontmatter `sources` first, legacy body `# Citations` fallback, §13.1).
+//   - `generated.at` (and the legacy `timestamp`) → Node.Generated() ok
+//     (frontmatter `generated.at` first, legacy `timestamp` fallback, §13.1).
+//   - any other dotted path `a.b.c` → literal nested-map traversal.
+//   - a plain key → the original flat non-blank frontmatter lookup.
+//
+// The overlay stays warning-class and adds no required vocabulary (§7.4, §11);
+// it only teaches the existing required_fields check to read v0.2 provenance.
+func hasNonEmptyField(n *Node, key string) bool {
+	switch key {
+	// §5.1 + §13.1: `sources` is satisfied by frontmatter `sources` OR a legacy
+	// body `# Citations` list. Bidirectional: a v0.1 node satisfies it too.
+	case "sources":
+		return n.SourceCitations() > 0
+	// §5.2 + §13.1: `generated.at` is satisfied by `generated.at` OR the legacy
+	// flat `timestamp`. The reverse — a legacy `[timestamp]` template against a
+	// migrated node — is handled by the `timestamp` case below.
+	case "generated.at":
+		_, ok := n.Generated()
+		return ok
+	// §13.1 reverse: a v0.1-authored template requiring the legacy `timestamp`
+	// resolves against a node that migrated to `generated.at` — this is the
+	// load-bearing case that stops false-positive drift on a migrated corpus.
+	case "timestamp":
+		_, ok := n.Generated()
+		return ok
+	}
+	if strings.Contains(key, ".") {
+		return dottedPathNonEmpty(n.Frontmatter, key)
+	}
+	return flatFieldNonEmpty(n.Frontmatter, key)
+}
+
+// dottedPathNonEmpty walks a dotted path (`a.b.c`) through nested frontmatter
+// maps and reports whether the leaf resolves to a non-blank value.
+func dottedPathNonEmpty(fm map[string]any, path string) bool {
+	parts := strings.Split(path, ".")
+	var cur any = fm
+	for i, part := range parts {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			// YAML may decode nested maps as map[any]any; normalize one level.
+			if am, ok := cur.(map[any]any); ok {
+				m = make(map[string]any, len(am))
+				for k, v := range am {
+					if ks, ok := k.(string); ok {
+						m[ks] = v
+					}
+				}
+			} else {
+				return false
+			}
+		}
+		v, ok := m[part]
+		if !ok {
+			return false
+		}
+		if i == len(parts)-1 {
+			return valueNonEmpty(v)
+		}
+		cur = v
+	}
+	return false
+}
+
+// flatFieldNonEmpty is the original v0.1 lookup: fm[key] present and non-blank.
+func flatFieldNonEmpty(fm map[string]any, key string) bool {
 	v, ok := fm[key]
 	if !ok {
 		return false
 	}
+	return valueNonEmpty(v)
+}
+
+// valueNonEmpty reports whether a resolved value counts as present: a non-blank
+// string, or any non-nil non-string (list, number, bool, map).
+func valueNonEmpty(v any) bool {
 	if s, ok := v.(string); ok {
 		return strings.TrimSpace(s) != ""
 	}
-	// A non-string value (list, number, bool) counts as present.
 	return v != nil
 }
 
