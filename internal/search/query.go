@@ -161,6 +161,18 @@ func containsTag(tags []string, want string) bool {
 	return false
 }
 
+// DefaultDecayFloor is the scale-free lower clamp on the recency multiplier that
+// BOTH query surfaces — the okfctl-search CLI (--decay-floor) and the HTTP
+// /api/v1/search endpoint (decay_floor) — apply by default. It lives here, in the
+// package both surfaces import, so the default is a single source of truth: the
+// #65/#67 fix landed it on the CLI, and a later merge left the HTTP surface at an
+// unbounded (0) floor, so the two surfaces answered the same query differently.
+// Reading one named constant from both call sites is what stops that drift from
+// recurring on the next merge-order accident. 0.25 is scale-free (it assumes
+// nothing about the cosine distribution of whichever embedder is loaded); it must
+// stay in [0, 1] for [DecayFloor, 1] to be a real interval — see DecayOptions.factor.
+const DefaultDecayFloor = 0.25
+
 // DecayOptions configures post-ranking recency decay. It is OFF by default (a nil
 // *DecayOptions on QueryOptions). When set, a result's raw cosine is multiplied by
 // an exponential recency factor derived from the node's §5.2 generated.at (with
