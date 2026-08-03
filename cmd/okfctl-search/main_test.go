@@ -77,6 +77,33 @@ func writeScopedBundle(t *testing.T) string {
 	return dir
 }
 
+// writeGateTailBundle lays down six nodes where the token "acidity" appears in
+// exactly two (a wine node and a coffee node) — a MINORITY, so a gate on
+// "acidity" does not degrade as over-broad, and the wine/coffee split lets a
+// --path filter be shown to constrain the appended lexical tail.
+func writeGateTailBundle(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	files := map[string]string{
+		"wine/tannin.md":    "---\ntype: Concept\ntitle: Tannin\n---\n\n# Tannin\n\nTannin gives structure and astringency.\n",
+		"wine/acidity.md":   "---\ntype: Concept\ntitle: Wine Acidity\n---\n\n# Wine Acidity\n\nAcidity gives a wine freshness and lift.\n",
+		"wine/body.md":      "---\ntype: Concept\ntitle: Body\n---\n\n# Body\n\nBody is the weight of the wine on the palate.\n",
+		"coffee/roast.md":   "---\ntype: Concept\ntitle: Roast\n---\n\n# Roast\n\nRoast level shapes the coffee acidity and sweetness.\n",
+		"coffee/grind.md":   "---\ntype: Concept\ntitle: Grind\n---\n\n# Grind\n\nGrind size controls extraction rate.\n",
+		"coffee/brewing.md": "---\ntype: Concept\ntitle: Brewing\n---\n\n# Brewing\n\nBrewing temperature and time drive flavor.\n",
+	}
+	for rel, c := range files {
+		p := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(c), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
 func TestPlugin_IndexBuildThenSemantic(t *testing.T) {
 	dir := writeSearchBundle(t)
 	if _, err := runPlugin(t, "index", "build", dir); err != nil {
@@ -552,6 +579,162 @@ func TestPlugin_HelpTextDescribesClampedGuarantee(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("help output should document %s; got:\n%s", want, out)
 		}
+	}
+}
+
+// TestPlugin_LexicalGateAcceptedAndOffUnchanged is the default-off control for
+// --lexical-gate: WITHOUT the flag, output is byte-identical to a bare query (the
+// gate is off by default, mirroring the --half-life control).
+func TestPlugin_LexicalGateAcceptedAndOffUnchanged(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	base, err := runPlugin(t, "--semantic", "structure acidity", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Flag present but not set (the cobra default false) must match bare output.
+	off, err := runPlugin(t, "--semantic", "structure acidity", "--lexical-gate=false", dir)
+	if err != nil {
+		t.Fatalf("--lexical-gate=false: %v", err)
+	}
+	if base != off {
+		t.Errorf("--lexical-gate=false changed output:\nbase=%q\noff=%q", base, off)
+	}
+	// A set gate must at least run without error and return results.
+	on, err := runPlugin(t, "--semantic", "structure acidity", "--lexical-gate", dir)
+	if err != nil {
+		t.Fatalf("--lexical-gate: %v", err)
+	}
+	if strings.TrimSpace(on) == "" {
+		t.Errorf("--lexical-gate returned no results")
+	}
+}
+
+// TestPlugin_LexicalGateEmptyTermDegrades is the CLI empty-term degrade: an
+// all-stopword query with the gate ON returns the same results as with it off —
+// a no-op, the direct test of the reproduced 0-hit failure mode.
+func TestPlugin_LexicalGateEmptyTermDegrades(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	q := "how should the"
+	off, err := runPlugin(t, "--semantic", q, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	on, err := runPlugin(t, "--semantic", q, "--lexical-gate", dir)
+	if err != nil {
+		t.Fatalf("--lexical-gate all-stopword: %v", err)
+	}
+	if off != on {
+		t.Errorf("all-stopword gate must be a no-op:\noff=%q\non =%q", off, on)
+	}
+}
+
+// TestPlugin_LexicalGateOverBroadDegrades is the CLI over-broad degrade: every
+// node in the scoped bundle contains "structure", so a query on it matches 100%
+// of the bundle — well over the fraction — and the gate must be a no-op.
+func TestPlugin_LexicalGateOverBroadDegrades(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	q := "structure"
+	off, err := runPlugin(t, "--semantic", q, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	on, err := runPlugin(t, "--semantic", q, "--lexical-gate", dir)
+	if err != nil {
+		t.Fatalf("--lexical-gate over-broad: %v", err)
+	}
+	if off != on {
+		t.Errorf("over-broad gate must be a no-op:\noff=%q\non =%q", off, on)
+	}
+}
+
+// TestPlugin_LexicalGateInteractionSmoke is the interaction control the card
+// mandates: --lexical-gate combined with --path and with --half-life must not
+// panic and must return sane (non-error) output. The card is explicit that the
+// interaction with scope filters (#63) and recency decay (#65) is not otherwise
+// specified, so this asserts composition, not a particular ordering.
+func TestPlugin_LexicalGateInteractionSmoke(t *testing.T) {
+	dir := writeScopedBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	// --lexical-gate + --path
+	if _, err := runPlugin(t, "--semantic", "structure acidity", "--lexical-gate", "--path", "wine/", dir); err != nil {
+		t.Errorf("--lexical-gate + --path errored: %v", err)
+	}
+	// --lexical-gate + --half-life
+	if _, err := runPlugin(t, "--semantic", "structure acidity", "--lexical-gate", "--half-life", "30", dir); err != nil {
+		t.Errorf("--lexical-gate + --half-life errored: %v", err)
+	}
+	// --lexical-gate + the negating scope filters (#68). These flags did not
+	// exist when the gate landed; composing the gate with exclusion is new
+	// behavior and must at minimum not panic or error.
+	if _, err := runPlugin(t, "--semantic", "structure acidity", "--lexical-gate", "--not-path", "coffee/", dir); err != nil {
+		t.Errorf("--lexical-gate + --not-path errored: %v", err)
+	}
+	if _, err := runPlugin(t, "--semantic", "structure acidity", "--lexical-gate", "--not-type", "Playbook", dir); err != nil {
+		t.Errorf("--lexical-gate + --not-type errored: %v", err)
+	}
+	if _, err := runPlugin(t, "--semantic", "structure acidity", "--lexical-gate", "--not-tag", "red", dir); err != nil {
+		t.Errorf("--lexical-gate + --not-tag errored: %v", err)
+	}
+	// Inclusion and exclusion together, with the gate on.
+	if _, err := runPlugin(t, "--semantic", "structure acidity", "--lexical-gate", "--path", "wine/", "--not-path", "wine/pairing.md", dir); err != nil {
+		t.Errorf("--lexical-gate + --path + --not-path errored: %v", err)
+	}
+	// All the moving parts together.
+	if _, err := runPlugin(t, "--semantic", "structure acidity", "--lexical-gate", "--path", "wine/", "--half-life", "30", dir); err != nil {
+		t.Errorf("--lexical-gate + --path + --half-life errored: %v", err)
+	}
+}
+
+// TestPlugin_LexicalGateNotPathConstrainsTail is the exclusion analog of
+// TestPlugin_LexicalGatePathConstrainsTail against the #68 negating filters: a
+// lexical-only hit that is EXCLUDED by --not-path must not be appended through the
+// gate. "acidity" matches a wine node and a coffee node (a minority, so the gate
+// does not degrade); with --not-path coffee/ the coffee node must never appear
+// even though it lexically matches — exclusion beats the preserved lexical tail.
+func TestPlugin_LexicalGateNotPathConstrainsTail(t *testing.T) {
+	dir := writeGateTailBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", "acidity", "--lexical-gate", "--not-path", "coffee/", dir)
+	if err != nil {
+		t.Fatalf("--lexical-gate + --not-path: %v", err)
+	}
+	if strings.Contains(out, "coffee/") {
+		t.Errorf("--not-path coffee/ leaked a coffee lexical hit through the gate: %q", out)
+	}
+	if !strings.Contains(out, "wine/") {
+		t.Errorf("--not-path coffee/ dropped the wine lexical hits too: %q", out)
+	}
+}
+
+// TestPlugin_LexicalGatePathConstrainsTail pins the documented filter/gate
+// interaction: a lexical-only hit that fails the --path filter is NOT appended.
+// The bundle has enough nodes that "acidity" matches a MINORITY (so the gate does
+// not degrade as over-broad), and both a wine and a coffee node match it; with
+// --path wine/ the coffee node must never appear even though it lexically matches.
+func TestPlugin_LexicalGatePathConstrainsTail(t *testing.T) {
+	dir := writeGateTailBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", "acidity", "--lexical-gate", "--path", "wine/", dir)
+	if err != nil {
+		t.Fatalf("--lexical-gate + --path: %v", err)
+	}
+	if strings.Contains(out, "coffee/") {
+		t.Errorf("--path wine/ leaked a coffee lexical hit through the gate: %q", out)
 	}
 }
 

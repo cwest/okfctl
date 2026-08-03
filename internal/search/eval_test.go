@@ -133,6 +133,107 @@ func goldRank(res []Result, wantNode string) int {
 	return 0
 }
 
+// bundleLexTexts maps each node path to its title+body prose — the surface the
+// lexical gate matches against, mirroring embedText. Kept here (not imported from
+// the cmd package) so the engine-level eval has no CLI dependency.
+func bundleLexTexts(b *okf.Bundle) map[string]string {
+	m := make(map[string]string, len(b.Nodes))
+	for path, n := range b.Nodes {
+		title, _ := n.Frontmatter["title"].(string)
+		m[path] = title + " " + n.Body
+	}
+	return m
+}
+
+// TestEval_LexicalGate is the load-bearing NEGATIVE CONTROL for --lexical-gate:
+// the full question-shaped gold set must score NO WORSE with the gate ON than
+// OFF, on BOTH embedders. This is the exact regression the degrade-to-semantic
+// rule exists to prevent — the issue is explicit that the gate must not be
+// defaulted on before this is checked. Skipped unless OKFCTL_EVAL_CORPUS and
+// OKFCTL_TEST_MODEL_DIR are set (neither is vendored). Run:
+//
+//	OKFCTL_EVAL_CORPUS=~/src/knowledge-base/bundles/knowledge \
+//	OKFCTL_TEST_MODEL_DIR=<potion-base-8M dir> \
+//	go test ./internal/search/ -run TestEval_LexicalGate -v
+func TestEval_LexicalGate(t *testing.T) {
+	corpus := os.Getenv("OKFCTL_EVAL_CORPUS")
+	modelDir := os.Getenv("OKFCTL_TEST_MODEL_DIR")
+	if corpus == "" || modelDir == "" {
+		t.Skip("set OKFCTL_EVAL_CORPUS and OKFCTL_TEST_MODEL_DIR to run the lexical-gate eval")
+	}
+	b, err := okf.Load(corpus)
+	if err != nil {
+		t.Fatalf("load corpus: %v", err)
+	}
+	texts := bundleLexTexts(b)
+	total := len(b.Nodes)
+
+	embedders := map[string]Embedder{"hash": NewHashEmbedder()}
+	if m, err := LoadModel2VecEmbedder(modelDir); err != nil {
+		t.Fatalf("load model2vec: %v", err)
+	} else {
+		embedders["model2vec"] = m
+	}
+
+	for _, name := range []string{"hash", "model2vec"} {
+		e := embedders[name]
+		s := BuildIndex(b, e, nil)
+
+		gate := func(q string) *LexicalGateOptions {
+			terms := LexTerms(q)
+			return &LexicalGateOptions{
+				Terms:             terms,
+				Match:             LexicalMatchSet(texts, terms),
+				OverBroadFraction: 0.60,
+				TotalNodes:        total,
+				WideN:             50,
+			}
+		}
+
+		offMRR, offRecall := evalQuery(t, s, e, func(q string) []Result {
+			res, _ := QueryWith(s, e, q, 5, QueryOptions{})
+			return res
+		})
+		onMRR, onRecall := evalQuery(t, s, e, func(q string) []Result {
+			res, _ := QueryWith(s, e, q, 5, QueryOptions{LexicalGate: gate(q)})
+			return res
+		})
+
+		t.Logf("[%s] gate OFF: MRR=%.3f recall@5=%.3f | gate ON: MRR=%.3f recall@5=%.3f (nodes=%d queries=%d)",
+			name, offMRR, offRecall, onMRR, onRecall, total, len(goldSet))
+
+		// The negative control: question-shaped quality must not drop. A tiny
+		// float epsilon guards against representation noise, not a real regression.
+		const eps = 1e-9
+		if onMRR < offMRR-eps {
+			t.Errorf("[%s] gate ON MRR %.4f regressed below gate OFF %.4f", name, onMRR, offMRR)
+		}
+		if onRecall < offRecall-eps {
+			t.Errorf("[%s] gate ON recall@5 %.4f regressed below gate OFF %.4f", name, onRecall, offRecall)
+		}
+	}
+}
+
+// evalQuery runs the gold set through a query function returning up to 5 ranked
+// results and reports MRR and recall@5.
+func evalQuery(t *testing.T, s *Store, e Embedder, queryFn func(q string) []Result) (mrr, recall float64) {
+	t.Helper()
+	var rrSum float64
+	var hits int
+	for _, g := range goldSet {
+		res := queryFn(g.query)
+		rank := goldRank(res, g.wantNode)
+		if rank > 0 {
+			rrSum += 1.0 / float64(rank)
+			if rank <= 5 {
+				hits++
+			}
+		}
+	}
+	n := float64(len(goldSet))
+	return rrSum / n, float64(hits) / n
+}
+
 func rankStr(rank int) string {
 	if rank == 0 {
 		return ">5"
