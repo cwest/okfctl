@@ -65,6 +65,11 @@ type searchService struct {
 	root     string
 	embedder search.Embedder
 	load     storeLoader
+	// now is the clock recency decay measures ages from. It defaults to the
+	// package now (time.Now) and is overridable in tests so a cross-surface
+	// equivalence assertion can pin the SAME instant into both the endpoint and
+	// the CLI-equivalent oracle and get byte-identical decayed scores.
+	now func() time.Time
 
 	mu      sync.Mutex
 	modTime time.Time                  // index file modtime the cache was built from
@@ -74,7 +79,7 @@ type searchService struct {
 }
 
 func newSearchService(root string, e search.Embedder, load storeLoader) *searchService {
-	return &searchService{root: root, embedder: e, load: load}
+	return &searchService{root: root, embedder: e, load: load, now: now}
 }
 
 // indexPath is the bundle's flat vector store, the same location the CLI's
@@ -164,18 +169,24 @@ func (s *searchService) buildMeta() (map[string]search.NodeMeta, error) {
 // url.Query returns every occurrence of a param, so ?path=a&path=b reads as two
 // prefixes exactly as the CLI's repeated --path flags do. The card's ordering
 // dependency says to mirror #68 when it merges first rather than invent a
-// syntax, which is what this does. half_life stays scalar; #65's decay_floor
-// landed in f4c9824 but is not exposed on this HTTP surface yet:
+// syntax, which is what this does. The recency-decay params match the CLI's:
+// half_life is scalar (--half-life), decay_floor is the #65 lower clamp on the
+// recency multiplier (--decay-floor, default search.DefaultDecayFloor), and
+// min_relevance is the #65 raw-cosine floor (--min-relevance). decay_floor and
+// min_relevance are validated with #72's CLI rules and reuse its error wording so
+// both surfaces speak the same language:
 //
-//	q          required semantic query string (the CLI --semantic)
-//	k          max results (default 5, the CLI default)
-//	path       §4.1 path-prefix filter, repeatable, OR   (the CLI --path)
-//	type       §4.1 type filter,        repeatable, OR   (the CLI --type)
-//	tag        §4.1 tag filter,         repeatable, OR   (the CLI --tag)
-//	not-path   §4.1 path-prefix exclusion, repeatable    (the CLI --not-path)
-//	not-type   §4.1 type exclusion,        repeatable    (the CLI --not-type)
-//	not-tag    §4.1 tag exclusion,         repeatable    (the CLI --not-tag)
-//	half_life  §5.2/§13.1 recency half-life in days, scalar (the CLI --half-life)
+//	q             required semantic query string (the CLI --semantic)
+//	k             max results (default 5, the CLI default)
+//	path          §4.1 path-prefix filter, repeatable, OR   (the CLI --path)
+//	type          §4.1 type filter,        repeatable, OR   (the CLI --type)
+//	tag           §4.1 tag filter,         repeatable, OR   (the CLI --tag)
+//	not-path      §4.1 path-prefix exclusion, repeatable    (the CLI --not-path)
+//	not-type      §4.1 type exclusion,        repeatable    (the CLI --not-type)
+//	not-tag       §4.1 tag exclusion,         repeatable    (the CLI --not-tag)
+//	half_life     §5.2/§13.1 recency half-life in days, scalar (the CLI --half-life)
+//	decay_floor   §5.2/#65 lower clamp on the recency multiplier, [0,1] (the CLI --decay-floor)
+//	min_relevance §5.2/#65 raw-cosine floor applied before decay, >= 0 (the CLI --min-relevance)
 func (s *searchService) handle(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	if q == "" {
@@ -203,6 +214,35 @@ func (s *searchService) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		halfLife = hl
+	}
+
+	// decay_floor: the #65 lower clamp on the recency multiplier. An OMITTED or
+	// EMPTY param takes the shared search.DefaultDecayFloor — the same default
+	// the CLI's --decay-floor uses — so the two surfaces cannot drift. A present
+	// value is validated in [0, 1] with #72's wording (a floor > 1 turns the
+	// "lower clamp" into a flat gain; a floor < 0 re-enables the #65 inversion);
+	// out of range is a 400, never a silently-ignored 200.
+	decayFloor := search.DefaultDecayFloor
+	if v := r.URL.Query().Get("decay_floor"); v != "" {
+		df, err := strconv.ParseFloat(v, 64)
+		if err != nil || df < 0 || df > 1 {
+			http.Error(w, `"decay_floor" must be in [0, 1]`, http.StatusBadRequest)
+			return
+		}
+		decayFloor = df
+	}
+
+	// min_relevance: the #65 raw-cosine floor applied BEFORE decay reorders.
+	// Default 0 (admit everything). A present value is validated non-negative and
+	// out-of-range is a 400, never silently ignored.
+	var minRelevance float64
+	if v := r.URL.Query().Get("min_relevance"); v != "" {
+		mr, err := strconv.ParseFloat(v, 64)
+		if err != nil || mr < 0 {
+			http.Error(w, `"min_relevance" must be a non-negative number`, http.StatusBadRequest)
+			return
+		}
+		minRelevance = mr
 	}
 
 	store, meta, modTime, err := s.ensureFresh()
@@ -237,14 +277,23 @@ func (s *searchService) handle(w http.ResponseWriter, r *http.Request) {
 	// Filters and decay resolve against the live-bundle meta; pass it only when
 	// something actually needs it, matching the CLI's needBundle guard so the
 	// unfiltered/undecayed path is byte-for-byte Query().
-	if !filter.IsEmpty() || halfLife > 0 {
+	if !filter.IsEmpty() || halfLife > 0 || minRelevance > 0 {
 		opts.Meta = meta
 	}
-	if halfLife > 0 {
-		// Post-ranking recency decay with the relevance floor on RAW cosine
-		// (MinRelevance 0) — the exact DecayOptions the CLI builds, so a
-		// fresh-but-irrelevant node is never promoted over a relevant older one.
-		opts.Decay = &search.DecayOptions{HalfLifeDays: halfLife, Now: time.Now(), MinRelevance: 0}
+	if halfLife > 0 || minRelevance > 0 {
+		// Post-ranking recency decay, mirroring the exact DecayOptions the CLI
+		// builds (cmd/okfctl-search/main.go) so the two surfaces cannot disagree
+		// for the same query and bundle: MinRelevance is a floor on RAW cosine
+		// (a sub-floor node is dropped before decay can reorder anything), and
+		// DecayFloor clamps the recency multiplier itself so an old-but-relevant
+		// node can be demoted but never crushed to zero below a mediocre fresh
+		// one (#65). DecayFloor defaults to the shared search.DefaultDecayFloor.
+		opts.Decay = &search.DecayOptions{
+			HalfLifeDays: halfLife,
+			Now:          s.now(),
+			MinRelevance: minRelevance,
+			DecayFloor:   decayFloor,
+		}
 	}
 
 	res, err := search.QueryWith(store, s.embedder, q, k, opts)

@@ -167,7 +167,8 @@ func newSearchCmd() *cobra.Command {
 				// is a no-op (factor 1) and this is a pure relevance cut. Its default
 				// stays 0: raw cosine distributions differ sharply between embedders
 				// (hash dim 64 vs model2vec dim 256), so any non-zero default is right
-				// for one and wrong for the other. DecayFloor defaults to scale-free 0.25.
+				// for one and wrong for the other. DecayFloor defaults to the shared
+				// scale-free search.DefaultDecayFloor.
 				opts.Decay = &search.DecayOptions{
 					HalfLifeDays: halfLife,
 					Now:          time.Now(),
@@ -227,7 +228,9 @@ func newSearchCmd() *cobra.Command {
 	// #65: clamp the recency multiplier so an old-but-relevant node can be demoted
 	// but never crushed below a mediocre fresh one. Scale-free, so it assumes
 	// nothing about the embedder's cosine distribution; 0 restores unbounded decay.
-	root.Flags().Float64Var(&decayFloor, "decay-floor", 0.25, "lower clamp on the recency multiplier 0.5^(age/half-life) (0 = unbounded decay)")
+	// The default is the shared search.DefaultDecayFloor — the SAME constant the
+	// HTTP /api/v1/search surface reads — so the two surfaces cannot drift apart.
+	root.Flags().Float64Var(&decayFloor, "decay-floor", search.DefaultDecayFloor, "lower clamp on the recency multiplier 0.5^(age/half-life) (0 = unbounded decay)")
 	// #65: raw-cosine floor applied BEFORE decay reorders, so a sub-floor fresh
 	// node is dropped rather than promoted. Default 0 (admit everything) because
 	// raw cosine distributions differ sharply between embedders, so a non-zero
