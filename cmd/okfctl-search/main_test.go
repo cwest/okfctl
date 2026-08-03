@@ -762,3 +762,110 @@ func TestSnippetPreview_TruncatesOnRuneBoundary(t *testing.T) {
 		t.Errorf("truncated preview should be 200 runes + ellipsis = 201 runes; got %d (%q)", got, out)
 	}
 }
+
+// TestPlugin_DecayFloorRejectedOutOfRange is the card's #71 POSITIVE control: a
+// --decay-floor outside [0, 1] is rejected at parse time with a non-nil error
+// naming the flag and the valid range. Above 1 the floor wins the math.Max for
+// every node and becomes a flat GAIN on raw cosine (help text says "lower clamp"
+// but it amplifies); below 0 it silently re-enables the #65 inversion that
+// f4c9824 was merged to fix. Both are rejected, and the message text — not just
+// the exit — is asserted.
+func TestPlugin_DecayFloorRejectedOutOfRange(t *testing.T) {
+	dir := writeDecayReproBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name  string
+		value string
+		note  string
+	}{
+		{"above-one-1.5", "1.5", "1.5x flat gain on raw cosine; scores leave [-1,1]"},
+		{"above-one-2", "2", "2.0x flat gain on raw cosine; scores leave [-1,1]"},
+		// --decay-floor -1 does NOT merely alias the unbounded path: it silently
+		// re-enables the exact #65 inversion that f4c9824 was merged to fix (an
+		// old-but-perfect match crushed to 0.0000 below a mediocre fresh node).
+		// This case is a regression guard on a just-fixed defect, not redundant
+		// spelling of --decay-floor 0.
+		{"negative-1", "-1", "re-enables the #65 inversion; regression vector"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := runPlugin(t, "--semantic", decayReproQuery, "--half-life", "90", "--decay-floor", tc.value, dir)
+			if err == nil {
+				t.Fatalf("--decay-floor %s (%s) must be rejected, got exit 0\noutput=%q", tc.value, tc.note, out)
+			}
+			msg := err.Error()
+			if !strings.Contains(msg, "--decay-floor") {
+				t.Errorf("error must name the flag --decay-floor; got %q", msg)
+			}
+			if !strings.Contains(msg, "[0, 1]") {
+				t.Errorf("error must name the valid range [0, 1]; got %q", msg)
+			}
+		})
+	}
+}
+
+// TestPlugin_HalfLifeRejectedNegative is the card's #71 half-life POSITIVE
+// control: a negative --half-life is rejected at parse time, reusing the
+// apiserver's "must be a non-negative number of days" wording so the CLI and
+// HTTP surfaces agree (internal/apiserver/search.go already rejects half_life<0
+// with 400; the CLI accepted it silently, byte-identical to no decay).
+func TestPlugin_HalfLifeRejectedNegative(t *testing.T) {
+	dir := writeDecayReproBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", decayReproQuery, "--half-life", "-5", dir)
+	if err == nil {
+		t.Fatalf("--half-life -5 must be rejected, got exit 0\noutput=%q", out)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "--half-life") {
+		t.Errorf("error must name the flag --half-life; got %q", msg)
+	}
+	if !strings.Contains(msg, "non-negative number of days") {
+		t.Errorf("error must reuse the apiserver wording \"non-negative number of days\"; got %q", msg)
+	}
+}
+
+// TestPlugin_BothFlagsBadDeterministicSingleError pins case 5: when BOTH flags
+// are out of range, exactly one error surfaces and it is deterministic. The order
+// is pinned here to --decay-floor first (validated before --half-life), so a
+// future reorder that changes which error a user sees breaks this test.
+func TestPlugin_BothFlagsBadDeterministicSingleError(t *testing.T) {
+	dir := writeDecayReproBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runPlugin(t, "--semantic", decayReproQuery, "--half-life", "-5", "--decay-floor", "2", dir)
+	if err == nil {
+		t.Fatalf("both flags bad must be rejected, got exit 0\noutput=%q", out)
+	}
+	msg := err.Error()
+	// Deterministic: --decay-floor is validated first, so its error wins.
+	if !strings.Contains(msg, "--decay-floor") {
+		t.Errorf("both-bad error must be the pinned --decay-floor error (validated first); got %q", msg)
+	}
+	if strings.Contains(msg, "--half-life") {
+		t.Errorf("only ONE error per invocation; the --half-life error must not also surface: %q", msg)
+	}
+}
+
+// TestPlugin_DecayFloorBoundariesAccepted pins the NEGATIVE controls at the two
+// inclusive endpoints of [0, 1]: --decay-floor 0 (unbounded decay restored) and
+// --decay-floor 1 (a floor of exactly 1 == "no decay") are BOTH accepted (exit
+// 0). A rejection that also fired on the boundaries would be as broken as one
+// that never fired. The 0 endpoint's ranking semantics are separately pinned by
+// TestPlugin_DecayFloorNegativeControl (which must pass unmodified).
+func TestPlugin_DecayFloorBoundariesAccepted(t *testing.T) {
+	dir := writeDecayReproBundle(t)
+	if _, err := runPlugin(t, "index", "build", dir); err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range []string{"0", "1"} {
+		if _, err := runPlugin(t, "--semantic", decayReproQuery, "--half-life", "90", "--decay-floor", v, dir); err != nil {
+			t.Errorf("--decay-floor %s is inside [0, 1] and must be accepted; got error %v", v, err)
+		}
+	}
+}

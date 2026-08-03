@@ -164,7 +164,8 @@ func (s *searchService) buildMeta() (map[string]search.NodeMeta, error) {
 // url.Query returns every occurrence of a param, so ?path=a&path=b reads as two
 // prefixes exactly as the CLI's repeated --path flags do. The card's ordering
 // dependency says to mirror #68 when it merges first rather than invent a
-// syntax, which is what this does. half_life stays scalar (#65 not landed):
+// syntax, which is what this does. half_life stays scalar; #65's decay_floor
+// landed in f4c9824 but is not exposed on this HTTP surface yet:
 //
 //	q          required semantic query string (the CLI --semantic)
 //	k          max results (default 5, the CLI default)
