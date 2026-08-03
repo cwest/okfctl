@@ -179,18 +179,14 @@ func newSearchCmd() *cobra.Command {
 			if lexicalGate {
 				// Lexical gate (#66): reduce the query to its stemmed content terms,
 				// resolve the term-wise match set against the live bundle prose, and
-				// hand both to the engine. The engine degrades to pure semantic when
-				// the terms are empty (all-stopword query) or the match set is
-				// over-broad, so an on-by-request gate is still a no-op on the query
+				// hand both to the engine. Built via the shared search.BuildLexicalGate
+				// so the CLI and the /api/v1/search HTTP surface construct byte-identical
+				// gate options from the same bundle — the two surfaces agree by
+				// construction, not by duplicated literals. The engine degrades to pure
+				// semantic when the terms are empty (all-stopword query) or the match set
+				// is over-broad, so an on-by-request gate is still a no-op on the query
 				// shapes where a lexical filter would only add noise.
-				terms := search.LexTerms(semantic)
-				opts.LexicalGate = &search.LexicalGateOptions{
-					Terms:             terms,
-					Match:             search.LexicalMatchSet(bundleTexts(b), terms),
-					OverBroadFraction: lexicalGateOverBroadFraction,
-					TotalNodes:        len(b.Nodes),
-					WideN:             lexicalGateWideN,
-				}
+				opts.LexicalGate = search.BuildLexicalGate(b, semantic)
 			}
 
 			res, err := search.QueryWith(s, e, semantic, k, opts)
@@ -262,38 +258,6 @@ func nonEmpty(vs []string) []string {
 		return nil
 	}
 	return out
-}
-
-// Lexical-gate tuning constants (#66). WideN is the semantic band width the
-// lexical set is intersected against — comfortably above the default --k so a
-// lexically-relevant node ranked mid-band still lands in the intersection rather
-// than the tail. OverBroadFraction is the degrade threshold: a term matching MORE
-// than this fraction of the bundle carries no discriminating signal and makes the
-// gate a no-op. Calibrated against the real corpus (234 nodes): the common
-// question-word content terms match a small minority, while `agent` at 172/234 =
-// 73% is the canonical over-broad case the issue names — 0.60 sits comfortably
-// below 0.73 and above the discriminating terms, so it degrades the noise cases
-// without disabling the useful ones.
-const (
-	lexicalGateWideN             = 50
-	lexicalGateOverBroadFraction = 0.60
-)
-
-// bundleTexts maps each node's path to the prose the lexical gate matches
-// against: its title (frontmatter title) plus body — the SAME surface embedText
-// feeds the vector index, so the lexical and semantic sides agree on what a node
-// "says". A nil bundle yields an empty map (the gate then matches nothing and the
-// engine degrades).
-func bundleTexts(b *okf.Bundle) map[string]string {
-	if b == nil {
-		return nil
-	}
-	m := make(map[string]string, len(b.Nodes))
-	for path, n := range b.Nodes {
-		title, _ := n.Frontmatter["title"].(string)
-		m[path] = title + " " + n.Body
-	}
-	return m
 }
 
 // buildNodeMeta resolves the per-node metadata the filters and recency decay key
