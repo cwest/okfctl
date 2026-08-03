@@ -104,6 +104,23 @@ func newSearchCmd() *cobra.Command {
 			if semantic == "" {
 				return cmd.Help()
 			}
+			// Validate the recency-decay bounds at parse time BEFORE building
+			// DecayOptions (#71). The library math.Max(0.5^x, DecayFloor) makes a
+			// floor > 1 win for every node — a flat GAIN on raw cosine, not the
+			// "lower clamp" the help text promises — and pushes scores outside the
+			// [-1, 1] cosine range the rest of the ranking assumes. A negative floor
+			// silently re-enables the #65 inversion f4c9824 fixed. A negative
+			// half-life is accepted silently today, byte-identical to no decay,
+			// while the HTTP surface (internal/apiserver/search.go) already rejects
+			// it with 400. Reject both here so the two surfaces agree; reusing the
+			// apiserver's half-life wording verbatim. --decay-floor is validated
+			// first, so when both are bad its error is the deterministic one.
+			if decayFloor < 0 || decayFloor > 1 {
+				return fmt.Errorf("--decay-floor must be in [0, 1], got %v", decayFloor)
+			}
+			if halfLife < 0 {
+				return fmt.Errorf("--half-life must be a non-negative number of days, got %v", halfLife)
+			}
 			e, err := resolveEmbedder(embedderName, modelPath)
 			if err != nil {
 				return err

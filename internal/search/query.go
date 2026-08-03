@@ -195,6 +195,16 @@ type DecayOptions struct {
 // bound but never erase a still-relevant node (#65). §5.2: generated.at marks the
 // content's last meaningful change, the signal that tells a recent edit from a
 // stale fact.
+//
+// DecayFloor is REQUIRED to be in [0, 1] for [DecayFloor, 1] to be a real
+// interval: a floor > 1 wins the math.Max for every node and turns the "lower
+// clamp" into a flat GAIN on raw cosine (scores leave [-1, 1]); a floor < 0
+// re-enables the #65 inversion. The CLI enforces this at parse time
+// (cmd/okfctl-search: --decay-floor rejected outside [0, 1]), so this method is
+// never reached with an out-of-range floor in normal use. It applies no
+// defensive re-clamp of its own: a silent clamp here would change behavior for
+// in-range values relative to today (#71 keeps the boundary at the CLI, not in
+// the library).
 func (d *DecayOptions) factor(gen time.Time, hasGen bool) float64 {
 	if d.HalfLifeDays <= 0 || !hasGen {
 		return 1
