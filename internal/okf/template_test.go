@@ -235,6 +235,82 @@ func TestTemplateDrift_LegacyNode_V02Template_Silent_Section13_1(t *testing.T) {
 	}
 }
 
+// §5.1 + §13.1: a v0.1 flat-STRING `sources:` list satisfies a required
+// `sources` field. The template check asks "present and non-empty", a weaker
+// question than "parses to structured provenance" — a well-sourced v0.1 node
+// must not be reported as missing sources. Regression guard for #79.
+func TestTemplateDrift_FlatStringSourcesSatisfies_Section5_1_13_1(t *testing.T) {
+	b := mkConceptBundle(t, provTemplate,
+		"sources:\n  - https://example.com/a|Ref A\n  - https://example.com/b|Ref B\ngenerated:\n  at: '2026-05-28T00:00:00Z'\n",
+		"Body.")
+	joined := ""
+	for _, f := range TemplateDrift(b) {
+		joined += f.Message + "\n"
+	}
+	if strings.Contains(joined, "sources") {
+		t.Fatalf("flat-string sources list should satisfy required sources (§5.1, §13.1), got: %v", joined)
+	}
+}
+
+// §5.1: the same, with bare URLs and no `|label` — still a non-empty flat-string
+// list, still satisfies the required field.
+func TestTemplateDrift_BareURLSourcesSatisfies_Section5_1(t *testing.T) {
+	b := mkConceptBundle(t, provTemplate,
+		"sources:\n  - https://example.com/a\n  - https://example.com/b\ngenerated:\n  at: '2026-05-28T00:00:00Z'\n",
+		"Body.")
+	joined := ""
+	for _, f := range TemplateDrift(b) {
+		joined += f.Message + "\n"
+	}
+	if strings.Contains(joined, "sources") {
+		t.Fatalf("bare-URL flat-string sources list should satisfy required sources (§5.1), got: %v", joined)
+	}
+}
+
+// NEGATIVE control (load-bearing): an EMPTY `sources: []` list is present but not
+// non-empty — the required field is NOT satisfied. Non-empty is required.
+func TestTemplateDrift_EmptySourcesList_Drifts_Section5_1(t *testing.T) {
+	b := mkConceptBundle(t, provTemplate,
+		"sources: []\ngenerated:\n  at: '2026-05-28T00:00:00Z'\n",
+		"Body.")
+	joined := ""
+	for _, f := range TemplateDrift(b) {
+		joined += f.Message + "\n"
+	}
+	if !strings.Contains(joined, "sources") {
+		t.Fatalf("empty sources: [] must still drift missing sources (§5.1), got: %v", joined)
+	}
+}
+
+// NEGATIVE control (load-bearing): a `sources:` list whose every entry is
+// blank/whitespace is present but not non-empty — still drifts. This is the
+// case that separates a presence check from a naive len(list) > 0 check.
+func TestTemplateDrift_BlankSourcesEntries_Drifts_Section5_1(t *testing.T) {
+	b := mkConceptBundle(t, provTemplate,
+		"sources:\n  - '   '\n  - ''\ngenerated:\n  at: '2026-05-28T00:00:00Z'\n",
+		"Body.")
+	joined := ""
+	for _, f := range TemplateDrift(b) {
+		joined += f.Message + "\n"
+	}
+	if !strings.Contains(joined, "sources") {
+		t.Fatalf("all-blank sources entries must still drift missing sources (§5.1), got: %v", joined)
+	}
+}
+
+// Criterion 9 invariant: the template presence loosening MUST NOT leak into the
+// structured-provenance accessor. Node.Sources() stays strict — a flat-string
+// list still parses to ZERO structured entries (§5.1: a structured source needs
+// a `resource`). analyze / coverage / freshness depend on this meaning.
+func TestNodeSources_FlatStringList_ParsesToZero_Section5_1(t *testing.T) {
+	n := &Node{Frontmatter: map[string]any{
+		"sources": []any{"https://example.com/a|Ref A", "https://example.com/b"},
+	}}
+	if got := n.Sources(); len(got) != 0 {
+		t.Fatalf("Node.Sources() must stay strict: flat-string list parses to 0 structured entries, got %d: %v", len(got), got)
+	}
+}
+
 // A non-provenance dotted path with no v0.2 accessor still resolves by literal
 // nested-map traversal: `foo.bar` reads frontmatter foo: { bar: ... }.
 func TestTemplateDrift_GenericDottedPath(t *testing.T) {

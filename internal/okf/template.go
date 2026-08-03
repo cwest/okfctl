@@ -142,8 +142,9 @@ func sortedNodePaths(b *Bundle) []string {
 // v0.1-authored template does not false-positive drift a migrated v0.2 node,
 // and a v0.1 node still satisfies a v0.2-authored template:
 //
-//   - `sources` / the dotted head `sources` → Node.SourceCitations() > 0
-//     (frontmatter `sources` first, legacy body `# Citations` fallback, §13.1).
+//   - `sources` / the dotted head `sources` → PRESENCE of a non-empty
+//     frontmatter `sources` list (ANY entry shape: v0.2 structured OR v0.1
+//     flat-string), else the legacy body `# Citations` fallback (§5.1, §13.1).
 //   - `generated.at` (and the legacy `timestamp`) → Node.Generated() ok
 //     (frontmatter `generated.at` first, legacy `timestamp` fallback, §13.1).
 //   - any other dotted path `a.b.c` → literal nested-map traversal.
@@ -153,10 +154,14 @@ func sortedNodePaths(b *Bundle) []string {
 // it only teaches the existing required_fields check to read v0.2 provenance.
 func hasNonEmptyField(n *Node, key string) bool {
 	switch key {
-	// §5.1 + §13.1: `sources` is satisfied by frontmatter `sources` OR a legacy
-	// body `# Citations` list. Bidirectional: a v0.1 node satisfies it too.
+	// §5.1 + §13.1: `sources` asks a PRESENCE question — is a non-empty
+	// `sources` list present (regardless of entry shape) OR a legacy body
+	// `# Citations` list? This is weaker than Node.SourceCitations()'s
+	// structured parse, so a well-sourced v0.1 flat-string `sources:` list is
+	// not false-positive drifted as missing sources (#79). Bidirectional: a
+	// v0.1 body-citations node satisfies it too. Node.Sources() stays strict.
 	case "sources":
-		return n.SourceCitations() > 0
+		return sourcesFieldPresent(n)
 	// §5.2 + §13.1: `generated.at` is satisfied by `generated.at` OR the legacy
 	// flat `timestamp`. The reverse — a legacy `[timestamp]` template against a
 	// migrated node — is handled by the `timestamp` case below.
@@ -174,6 +179,41 @@ func hasNonEmptyField(n *Node, key string) bool {
 		return dottedPathNonEmpty(n.Frontmatter, key)
 	}
 	return flatFieldNonEmpty(n.Frontmatter, key)
+}
+
+// sourcesFieldPresent answers the template PRESENCE question for `sources`
+// (§5.1): is a non-empty frontmatter `sources` list present, counting entries of
+// ANY shape — a v0.2 structured mapping OR a v0.1 flat string — as long as the
+// entry carries a non-blank value? Falls back to the §13.1 legacy body
+// `# Citations` list when no frontmatter list is present. Deliberately weaker
+// than Node.Sources()/Node.SourceCitations(), which stay strict for provenance
+// analysis: a flat-string list satisfies the required field here but still
+// parses to zero structured sources there (#79).
+func sourcesFieldPresent(n *Node) bool {
+	if raw, ok := n.Frontmatter["sources"].([]any); ok {
+		for _, item := range raw {
+			switch v := item.(type) {
+			case string:
+				if strings.TrimSpace(v) != "" {
+					return true
+				}
+			case map[string]any:
+				for _, mv := range v {
+					if valueNonEmpty(mv) {
+						return true
+					}
+				}
+			case map[any]any:
+				for _, mv := range v {
+					if valueNonEmpty(mv) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	// §13.1: legacy body `# Citations` fallback for a true v0.1 node.
+	return citationCount(n.Body) > 0
 }
 
 // dottedPathNonEmpty walks a dotted path (`a.b.c`) through nested frontmatter
