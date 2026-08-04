@@ -1,0 +1,9 @@
+# Astro / Starlight build artifacts
+dist/
+.astro/
+node_modules/
+
+# Templated content copied in from ../docs at build time by
+# scripts/prepare-content.mjs. Regenerated every build; never edited by hand,
+# never committed (committing it would let it drift from the source docs).
+src/content/docs/_generated/

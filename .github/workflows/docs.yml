@@ -1,0 +1,43 @@
+name: docs
+on:
+  push: { branches: [main] }
+  release: { types: [published] }
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: install
+        run: npm ci --prefix site
+      - name: build
+        # The build's prebuild step templates the CI-proven command reference
+        # (docs/commands/README.md) into the site; the version snippet derives
+        # from the GitHub releases API. GITHUB_TOKEN raises that call's rate
+        # limit but is optional.
+        run: npm run build --prefix site
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site/dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: github-pages
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
