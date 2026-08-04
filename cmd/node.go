@@ -32,10 +32,12 @@ func newNodeCmd() *cobra.Command {
 	var typ, title, dir string
 	newC := &cobra.Command{
 		Use:   "new <path>",
-		Short: "Create a conformant node (type required, §7)",
+		Short: "Create a conformant node (type required, PRD §7)",
 		Long: "new creates a conformant concept node at <path>. A non-empty --type is REQUIRED: " +
-			"type is the one managed field (OKF §7 — a node must carry a non-empty type; the value " +
-			"itself is open per §7.4, so any string is accepted). If a type template governs the " +
+			"type is the one managed field (PRD §7 — a node must carry a non-empty type; the value " +
+			"itself is open per PRD §7.4, so any string is accepted). The presence requirement is the " +
+			"spec floor (OKF §4.1 / §11: every frontmatter block carries a non-empty type). If a type " +
+			"template governs the " +
 			"given type, the node is scaffolded from it (PRD §9.3); otherwise a plain conformant " +
 			"node is written. Creation is recorded in log.md and index.md is regenerated, so a new " +
 			"node is never an audit gap. It does not open an editor — use `okfctl node edit` for that.",
@@ -46,7 +48,7 @@ func newNodeCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if typ == "" {
-				return fmt.Errorf("--type is required (OKF §7: every node needs a non-empty type)")
+				return fmt.Errorf("--type is required (OKF §4.1 / §11: every node needs a non-empty type)")
 			}
 			// If a template governs this type, scaffold from it (§9.3); otherwise
 			// create a plain conformant node (unchanged path).
@@ -79,7 +81,7 @@ func newNodeCmd() *cobra.Command {
 			return nil
 		},
 	}
-	newC.Flags().StringVar(&typ, "type", "", "type to assign the new node (required; any non-empty value, §7.4)")
+	newC.Flags().StringVar(&typ, "type", "", "type to assign the new node (required; any non-empty value, PRD §7.4)")
 	newC.Flags().StringVar(&title, "title", "", "title for the new node (omitted from frontmatter when empty)")
 	newC.Flags().StringVar(&dir, "bundle", ".", "bundle directory to operate on")
 	node.AddCommand(newC)
@@ -242,7 +244,7 @@ func newNodeCmd() *cobra.Command {
 		Use:   "edit <path>",
 		Short: "Open a node in $EDITOR, then re-validate on return",
 		Long: "edit opens a node in your editor ($OKFCTL_EDITOR, then $VISUAL, then $EDITOR, then " +
-			"vi) and, on return, re-validates the whole bundle against the spec floor (OKF §7). If " +
+			"vi) and, on return, re-validates the whole bundle against the spec floor (OKF §4.1 / §11). If " +
 			"validation fails, the findings are printed and the command exits non-zero. On success " +
 			"it refreshes the node's `modified` timestamp (`created` is never touched), appends to " +
 			"log.md, and regenerates index.md — this is how `modified` stays honest for the " +

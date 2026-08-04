@@ -51,7 +51,7 @@ func newSearchCmd() *cobra.Command {
 			"Graph-structural mode: okfctl search --neighbors <node-path> [dir] returns the\n" +
 			"nodes within --depth hops of a node in the link graph (edges are undirected).\n\n" +
 			"Semantic (vector) search is the separate okfctl-search plugin: run\n" +
-			"`okfctl-search --semantic \\\"query\\\"` (PRD \\u00a78).",
+			"`okfctl-search --semantic \"query\"` (PRD §8).",
 		Example: "  # Lexical search across all fields in the current bundle\n" +
 			"  okfctl search \"income statement\"\n\n" +
 			"  # Restrict the match surface to titles, in a bundle elsewhere\n" +
