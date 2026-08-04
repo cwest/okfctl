@@ -29,6 +29,11 @@ func newConfigCmd() *cobra.Command {
 	c := &cobra.Command{Use: "config", Short: "Get and set okfctl configuration"}
 	c.AddCommand(&cobra.Command{
 		Use: "set <key> <value>", Short: "Set a config value", Args: cobra.ExactArgs(2),
+		Long: "set writes a key/value pair into the single okfctl config store (a flat file " +
+			"under $OKFCTL_CONFIG_HOME or the OS user-config dir). An existing key is overwritten. " +
+			"This is okfctl's own tool configuration, not bundle content — it never touches a bundle.",
+		Example: "  # Pin a default remote registry URL prefix\n" +
+			"  okfctl config set default.remote https://github.com/acme",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			m, err := loadConfig()
 			if err != nil {
@@ -40,6 +45,10 @@ func newConfigCmd() *cobra.Command {
 	})
 	c.AddCommand(&cobra.Command{
 		Use: "get <key>", Short: "Get a config value", Args: cobra.ExactArgs(1),
+		Long: "get prints the value stored for a single config key, or exits non-zero if the " +
+			"key is unset. It is read-only. Use `okfctl config list` to see every key at once.",
+		Example: "  # Print one config value\n" +
+			"  okfctl config get default.remote",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			m, err := loadConfig()
 			if err != nil {
@@ -55,6 +64,11 @@ func newConfigCmd() *cobra.Command {
 	})
 	c.AddCommand(&cobra.Command{
 		Use: "list", Short: "List all config values", Args: cobra.NoArgs,
+		Long: "list prints every stored config key and its value, sorted by key. It is read-only. " +
+			"Registered remote sources appear here too, under the registry. key prefix (see " +
+			"`okfctl registry list` for a focused view of those).",
+		Example: "  # Show every stored config key and value\n" +
+			"  okfctl config list",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			m, err := loadConfig()
 			if err != nil {

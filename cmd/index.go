@@ -27,7 +27,16 @@ func newIndexCmd() *cobra.Command {
 	buildCmd := &cobra.Command{
 		Use:   "build [dir]",
 		Short: "Regenerate index.md from the current bundle",
-		Args:  cobra.MaximumNArgs(1),
+		Long: "index build regenerates the reserved index.md navigation file(s) from the bundle's " +
+			"current concept nodes (OKF §8: index files are a reserved, generated navigation " +
+			"surface). It rewrites index.md at the bundle root and in each directory that has one; " +
+			"it never edits concept nodes. Run it after adding, moving, or removing nodes by hand " +
+			"(the node verbs regenerate it for you).",
+		Example: "  # Regenerate index.md for the current bundle\n" +
+			"  okfctl index build\n\n" +
+			"  # Regenerate for a bundle elsewhere\n" +
+			"  okfctl index build ./bundles/knowledge",
+		Args: cobra.MaximumNArgs(1),
 	}
 	buildNoIgnore := addNoIgnoreFlag(buildCmd)
 	buildCmd.RunE = func(cmd *cobra.Command, args []string) error {
@@ -48,7 +57,15 @@ func newIndexCmd() *cobra.Command {
 	checkCmd := &cobra.Command{
 		Use:   "check [dir]",
 		Short: "Verify index.md is current (nonzero exit if stale)",
-		Args:  cobra.MaximumNArgs(1),
+		Long: "index check verifies the reserved index.md (OKF §8) is in sync with the bundle's " +
+			"current nodes, without writing anything. It is the CI-friendly counterpart to " +
+			"`index build`: it exits zero when the index is current and non-zero (printing what " +
+			"drifted) when a rebuild is needed. Read-only — it never rewrites the index.",
+		Example: "  # Verify the index is current (exit 0) or report drift (exit 1)\n" +
+			"  okfctl index check\n\n" +
+			"  # Check a bundle elsewhere, e.g. in CI\n" +
+			"  okfctl index check ./bundles/knowledge",
+		Args: cobra.MaximumNArgs(1),
 	}
 	checkNoIgnore := addNoIgnoreFlag(checkCmd)
 	checkCmd.RunE = func(cmd *cobra.Command, args []string) error {

@@ -40,7 +40,15 @@ func newPluginListCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "list",
 		Short: "List okfctl-<name> plugin executables found on PATH",
-		Args:  cobra.NoArgs,
+		Long: "plugin list discovers okfctl-<name> executables on your PATH and prints each " +
+			"plugin's name and resolved path. These are the subcommands okfctl will dispatch to " +
+			"git/kubectl-style when you run `okfctl <name>`. Read-only. Scan a specific PATH with " +
+			"--path; the default is $PATH.",
+		Example: "  # List discovered plugins on $PATH\n" +
+			"  okfctl plugin list\n\n" +
+			"  # Scan a specific PATH\n" +
+			"  okfctl plugin list --path ~/bin",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			pathenv := pathOverride
 			if pathenv == "" {
@@ -72,6 +80,10 @@ func newPluginInstallCmd() *cobra.Command {
 			"plugins dir (default $OKFCTL_CONFIG_HOME/plugins or <user config dir>/okfctl/plugins, " +
 			"override with --dir). Put that dir on your PATH so `okfctl plugin list` and " +
 			"subcommand dispatch discover the installed plugin.",
+		Example: "  # Install a plugin executable into the managed plugins dir\n" +
+			"  okfctl plugin install ./okfctl-search\n\n" +
+			"  # Install into a specific directory\n" +
+			"  okfctl plugin install --dir ~/bin ./okfctl-search",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := dirOverride

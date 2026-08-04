@@ -28,7 +28,16 @@ func newLogCmd() *cobra.Command {
 	appendC := &cobra.Command{
 		Use:   "append [dir]",
 		Short: "Append a timestamped change entry to log.md",
-		Args:  cobra.MaximumNArgs(1),
+		Long: "log append adds one timestamped entry to the reserved log.md change history (OKF §9: " +
+			"the log file is a reserved, append-only record of what changed in the bundle and when). " +
+			"The entry text is required via --message. It only appends — it never rewrites or " +
+			"reorders existing history. The node verbs append to log.md for you; use this for " +
+			"changes you made outside okfctl.",
+		Example: "  # Record a manual change\n" +
+			"  okfctl log append --message \"reworded the revenue concept\"\n\n" +
+			"  # Record against a bundle elsewhere\n" +
+			"  okfctl log append --message \"imported Q3 sources\" ./bundles/knowledge",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if msg == "" {
 				return fmt.Errorf("--message is required")
@@ -47,7 +56,14 @@ func newLogCmd() *cobra.Command {
 	logCmd.AddCommand(&cobra.Command{
 		Use:   "show [dir]",
 		Short: "Print the change history",
-		Args:  cobra.MaximumNArgs(1),
+		Long: "log show prints the reserved log.md change history (OKF §9) verbatim to stdout. It " +
+			"is read-only and does not mutate the bundle. Use it to review what changed and when, " +
+			"or to pipe the history into another tool.",
+		Example: "  # Print the change history for the current bundle\n" +
+			"  okfctl log show\n\n" +
+			"  # Print the history for a bundle elsewhere\n" +
+			"  okfctl log show ./bundles/knowledge",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := bundleDirArg(args)
 			body, err := okf.ReadLog(dir)

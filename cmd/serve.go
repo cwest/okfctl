@@ -64,6 +64,10 @@ func newServeCmd() *cobra.Command {
 		Long: "serve starts a local web server that renders the bundle as an interactive, " +
 			"navigable knowledge graph. Assets are embedded in the binary — no separate " +
 			"install. Binds loopback by default; override with --addr.",
+		Example: "  # Serve the current bundle on http://127.0.0.1:8080\n" +
+			"  okfctl serve\n\n" +
+			"  # Serve a bundle elsewhere on a custom address\n" +
+			"  okfctl serve --addr 127.0.0.1:9000 ./bundles/knowledge",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."

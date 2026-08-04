@@ -34,6 +34,12 @@ func newValidateCmd() *cobra.Command {
 			"runs the opt-in team overlay (§9.4), reporting template drift. All drift is " +
 			"advisory by default (exit 0); pass --strict to exit non-zero on any drift. " +
 			"Floor violations always fail regardless of --strict.",
+		Example: "  # Check the spec floor for the bundle in the current directory\n" +
+			"  okfctl validate\n\n" +
+			"  # Check a bundle elsewhere\n" +
+			"  okfctl validate ./bundles/knowledge\n\n" +
+			"  # Also run the opt-in team template overlay, failing CI on any drift\n" +
+			"  okfctl validate --templates --strict ./bundles/knowledge",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."

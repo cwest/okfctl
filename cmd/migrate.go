@@ -57,6 +57,12 @@ func newMigrateCmd() *cobra.Command {
 			"additive-only, then re-validates. --dry-run writes nothing and is byte-identical " +
 			"to the real apply. Judgment items are never guessed — they stay in the plan for " +
 			"its consumer (agent, colleague, shell loop, or a human) to resolve.",
+		Example: "  # Phase 1 (default): compute the plan (pure read), writing only the plan file\n" +
+			"  okfctl migrate ./bundles/knowledge --plan migrate-plan.json --generated-by \"casey\"\n\n" +
+			"  # Phase 2: preview the apply without writing (byte-identical to the real apply)\n" +
+			"  okfctl migrate ./bundles/knowledge --apply --plan migrate-plan.json --dry-run\n\n" +
+			"  # Phase 2: apply the plan's deterministic edits, then re-validate\n" +
+			"  okfctl migrate ./bundles/knowledge --apply --plan migrate-plan.json",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := args[0]

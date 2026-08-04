@@ -41,6 +41,12 @@ func newGraphExportCmd() *cobra.Command {
 		Long: "graph export serializes the bundle's concept-node link graph for use in " +
 			"other tools and CI. Formats: json (default) and dot. For SVG, pipe dot to " +
 			"Graphviz: okfctl graph export --format dot | dot -Tsvg > graph.svg",
+		Example: "  # Export the current bundle's graph as JSON\n" +
+			"  okfctl graph export\n\n" +
+			"  # Export a bundle elsewhere as Graphviz DOT\n" +
+			"  okfctl graph export --format dot ./bundles/knowledge\n\n" +
+			"  # Render an SVG via Graphviz\n" +
+			"  okfctl graph export --format dot ./bundles/knowledge | dot -Tsvg > graph.svg",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."

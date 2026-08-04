@@ -72,7 +72,7 @@ func newLintCmd() *cobra.Command {
 	var noIgnore *bool
 	c := &cobra.Command{
 		Use:   "lint [bundle-dir]",
-		Short: "Report curation health findings for a bundle (orphans, missing cross-references, broken internal links, coverage gaps, type hygiene)",
+		Short: "Report a bundle's curation health (orphans, broken links, coverage gaps, hygiene)",
 		Long: "lint surfaces judgment-worthy curation findings, not spec-floor violations " +
 			"(use validate for those). It never mutates the bundle. By default it is advisory " +
 			"and exits 0 even with findings; pass --strict to exit non-zero on any finding.\n\n" +
@@ -83,6 +83,14 @@ func newLintCmd() *cobra.Command {
 			"--semantic adds similarity-driven checks (similar-but-unlinked pairs, nodes with " +
 			"no semantic neighbors) by reading the index built by 'okfctl-search index build'. " +
 			"Core only reads that index, so no embedding model is needed to lint.",
+		Example: "  # Report curation findings for the current bundle (advisory, exit 0)\n" +
+			"  okfctl lint\n\n" +
+			"  # Fail CI on any finding\n" +
+			"  okfctl lint --strict ./bundles/knowledge\n\n" +
+			"  # Machine-readable findings for tooling\n" +
+			"  okfctl lint --json ./bundles/knowledge\n\n" +
+			"  # Also run similarity checks against a prebuilt semantic index\n" +
+			"  okfctl lint --semantic ./bundles/knowledge",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."
