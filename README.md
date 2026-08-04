@@ -1,14 +1,20 @@
 # okfctl
 
-A CLI for managing Open Knowledge Format (OKF) bundles.
+`okfctl` is a command-line tool for authoring and maintaining
+[Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+(OKF) bundles — a curated tree of Markdown "nodes" with a link graph, reserved
+`index.md`/`log.md` files, and frontmatter provenance.
 
-See [docs/PRD.md](docs/PRD.md) for the tool spec,
-[docs/adr/](docs/adr/README.md) for the Architecture Decision Records (why the
-architecture is the way it is), and
-[docs/plans/2026-07-22-roadmap.md](docs/plans/2026-07-22-roadmap.md)
-for the full plan. The walking skeleton (increment 1) covered bundle,
-node, validate, and config; this increment adds lifecycle management for
-the reserved `index.md` and `log.md` files.
+OKF is a specification this tool **consumes and conforms to**; okfctl does not
+author the spec. Where the spec defines behavior, the spec wins. The tool
+enforces the spec *floor* for everyone and keeps anything stricter behind an
+explicit opt-in overlay (`--templates`, §9.4), so an unknown `type` or a future
+frontmatter key never fails `validate`.
+
+Use it to scaffold a bundle, add and move nodes without breaking links, keep the
+reserved index and change log current, check a corpus against the spec, and
+inspect its health and link graph. It is pure Go with no CGO, no Python, and no
+model runtime.
 
 ## Install
 
@@ -35,177 +41,87 @@ okfctl version        # e.g. okfctl v1.2.3 (commit abc1234, built 2026-...)
 okfctl --version      # same string
 ```
 
-A binary built straight from source with a plain `go build` (no release
-metadata injected) reports `dev`.
-
-## Build
+To build from source instead:
 
 ```sh
-go build -o okfctl .
+go build -o okfctl .                    # dynamic build; version reports "dev"
+CGO_ENABLED=0 go build -o okfctl .      # static, no cgo
 ```
 
-For a static binary with no cgo dependency:
+## 60-second quickstart
+
+Starting from an empty directory, scaffold a bundle, add a node, build the
+index, and validate — a full cold start:
 
 ```sh
-CGO_ENABLED=0 go build -o okfctl .
-```
-
-## Quickstart
-
-```sh
-okfctl bundle init mykb
+okfctl bundle init mykb                                              # scaffold a conformant bundle
 okfctl node new concepts/tannin.md --type Reference --title "Tannin" --bundle mykb
-okfctl node list --bundle mykb
-okfctl index build mykb
-okfctl index check mykb
-okfctl log append mykb --message "added tannin node"
-okfctl log show mykb
-okfctl validate mykb
-okfctl bundle info mykb
+okfctl node list --bundle mykb                                       # see the node you just made
+okfctl index build mykb                                              # generate the reserved index.md files
+okfctl index check mykb                                              # confirm the index is current
+okfctl log append mykb --message "added tannin node"                # record the change
+okfctl validate mykb                                                 # check against the OKF spec floor
+okfctl bundle info mykb                                              # nodes: 1, reserved: 3, okf_version: 0.2
 ```
+
+From here, `okfctl search "tannin" mykb` finds nodes lexically, `okfctl graph
+export mykb` dumps the link graph, and `okfctl analyze mykb` reports where the
+bundle is weak. Every command explains itself with `okfctl <cmd> --help`,
+including a runnable example.
 
 ## Commands
 
-- `bundle init [dir]` — scaffold a minimal conformant OKF bundle
-- `bundle info [dir]` — summarize a bundle: node count, reserved-file count, spec version
-- `node new <path> --type <type> [--title <title>] --bundle <dir>` — create a new concept node. When a type template governs `--type`, the node is scaffolded from it: required fields are stubbed (`TODO` placeholders), recommended fields are stubbed empty, and the template's body sections are laid down as empty `##` headings, so the new node starts conformant to the team's convention.
-- `node show <path> --bundle <dir>` — print a node's front matter and body
-- `node list --bundle <dir>` — list the concept nodes in a bundle
-- `node edit <path> --bundle <dir>` — open a node in `$EDITOR` (or `$OKFCTL_EDITOR`/`$VISUAL`), then re-validate the bundle on return
-- `node mv <old> <new> --bundle <dir> [--dry-run]` — move/rename a node and rewrite every inbound link, preserving each author's relative link form (path is identity, so a move is a graph operation)
-- `node refresh <bundle> [path] [--dry-run] [--yes]` — bulk-fix stale `modified` timestamps: rewrite every drifting node's `modified` to its git last-commit day (the remediation for the git drift `validate` reports). `created` is immutable and never touched, the body is preserved verbatim, and `log.md`/`index.md` are maintained. A trailing path fixes a single node; `--dry-run` lists what would change and writes nothing. Degrades to a no-op outside a git repo, and exits non-zero only on real failure. **Guardrail:** a plan dominated by a single commit — the signature of a bulk mechanical commit, whose remediation would collapse the real authoring dates it touched into that one migration date — is **refused** unless `--yes` is given. The recommended fix in that case is to list the mechanical commit in `.okf-drift-ignore-revs` (see below), not to force the rewrite.
-- `node promote <bundle> [--name <basename>] [--dry-run]` — bulk-remediate the **directory-as-concept** shape (a corpus authored on the intuition that a directory *is* a concept and `index.md` is what it says, as Obsidian folder notes / Hugo `_index.md` / Jekyll collections do). Every **non-root** `index.md` that carries frontmatter is moved to a sibling concept file (`foo/index.md` → `foo/foo.md`; `--name overview` applies one basename convention uniformly), preserving the body verbatim and keeping `created` immutable. Inbound links to the old directory-concept are rewritten — both the `foo/` and `foo/index.md` spellings — the real `index.md` is regenerated with no frontmatter, and `log.md` is appended. The bundle-root index is left alone (its §12 `okf_version` marker is legal). `--dry-run` lists every move and rewrite and writes nothing.
-- `node rm <path> --bundle <dir> [--dry-run]` — remove a node and report any nodes orphaned as a result
-- `index build [dir]` — regenerate the reserved `index.md` files from the current bundle. Per OKF SPEC §8, one `index.md` is emitted in **each** directory that holds concepts or subdirectories, enumerating only that directory's own contents with **dir-relative** links (`concept.md` for a sibling concept, `subdir/` for a child directory) and each concept's `description`. Only the bundle-root index carries frontmatter (the §12 `okf_version` marker); every nested index carries none. Orphaned indexes left in a now-empty directory are pruned.
-- `index check [dir]` — verify every directory's `index.md` is current; nonzero exit if any nested index is stale, missing, or orphaned
-- `log append [dir] --message <text>` — append a dated entry to `log.md`
-- `log show [dir]` — print the change history
-- `validate <dir>` — validate a bundle against the OKF spec floor. It also reports **git drift** — any node whose frontmatter `modified` disagrees with its git last-commit date — as advisory warnings (read-only; run `node refresh` to fix them; degrades to nothing outside a git repo). Commits listed in `.okf-drift-ignore-revs` (see below) are walked past, so a bulk mechanical commit does not manufacture drift against every node it touched. With `--templates` it additionally runs the opt-in type-template overlay (§9.4), reporting **template drift** (a node missing a required field or body section its governing template declares) as warnings — advisory by default (exit 0), `--strict` exits non-zero on any drift. Spec-floor violations always fail regardless of `--templates`/`--strict`; the overlay never leaks into the floor (unknown type values still pass, §7.4).
+One line each; run `okfctl <cmd> --help` for full detail and examples, or see
+the [command reference](docs/commands/README.md).
 
-### `.okf-drift-ignore-revs` — opt a bulk mechanical commit out of git drift
+| Command | What it does |
+|---|---|
+| [`bundle`](docs/commands/README.md#okfctl-bundle) | Scaffold (`init`) and summarize (`info`) an OKF bundle. |
+| [`node`](docs/commands/README.md#okfctl-node) | Author and inspect nodes: `new`, `show`, `list`, `edit`, `mv`, `rm`, `refresh`, `promote`. |
+| [`index`](docs/commands/README.md#okfctl-index) | Regenerate (`build`) and verify (`check`) the reserved per-directory `index.md`. |
+| [`log`](docs/commands/README.md#okfctl-log) | Append (`append`) and print (`show`) the reserved `log.md` change history. |
+| [`validate`](docs/commands/README.md#okfctl-validate) | Check a bundle against the OKF spec floor; optionally overlay type-templates. |
+| [`lint`](docs/commands/README.md#okfctl-lint) | Report curation-health findings (orphans, broken links, coverage gaps); `--strict` for CI. |
+| [`analyze`](docs/commands/README.md#okfctl-analyze) | Report where a bundle is weak: freshness, clusters, gaps, connectivity, structure. |
+| [`search`](docs/commands/README.md#okfctl-search) | Core lexical + graph-neighborhood search (stdlib-only, no model or index). |
+| [`graph`](docs/commands/README.md#okfctl-graph) | Export the concept-node link graph (`--format json\|dot`). |
+| [`serve`](docs/commands/README.md#okfctl-serve) | Serve an interactive web visualization of the bundle graph. |
+| [`template`](docs/commands/README.md#okfctl-template) | List (`list`) and show (`show`) the type-templates a bundle declares. |
+| [`migrate`](docs/commands/README.md#okfctl-migrate) | Upgrade a bundle from OKF v0.1 to v0.2 (two-phase, consumer-agnostic). |
+| [`registry`](docs/commands/README.md#okfctl-registry) | Manage named remote bundle sources — `git remote` for OKF bundles. |
+| [`connect`](docs/commands/README.md#okfctl-connect) | Clone or fast-forward a remote bundle source into a local directory. |
+| [`plugin`](docs/commands/README.md#okfctl-plugin) | Discover (`list`) and install (`install`) `okfctl-<name>` plugins on `PATH`. |
+| [`config`](docs/commands/README.md#okfctl-config) | Get, set, and list okfctl configuration. |
+| [`completion`](docs/commands/README.md#okfctl-completion) | Generate a shell completion script (bash, zsh, fish). |
+| [`version`](docs/commands/README.md#okfctl-version) | Print the okfctl version (also `okfctl --version`). |
 
-Git drift infers a node's freshness from its last-touching commit's date. That is
-right for an incremental edit, but a **bulk mechanical commit** — a one-time
-migration that rewrites frontmatter across the whole corpus on day one — has no
-authoring intent, and treating its date as the node's `modified` collapses the
-real authoring history into the migration date. Git records *when* a commit
-landed, not *why*, so the tool cannot tell the two apart on its own.
+Semantic search over a bundle ships as the bundled `okfctl-search` plugin,
+invoked as `okfctl search --semantic …`. See the
+[search guide](docs/guides/search.md).
 
-Declare the intent with a checked-in `.okf-drift-ignore-revs` at the bundle root,
-mirroring `git blame --ignore-revs-file` — a convention users already understand:
+## Learn more
 
-```
-# Mechanical migration commits — opt these out of git drift.
-# One commit SHA per line; blank lines and #-comments are ignored.
-3f9a1c2e8b7d6a5c4e3f2a1b0c9d8e7f6a5b4c3d   # v0.2 frontmatter key sweep
-```
-
-When a node's last-touching commit is on the list, the drift comparison **walks
-back to the prior real commit** for that file. Incremental edits (commits *not*
-on the list) still drift normally — the check is not narrowed into uselessness.
-Full or abbreviated (≥7-char) SHAs both match. This is the recommended cure when
-`node refresh` refuses a bulk-dominated plan.
-- `template list [dir]` — list the type templates a bundle declares (target type, required-field and body-section counts). Templates are authored as ordinary OKF nodes (`type: Type Template`); nothing lives in tool config.
-- `template show <target-type> [dir]` — show one template's required/recommended fields and body sections.
-- `plugin list [--path <PATH>]` — list `okfctl-<name>` plugin executables discovered on `PATH` (sorted by name, first-on-PATH wins). Plugins extend okfctl `git`/`kubectl`-style: an unknown subcommand `okfctl foo bar` execs an `okfctl-foo` binary found on `PATH`, passing through `bar` plus the remaining flags and environment (with `OKFCTL` set to the core binary's path so a plugin can call back), and propagates the plugin's exit code. Built-in subcommands always take precedence; an unknown subcommand with no matching plugin produces the usual error plus a did-you-mean suggestion. Executable detection uses Unix permission bits (macOS/Linux); Windows is not yet supported.
-- `plugin install <source> [--dir <dir>]` — copy an `okfctl-<name>` executable into the managed plugins dir so `plugin list` and dispatch discover it. The default destination is `$OKFCTL_CONFIG_HOME/plugins` (or `<user config dir>/okfctl/plugins`), the same config-home convention `config` uses; override with `--dir`. Put that directory on your `PATH`. The source's base name must follow `okfctl-<name>`; the copy is written with execute bits. If the destination is not on your `PATH`, install prints a note to stderr so the plugin is not silently undiscoverable.
-
-### okfctl-search — offline semantic search (plugin)
-
-`okfctl-search` is a bundled plugin (a separate static binary; invoke as `okfctl search …` via plugin dispatch, or directly). It adds **semantic** search over a bundle's concept nodes, fully offline, with zero runtime dependencies — no Python, no ONNX, no `sqlite-vec`, no model server. It shares the exact embedding protocol with `cwest/knowledge-base` so vectors are cross-verifiable.
-
-- `okfctl-search index build [bundle-dir]` — embed every concept node into `.okfctl/index.db`, recording the embedder model + dimension. Content-hash keyed: an unchanged node is not re-embedded; deterministic for a fixed embedder.
-- `okfctl-search --semantic "query" [bundle-dir]` — rank nodes by cosine similarity to the query (top-`--k`, default 5). Refuses an index built under a different model (rebuild with `index build`).
-- `okfctl-search related <node-path> [bundle-dir]` — a node's nearest neighbors (self excluded); the neighbor set `lint --semantic` consumes for its similarity-driven checks (§8.6).
-- `--embedder hash` (default) is the offline, dependency-free embedder. It is deterministic and needs no model, but it is *lexical* — it matches tokens, not meaning.
-- `--lexical-gate` (off by default) gates the semantic results by a **term-wise** lexical match and preserves lexical recall. It runs the semantic query wide, keeps the results whose node also contains a query term (stopwords dropped, plurals/inflections stemmed so `hash` and `hashes` match the same nodes), in semantic order, then **appends the lexical hits the semantic band missed** so a correct exact match outside the embedding's top band is never discarded. It is useful for exact-identifier-shaped queries where the embedding blurs a rare token. It **degrades to pure semantic** (a no-op, byte-identical to gate-off) when the query has no content terms (an all-stopword question like `"how should the"`) **or** a term matches more than 60% of the bundle (a term that broad carries no discriminating signal — e.g. `agent` matches 73% of the reference corpus). Composes with `--path`/`--type`/`--tag` (which constrain both the semantic band and the appended lexical tail) and with `--half-life`.
-
-#### Real semantic search with `--embedder model2vec`
-
-`--embedder model2vec` runs a genuine static embedding model (for example [`minishlab/potion-base-8M`](https://huggingface.co/minishlab/potion-base-8M)) in **pure Go** — the BERT WordPiece tokenizer and the Model2Vec inference math are both ported into `internal/search`, so there is still no CGO, no Python, and no ONNX runtime. Vectors match the upstream `model2vec` library's own output to within `1e-5`, which is verified against the real model in the test suite.
-
-`okfctl` never downloads a model at runtime. Point it at a directory you already have on disk:
-
-```sh
-# once — persisted in okfctl's JSON config
-okfctl config set model_path ~/models/potion-base-8M
-okfctl-search --embedder model2vec index build ./my-bundle
-okfctl-search --embedder model2vec --semantic "tannin structure" ./my-bundle
-
-# or per-invocation, overriding the config
-okfctl-search --embedder model2vec --model-path ~/models/potion-base-8M --semantic "…" ./my-bundle
-```
-
-The directory needs the standard model2vec layout: `config.json`, `model.safetensors`, and `tokenizer.json` (or `vocab.txt`). If no path is configured, `model2vec` fails with an actionable error rather than silently falling back to `hash` — a query answered by the wrong embedder is worse than one that refuses to run. An index records the model it was built with, so switching embedders requires a rebuild.
-- `lint <dir>` — report curation health findings (orphans, missing cross-references, broken internal links, coverage gaps, type-value hygiene). Advisory by default (exits 0 even with findings); `--strict` exits non-zero on any finding, `--coverage-threshold N` tunes the coverage-gap check (default 3). `lint` never mutates the bundle.
-- `lint <dir> --semantic` — add the two similarity-driven checks (see below). Requires an index built by `okfctl-search index build`; **no embedding model is needed to lint**, because core only ever *reads* an index.
-
-#### Semantic lint (`--semantic`)
-
-Structural lint asks *"is anything linked to this?"*. Semantic lint asks *"is anything even about the same thing?"* — the curation question the graph alone can't answer:
-
-| check | finding | reads as |
-|---|---|---|
-| `similar-unlinked` | two nodes scoring ≥ `--similarity-threshold` (default `0.80`) with **no link in either direction** | *"these cover the same ground and don't reference each other — missing cross-reference?"* |
-| `no-semantic-neighbors` | a node whose **best** neighbor falls below `--isolation-floor` (default `0.20`) | *"nothing in the corpus is close to this — dead concept, or missing context?"* |
-
-```sh
-okfctl-search index build ./my-bundle     # the plugin builds (needs a model)
-okfctl lint ./my-bundle --semantic        # core reads (needs none)
-```
-
-Three deliberate behaviors:
-
-- **Opt-in.** Without `--semantic`, output is unchanged and the index is never read.
-- **A missing index is an error, not a silent skip** — it names `okfctl-search index build`. A quiet structural-only fallback would let CI believe semantic checks ran when they did not.
-- **Index drift is surfaced.** Nodes added since the last `index build` produce one `stale-index` finding listing them, so a partial pass never reads as a clean one.
-
-Findings are only as meaningful as the embedder that built the index. With the default `hash` embedder, `similar-unlinked` effectively means "shares vocabulary"; with `--embedder model2vec` it means genuinely related subject matter. Build the index with `model2vec` if you intend to act on these findings.
-- `search "query" [dir]` — **core lexical + graph-structural search**, stdlib-only, no model or index. Matches concept nodes case-insensitively by title, tag, type, or body substring; restrict the surface with `--field title|tag|type|body` (default `any`). Reserved files (`index.md`/`log.md`) are never results. A zero-result query is not an error. Add `--json` for a deterministic, CI-diffable array (path/title/type/neighborhood/matched_on).
-- `search --neighbors <node-path> [dir]` — graph-structural query: the concept nodes within `--depth` hops (default 1) of a node in the link graph. Edges are treated as **undirected** (a node is a neighbor whether it links to the start or the start links to it), so a reader's traversal is symmetric. Results are ordered by (depth, path); `--json` emits the same fields plus `depth`. This is the core, always-available baseline; the **semantic** side of search is the separate `okfctl-search` plugin above (`okfctl-search --semantic …`).
-- `graph export <dir> --format json|dot` — export the concept-node link graph in a machine format (deterministic, CI-diffable). `json` (default) emits nodes (path/title/type/neighborhood/orphan) + edges; `dot` emits Graphviz. For SVG, pipe DOT to Graphviz: `okfctl graph export --format dot | dot -Tsvg > graph.svg`.
-- `serve <dir> --addr 127.0.0.1:8080` — start a local web server rendering the bundle as an interactive knowledge graph (click a node to inspect, follow edges, orphans highlighted, filter by type/neighborhood). The viewer is embedded in the binary — no separate install. Binds loopback by default; override with `--addr`.
-- `config set <key> <value>` — set a config value
-- `config get <key>` — read a config value
-- `config list` — list all config values
-- `registry add <name> <git-url>` — register (or re-point) a named remote bundle source. Named remotes are plain git URLs — this is `git remote` for OKF bundles, **not** a hosted service, account system, or schema registry. They live in the one okfctl config store (keyed `registry.<name>`), so there is no second config file.
-- `registry list` — list the registered `name` → `url` sources, sorted by name.
-- `registry show <name>` — print a source's git URL (nonzero exit on an unknown name).
-- `registry remove <name>` (alias `rm`) — unregister a source.
-- `connect <name|git-url> [dir]` — materialize a remote bundle source into a local directory over git. A registered name resolves to its URL; an ad-hoc git URL is used directly. A fresh destination is `git clone`d; an existing checkout of the same source is fast-forwarded (`git pull --ff-only`, never a history-rewriting merge); a non-empty directory that is not that checkout is left untouched. `okfctl` shells out to `git` (no new dependency) and does no authentication of its own — reaching a private URL is git's concern (ssh agent, credential helper). Default `dir` is a directory named after the source (trailing `.git` stripped), matching `git clone`.
-- `completion <bash|zsh|fish>` — generate a shell completion script
-- `version` — print the okfctl version (also `okfctl --version`); reports the release tag injected at build time, or `dev` for a plain source build
-
-## Skipping vendored and derived directories
-
-Every command that walks a bundle (`validate`, `lint`, `analyze`, `search`,
-`graph export`, `index build`/`check`) prunes vendored and derived directories
-by default — a Python virtualenv (`.venv`), `node_modules`, a `vendor/` tree, or
-a build-output dir (`dist`, `build`, `target`, …) sitting under the bundle root
-holds `.md` files nobody authored as knowledge, and walking them pollutes every
-report. The prune is by directory **base name** at any depth (see
-`DefaultSkipDirs`), applied once in the loader so all commands share identical
-scope, and it never touches the bundle root itself.
-
-Two guardrails keep this from silently eating your work:
-
-- **`--no-ignore`** restores the full walk on any of those commands, so a
-  directory whose name happens to match the skip list (real content you
-  deliberately authored there) is always recoverable.
-- The skip is **never silent**: when the walk prunes anything, the command
-  prints a note to **stderr** naming the skipped directories and pointing at
-  `--no-ignore`.
-
-This is a built-in default, not a policy read from config — `okfctl` deliberately
-does not consult `.gitignore` (curation scope and version-control scope are
-different questions) and needs no `.okfctlignore` to be usable on a real tree.
-
-## What validate checks
-
-`validate` enforces the OKF spec floor only: every node must carry a
-non-empty `type` (OKF §7). Unknown type *values* are allowed — the
-walking skeleton does not enforce a taxonomy, so `--type Reference`,
-`--type Concept`, or any other string all pass.
+- **User docs** — concepts, task-oriented guides, and the full command
+  reference live under [`docs/`](docs/README.md). Start with
+  [concepts](docs/concepts.md), then the guides:
+  - [Starting and authoring a bundle](docs/guides/authoring.md)
+  - [Keeping `index.md` current and fixing freshness drift](docs/guides/index-and-freshness.md)
+    — covers `.okf-drift-ignore-revs`.
+  - [Curation health: `lint`, `analyze`, and `--strict` in CI](docs/guides/curation-health.md)
+    — covers the semantic-lint checks and the vendored/derived skip policy.
+  - [Search: core lexical/graph and the `okfctl-search` semantic plugin](docs/guides/search.md)
+    — covers model2vec setup.
+  - [Migrating a v0.1 bundle to v0.2](docs/guides/migrating.md)
+  - [Remote sources: `registry` and `connect`](docs/guides/remote-sources.md)
+  - [Extending okfctl with plugins](docs/guides/plugins.md)
+- **Per-command help** — `okfctl <cmd> --help` is authoritative and always
+  matches the binary.
+- **The spec** — the authoritative
+  [OKF v0.2 specification](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md).
+- **For contributors** — [`docs/PRD.md`](docs/PRD.md), the
+  [ADRs](docs/adr/README.md), and the dated
+  [plans](docs/plans/2026-07-22-roadmap.md)/[specs](docs/specs/) that record how
+  and why the tool was built.
 
 ## License
 
