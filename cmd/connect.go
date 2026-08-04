@@ -39,6 +39,12 @@ func newConnectCmd() *cobra.Command {
 			"A fresh destination is cloned; an existing checkout of the same source " +
 			"is fast-forwarded (never a history-rewriting merge). A non-empty " +
 			"directory that is not that git checkout is left untouched.",
+		Example: "  # Clone a registered remote into a directory named after the source\n" +
+			"  okfctl connect knowledge\n\n" +
+			"  # Clone an ad-hoc git URL into a chosen directory\n" +
+			"  okfctl connect https://github.com/acme/kb.git ./kb\n\n" +
+			"  # Re-run to fast-forward an existing checkout\n" +
+			"  okfctl connect knowledge ./kb",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			source := args[0]

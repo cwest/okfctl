@@ -33,7 +33,17 @@ func newNodeCmd() *cobra.Command {
 	newC := &cobra.Command{
 		Use:   "new <path>",
 		Short: "Create a conformant node (type required, §7)",
-		Args:  cobra.ExactArgs(1),
+		Long: "new creates a conformant concept node at <path>. A non-empty --type is REQUIRED: " +
+			"type is the one managed field (OKF §7 — a node must carry a non-empty type; the value " +
+			"itself is open per §7.4, so any string is accepted). If a type template governs the " +
+			"given type, the node is scaffolded from it (PRD §9.3); otherwise a plain conformant " +
+			"node is written. Creation is recorded in log.md and index.md is regenerated, so a new " +
+			"node is never an audit gap. It does not open an editor — use `okfctl node edit` for that.",
+		Example: "  # Create a node of an open type\n" +
+			"  okfctl node new concepts/revenue --type Concept --title Revenue\n\n" +
+			"  # Create in a bundle elsewhere\n" +
+			"  okfctl node new concepts/revenue --type Concept --bundle ./bundles/knowledge",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if typ == "" {
 				return fmt.Errorf("--type is required (OKF §7: every node needs a non-empty type)")
@@ -69,16 +79,23 @@ func newNodeCmd() *cobra.Command {
 			return nil
 		},
 	}
-	newC.Flags().StringVar(&typ, "type", "", "node type (required)")
-	newC.Flags().StringVar(&title, "title", "", "node title")
-	newC.Flags().StringVar(&dir, "bundle", ".", "bundle directory")
+	newC.Flags().StringVar(&typ, "type", "", "type to assign the new node (required; any non-empty value, §7.4)")
+	newC.Flags().StringVar(&title, "title", "", "title for the new node (omitted from frontmatter when empty)")
+	newC.Flags().StringVar(&dir, "bundle", ".", "bundle directory to operate on")
 	node.AddCommand(newC)
 
 	var showBundle string
 	showC := &cobra.Command{
 		Use:   "show <path>",
 		Short: "Print a node, surfacing its type (§7.3)",
-		Args:  cobra.ExactArgs(1),
+		Long: "show prints a single node's path, its type, and its Markdown body (PRD §7.3: reads " +
+			"surface the managed type). The .md suffix is optional in <path>. Read-only — it never " +
+			"mutates the bundle. It errors if no node matches.",
+		Example: "  # Show a node (the .md suffix is optional)\n" +
+			"  okfctl node show concepts/revenue\n\n" +
+			"  # Show a node in a bundle elsewhere\n" +
+			"  okfctl node show concepts/revenue --bundle ./bundles/knowledge",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			b, err := okf.Load(showBundle)
 			if err != nil {
@@ -96,14 +113,21 @@ func newNodeCmd() *cobra.Command {
 			return nil
 		},
 	}
-	showC.Flags().StringVar(&showBundle, "bundle", ".", "bundle directory")
+	showC.Flags().StringVar(&showBundle, "bundle", ".", "bundle directory to operate on")
 	node.AddCommand(showC)
 
 	var listBundle string
 	listC := &cobra.Command{
 		Use:   "list",
 		Short: "List nodes with their type (§7.3)",
-		Args:  cobra.NoArgs,
+		Long: "list prints every concept node in the bundle with its managed type, sorted by path " +
+			"(PRD §7.3: reads surface the type). Reserved files (index.md, log.md) are not nodes " +
+			"and are not listed. Read-only.",
+		Example: "  # List every node in the current bundle\n" +
+			"  okfctl node list\n\n" +
+			"  # List nodes in a bundle elsewhere\n" +
+			"  okfctl node list --bundle ./bundles/knowledge",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			b, err := okf.Load(listBundle)
 			if err != nil {
@@ -120,7 +144,7 @@ func newNodeCmd() *cobra.Command {
 			return nil
 		},
 	}
-	listC.Flags().StringVar(&listBundle, "bundle", ".", "bundle directory")
+	listC.Flags().StringVar(&listBundle, "bundle", ".", "bundle directory to operate on")
 	node.AddCommand(listC)
 
 	var mvBundle string
@@ -128,7 +152,15 @@ func newNodeCmd() *cobra.Command {
 	mvC := &cobra.Command{
 		Use:   "mv <old> <new>",
 		Short: "Move/rename a node, rewriting inbound links (path is identity)",
-		Args:  cobra.ExactArgs(2),
+		Long: "mv moves or renames a node. A node's path is its identity (OKF §6: cross-links are " +
+			"by path), so mv also rewrites every inbound internal link to point at the new path, " +
+			"then maintains log.md and index.md. The .md suffix is optional on both arguments. " +
+			"--dry-run prints the move and every link rewrite and writes nothing.",
+		Example: "  # Rename a node and rewrite inbound links\n" +
+			"  okfctl node mv concepts/revenue concepts/net-revenue\n\n" +
+			"  # Preview the move and rewrites without touching disk\n" +
+			"  okfctl node mv concepts/revenue concepts/net-revenue --dry-run",
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			b, err := okf.Load(mvBundle)
 			if err != nil {
@@ -155,7 +187,7 @@ func newNodeCmd() *cobra.Command {
 			return nil
 		},
 	}
-	mvC.Flags().StringVar(&mvBundle, "bundle", ".", "bundle directory")
+	mvC.Flags().StringVar(&mvBundle, "bundle", ".", "bundle directory to operate on")
 	mvC.Flags().BoolVar(&mvDry, "dry-run", false, "print the plan without touching disk")
 	node.AddCommand(mvC)
 
@@ -164,7 +196,16 @@ func newNodeCmd() *cobra.Command {
 	rmC := &cobra.Command{
 		Use:   "rm <path>",
 		Short: "Remove a node and report resulting orphans",
-		Args:  cobra.ExactArgs(1),
+		Long: "rm deletes a node and reports which nodes are orphaned as a result (left with no " +
+			"inbound links, OKF §6), then maintains log.md and index.md. The .md suffix is " +
+			"optional. It does NOT rewrite links that pointed at the removed node — those become " +
+			"broken links that `okfctl lint` will report, by design. --dry-run reports the plan " +
+			"and writes nothing.",
+		Example: "  # Remove a node and see resulting orphans\n" +
+			"  okfctl node rm concepts/deprecated\n\n" +
+			"  # Preview the removal without touching disk\n" +
+			"  okfctl node rm concepts/deprecated --dry-run",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			b, err := okf.Load(rmBundle)
 			if err != nil {
@@ -192,7 +233,7 @@ func newNodeCmd() *cobra.Command {
 			return nil
 		},
 	}
-	rmC.Flags().StringVar(&rmBundle, "bundle", ".", "bundle directory")
+	rmC.Flags().StringVar(&rmBundle, "bundle", ".", "bundle directory to operate on")
 	rmC.Flags().BoolVar(&rmDry, "dry-run", false, "print the plan without touching disk")
 	node.AddCommand(rmC)
 
@@ -200,7 +241,17 @@ func newNodeCmd() *cobra.Command {
 	editC := &cobra.Command{
 		Use:   "edit <path>",
 		Short: "Open a node in $EDITOR, then re-validate on return",
-		Args:  cobra.ExactArgs(1),
+		Long: "edit opens a node in your editor ($OKFCTL_EDITOR, then $VISUAL, then $EDITOR, then " +
+			"vi) and, on return, re-validates the whole bundle against the spec floor (OKF §7). If " +
+			"validation fails, the findings are printed and the command exits non-zero. On success " +
+			"it refreshes the node's `modified` timestamp (`created` is never touched), appends to " +
+			"log.md, and regenerates index.md — this is how `modified` stays honest for the " +
+			"okfctl-mediated edit path. Reserved files (index.md, log.md) cannot be edited this way.",
+		Example: "  # Edit a node, then re-validate on save\n" +
+			"  okfctl node edit concepts/revenue\n\n" +
+			"  # Use a specific editor for this edit\n" +
+			"  OKFCTL_EDITOR=\"code --wait\" okfctl node edit concepts/revenue",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p := withMD(args[0])
 			if okf.IsReservedPath(p) {
@@ -242,7 +293,7 @@ func newNodeCmd() *cobra.Command {
 			return nil
 		},
 	}
-	editC.Flags().StringVar(&editBundle, "bundle", ".", "bundle directory")
+	editC.Flags().StringVar(&editBundle, "bundle", ".", "bundle directory to operate on")
 	node.AddCommand(editC)
 
 	node.AddCommand(newNodeRefreshCmd())
@@ -279,6 +330,12 @@ func newNodeRefreshCmd() *cobra.Command {
 			"migration date — is REFUSED unless --yes is given. The right fix in that case " +
 			"is to list the mechanical commit in " + okf.DriftIgnoreRevsFile + " (like " +
 			"`git blame --ignore-revs-file`), so drift walks back to the prior real commit.",
+		Example: "  # Fix every drifting node in the bundle\n" +
+			"  okfctl node refresh ./bundles/knowledge\n\n" +
+			"  # Preview the plan without writing anything\n" +
+			"  okfctl node refresh --dry-run ./bundles/knowledge\n\n" +
+			"  # Fix a single node\n" +
+			"  okfctl node refresh ./bundles/knowledge concepts/income-statement.md",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := args[0]
@@ -375,6 +432,12 @@ func newNodePromoteCmd() *cobra.Command {
 			"dir/ spellings), the real index.md is regenerated with no frontmatter, and log.md is " +
 			"appended. The bundle-root index is left alone. --dry-run lists every move and rewrite " +
 			"and writes nothing.",
+		Example: "  # Promote every directory-as-concept index in the bundle\n" +
+			"  okfctl node promote ./bundles/knowledge\n\n" +
+			"  # Preview the moves and inbound-link rewrites without writing\n" +
+			"  okfctl node promote --dry-run ./bundles/knowledge\n\n" +
+			"  # Use a fixed basename for every promoted concept file\n" +
+			"  okfctl node promote --name overview ./bundles/knowledge",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := args[0]

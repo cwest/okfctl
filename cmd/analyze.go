@@ -34,7 +34,7 @@ func newAnalyzeCmd() *cobra.Command {
 	var noIgnore *bool
 	c := &cobra.Command{
 		Use:   "analyze [bundle-dir]",
-		Short: "Report where a bundle is WEAK: freshness, clusters, gaps, connectivity, structure",
+		Short: "Report where a bundle is weak (freshness, gaps, connectivity, clusters, structure)",
 		Long: "analyze is a proactive curation REPORT, not a gate. Where lint answers " +
 			"\"is this corpus broken?\" (a CI gate: --strict exits non-zero), analyze answers " +
 			"\"where is this corpus weak?\" across five dimensions — coverage gaps, freshness/" +
@@ -45,6 +45,12 @@ func newAnalyzeCmd() *cobra.Command {
 			"succeeded, not whether the corpus is perfect. There is deliberately no --strict flag; " +
 			"use lint --strict for a gate.\n\n" +
 			"Pass --json for the machine path (the curation sweep files research cards from it).",
+		Example: "  # Human-readable weakness report for the current bundle\n" +
+			"  okfctl analyze\n\n" +
+			"  # Report on a bundle elsewhere\n" +
+			"  okfctl analyze ./bundles/knowledge\n\n" +
+			"  # Machine-readable report (the curation sweep files research cards from this)\n" +
+			"  okfctl analyze --json ./bundles/knowledge",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."

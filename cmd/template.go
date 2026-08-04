@@ -32,7 +32,16 @@ func newTemplateCmd() *cobra.Command {
 	templateCmd.AddCommand(&cobra.Command{
 		Use:   "list [bundle-dir]",
 		Short: "List the type templates a bundle declares (target type, required fields, body sections)",
-		Args:  cobra.MaximumNArgs(1),
+		Long: "template list shows the type templates a bundle declares. Templates are okfctl's " +
+			"opt-in team overlay (PRD §9): they are authored as ordinary OKF nodes whose type is " +
+			"`Type Template`, NOT a spec concept, and they never affect the spec floor. Each row " +
+			"names a target type and how many required fields and body sections its template " +
+			"defines. Read-only. A bundle with no templates prints a notice and exits zero.",
+		Example: "  # List templates declared by the current bundle\n" +
+			"  okfctl template list\n\n" +
+			"  # List templates in a bundle elsewhere\n" +
+			"  okfctl template list ./bundles/knowledge",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			tmpls, err := loadTemplates(args)
 			if err != nil {
@@ -59,7 +68,17 @@ func newTemplateCmd() *cobra.Command {
 	templateCmd.AddCommand(&cobra.Command{
 		Use:   "show <target-type> [bundle-dir]",
 		Short: "Show a single type template's required/recommended fields and body sections",
-		Args:  cobra.RangeArgs(1, 2),
+		Long: "template show prints one type template in full: its target type, source node, and " +
+			"its required fields, recommended fields, and body sections. Templates are okfctl's " +
+			"opt-in team overlay (PRD §9), authored as ordinary OKF nodes — this command only " +
+			"reads them and never mutates the bundle. It errors if no template governs the given " +
+			"type. See what `okfctl validate --templates` will enforce and what `node new` will " +
+			"scaffold.",
+		Example: "  # Show the template that governs the \"Runbook\" type\n" +
+			"  okfctl template show Runbook\n\n" +
+			"  # Show a template in a bundle elsewhere\n" +
+			"  okfctl template show Runbook ./bundles/knowledge",
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := args[0]
 			tmpls, err := loadTemplates(args[1:])

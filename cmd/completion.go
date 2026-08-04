@@ -20,8 +20,18 @@ import (
 
 func newCompletionCmd(root *cobra.Command) *cobra.Command {
 	return &cobra.Command{
-		Use:                   "completion [bash|zsh|fish]",
-		Short:                 "Generate a shell completion script",
+		Use:   "completion [bash|zsh|fish]",
+		Short: "Generate a shell completion script",
+		Long: "completion writes a shell completion script for okfctl to stdout. Source it (or " +
+			"install it where your shell loads completions) to get tab-completion of commands and " +
+			"flags. Supported shells: bash, zsh, fish. It prints the script only — it does not " +
+			"install anything itself.",
+		Example: "  # Load bash completions for the current shell\n" +
+			"  source <(okfctl completion bash)\n\n" +
+			"  # Install zsh completions\n" +
+			"  okfctl completion zsh > \"${fpath[1]}/_okfctl\"\n\n" +
+			"  # Install fish completions\n" +
+			"  okfctl completion fish > ~/.config/fish/completions/okfctl.fish",
 		Args:                  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 		ValidArgs:             []string{"bash", "zsh", "fish"},
 		DisableFlagsInUseLine: true,
