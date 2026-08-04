@@ -1,0 +1,24 @@
+{
+  "name": "okfctl-site",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "prebuild": "node scripts/prepare-content.mjs",
+    "dev": "npm run prebuild && astro dev",
+    "start": "npm run prebuild && astro dev",
+    "build": "npm run prebuild && astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.41.6",
+    "@astrojs/starlight-tailwind": "5.0.0",
+    "@tailwindcss/vite": "4.3.3",
+    "astro": "7.1.6",
+    "tailwindcss": "4.3.3"
+  }
+}
