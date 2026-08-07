@@ -359,6 +359,7 @@ const goInstallCmd = version.tag
               <button class="term-tab" role="tab" aria-selected="true" aria-controls="t-cold" id="tab-cold" type="button">cold&nbsp;start</button>
               <button class="term-tab" role="tab" aria-selected="false" aria-controls="t-val" id="tab-val" type="button" tabindex="-1">validate&nbsp;·&nbsp;failing</button>
               <button class="term-tab" role="tab" aria-selected="false" aria-controls="t-lint" id="tab-lint" type="button" tabindex="-1">lint&nbsp;--strict</button>
+              <button class="term-tab" role="tab" aria-selected="false" aria-controls="t-eval" id="tab-eval" type="button" tabindex="-1">eval&nbsp;transparency</button>
               <button class="term-tab" role="tab" aria-selected="false" aria-controls="t-scale" id="tab-scale" type="button" tabindex="-1">at&nbsp;scale</button>
             </div>
 
@@ -405,6 +406,25 @@ const goInstallCmd = version.tag
 <span class="bad">okfctl: 1 lint finding(s)</span>
 <span class="p">$</span> <span class="c">echo</span> $?
 <span class="bad">1</span>   <span class="cm"># the same finding, now a CI gate</span></pre></div>
+
+              <div role="tabpanel" id="t-eval" aria-labelledby="tab-eval" tabindex="0" hidden><pre>
+<span class="cm"># the first gate that touches provenance, not just format:</span>
+<span class="cm"># grade-missing · grade-vocabulary · uncited · citation-unresolved</span>
+<span class="p">$</span> <span class="c">okfctl eval transparency</span> <span class="f">mykb</span>
+<span class="o">uncited: concepts/aging.md carries no citations of any kind</span>
+<span class="o">grade-missing: concepts/aging.md has neither an epistemic nor an authority grade</span>
+<span class="p">$</span> <span class="c">echo</span> $?
+<span class="ok">0</span>   <span class="cm"># advisory by default, like lint</span>
+
+<span class="p">$</span> <span class="c">okfctl eval transparency</span> <span class="f">--strict</span> <span class="f">mykb</span>
+<span class="bad">okfctl: 2 transparency finding(s)</span>
+<span class="p">$</span> <span class="c">echo</span> $?
+<span class="bad">1</span>   <span class="cm"># the CI gate</span>
+
+<span class="cm"># Transparency is the one TACA dimension a no-model tool can gate.</span>
+<span class="cm"># Accuracy, Calibration and Alignment are SCAFFOLDED for a human</span>
+<span class="cm"># or an out-of-band judge — okfctl never computes a truth verdict.</span>
+<span class="p">$</span> <span class="c">okfctl eval sample</span> <span class="f">--changed-since</span> <span class="f">origin/main</span> <span class="f">mykb</span></pre></div>
 
               <div role="tabpanel" id="t-scale" aria-labelledby="tab-scale" tabindex="0" hidden><pre>
 <span class="cm"># a real corpus, not a fixture</span>
@@ -709,6 +729,7 @@ const goInstallCmd = version.tag
           "tab-cold": [0, "clean cold start"],
           "tab-val": [1, "spec-floor violation — always fatal"],
           "tab-lint": [1, "advisory run exits 0; --strict exits 1"],
+          "tab-eval": [1, "provenance gate — advisory exits 0; --strict exits 1"],
           "tab-scale": [0, "a real corpus, not a fixture"],
         };
         const select = (id) => {
