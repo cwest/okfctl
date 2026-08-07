@@ -82,6 +82,7 @@ the [command reference](docs/commands/README.md).
 | [`log`](docs/commands/README.md#okfctl-log) | Append (`append`) and print (`show`) the reserved `log.md` change history. |
 | [`validate`](docs/commands/README.md#okfctl-validate) | Check a bundle against the OKF spec floor; optionally overlay type-templates. |
 | [`lint`](docs/commands/README.md#okfctl-lint) | Report curation-health findings (orphans, broken links, coverage gaps); `--strict` for CI. |
+| [`eval`](docs/commands/README.md#okfctl-eval) | Measure KB-node trustworthiness (TACA): a deterministic Transparency gate + a spot-check sampler for Accuracy/Alignment/Calibration. |
 | [`analyze`](docs/commands/README.md#okfctl-analyze) | Report where a bundle is weak: freshness, clusters, gaps, connectivity, structure. |
 | [`search`](docs/commands/README.md#okfctl-search) | Core lexical + graph-neighborhood search (stdlib-only, no model or index). |
 | [`graph`](docs/commands/README.md#okfctl-graph) | Export the concept-node link graph (`--format json\|dot`). |
