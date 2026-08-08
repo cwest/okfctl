@@ -156,3 +156,21 @@ test("no published HTML links to a _generated path (redirect stubs excepted)", a
     `these published pages still link to a _generated path: ${offenders.join(", ")}`,
   );
 });
+
+test("no published text asset links to a _generated path", async () => {
+  // The HTML sweep above cannot see plain-text assets that GitHub Pages serves
+  // verbatim — llms.txt, robots.txt, and friends. Those carry absolute URLs for
+  // agent consumers, so a stale /_generated/ path there is just as broken as one
+  // in a rendered page, and nothing else in this suite would catch it.
+  const files = (await walk(dist)).filter((f) => f.endsWith(".txt"));
+  const offenders = [];
+  for (const f of files) {
+    const body = await readFile(f, "utf8");
+    if (body.includes("/_generated/")) offenders.push(relative(dist, f));
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `these published text assets still link to a _generated path: ${offenders.join(", ")}`,
+  );
+});
