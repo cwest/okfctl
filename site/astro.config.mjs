@@ -36,9 +36,10 @@ export default defineConfig({
   redirects: LEGACY_TO_CLEAN,
   vite: {
     // Tailwind v4 is wired via its first-party Vite plugin. This is the theming
-    // SEAM for the follow-up design card: starlightTailwind() below tells
-    // Starlight to defer to Tailwind's design tokens. We do NOT restyle here —
-    // the default Starlight look ships as-is.
+    // SEAM the bespoke design restyles through: starlightTailwind() below tells
+    // Starlight to defer to Tailwind's design tokens, and src/styles/global.css
+    // maps Starlight's --sl-* variables onto the shared tokens (src/styles/
+    // tokens.css). See site/README.md for how the palette is changed in one place.
     plugins: [tailwindcss()],
   },
   integrations: [
@@ -91,6 +92,31 @@ export default defineConfig({
           tag: "meta",
           attrs: { name: "twitter:image", content: "https://okfctl.dev/og.png" },
         },
+        // The bespoke web fonts (Newsreader/Inter/JetBrains Mono) load via <link>
+        // in the docs <head> — the same proven path the standalone homepage uses
+        // (src/pages/index.astro). A CSS `@import url(...)` in customCss is dropped
+        // by the Tailwind v4 optimizer: a font @import that follows the Tailwind
+        // rule-emitting @imports is an invalid non-leading @import per the CSS
+        // spec, so the docs would otherwise fall back to system fonts.
+        {
+          tag: "link",
+          attrs: { rel: "preconnect", href: "https://fonts.googleapis.com" },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "preconnect",
+            href: "https://fonts.gstatic.com",
+            crossorigin: true,
+          },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&display=swap",
+          },
+        },
       ],
       social: [
         {
@@ -101,8 +127,8 @@ export default defineConfig({
       ],
       // Tailwind v4 is wired via its first-party Vite plugin (see `vite` above)
       // plus the Starlight Tailwind preset, imported from src/styles/global.css.
-      // This is the theming SEAM for the follow-up design pass; intentionally no
-      // custom palette or component CSS here — the default Starlight look ships.
+      // global.css also imports the bespoke design tokens and the Starlight token
+      // mapping, so the docs pages inherit the homepage's design language.
       customCss: ["./src/styles/global.css"],
       // Pages are sourced from src/content/docs/. The user-facing docs under
       // ../docs are copied in at build time by scripts/prepare-content.mjs

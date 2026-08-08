@@ -43,6 +43,46 @@ sidebar-eligibility, and redirect all follow from that one entry.
 `dist/` — clean routes resolve, `_generated/*` redirects rather than 404s, and
 the sitemap lists only clean URLs.
 
+## Theming: the bespoke design and where the palette lives
+
+The site serves a **bespoke visual design**, not the default Starlight look.
+
+- **The homepage** is a standalone Astro page at `src/pages/index.astro` — it owns
+  the `/` route and carries its own header, footer, and theme toggle. Its layout
+  and components are styled by `src/styles/homepage.css`.
+- **The docs pages** are Starlight, restyled through the CSS-custom-property seam
+  by `src/styles/starlight-theme.css`, which maps Starlight's own `--sl-*` design
+  variables onto the shared tokens. No Starlight component is forked.
+
+### Change the palette in ONE place
+
+`src/styles/tokens.css` is the **single source of truth** for the palette, type
+scale, spacing, and radii. It was extracted unchanged from the design draft
+(HSL ramps authored off four hue anchors; the accent is gold, `--h-accent: 41`,
+chosen to avoid the AI-default violet). Both the homepage and the docs read these
+tokens, so:
+
+- To reshape the brand colour, change a hue anchor (`--h-accent`, `--h-ink`, …)
+  or a ramp value in `tokens.css`. That one edit reflows the homepage and every
+  docs page in both light and dark.
+- **Light and dark are both authored** in `tokens.css` — the light ramp is a
+  distinct design (white surfaces + shadow on a cool paper canvas, accent
+  darkened to ochre for contrast), not an inversion of dark. The theme toggle
+  shares Starlight's `starlight-theme` localStorage key, so a visitor's choice
+  persists across the homepage and the docs.
+
+### Every fact on the page derives — none is hand-typed
+
+- **Version**: the nav chip, the install snippet, and the footer read
+  `src/lib/version.ts` (GitHub releases API at build time). No version string is
+  authored anywhere under `site/`.
+- **Terminal panels / corpus scale**: the homepage shows the stable command
+  *grammar* (`okfctl validate`, `lint --strict`, …), which the command-reference
+  drift gate already proves matches the binary. It deliberately does NOT paste a
+  version-pinned transcript or specific corpus counts — a render-only site does
+  not run the binary to generate content, so those would rot. The qualitative
+  "a real corpus, not a fixture" claim stays; the rotting numbers do not.
+
 ## Version numbers derive, never copied
 
 `src/lib/version.ts` fetches
@@ -60,8 +100,14 @@ npm run build         # runs prebuild, then astro build -> dist/
 ## Theming seam
 
 Tailwind v4 is wired via `@astrojs/starlight-tailwind` + `@tailwindcss/vite`.
-This ships the **default Starlight look**; the bespoke visual design lands as a
-separate change that restyles through this seam. Do not restyle here.
+`src/styles/global.css` is the Starlight `customCss` entry point: it imports the
+design tokens (`tokens.css`) and the Starlight token mapping
+(`starlight-theme.css`). The web fonts load via `<link>` tags in the Starlight
+`head` config in `astro.config.mjs` — a font `@import` in `customCss` follows the
+Tailwind rule-emitting `@import`s and is dropped by the Tailwind v4 optimizer as
+an invalid non-leading `@import`, so docs would fall back to system fonts.
+Restyle by editing those files — see "Theming: the bespoke design and where the
+palette lives" above.
 
 ## Custom domain
 

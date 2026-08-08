@@ -1,0 +1,153 @@
+/*
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   okfctl.dev — design tokens
+   Extracted UNCHANGED from the source design draft; nothing below invents a
+   value. Palette is authored in HSL off four hue anchors. The accent is gold
+   (41°) — an archive/provenance hue, deliberately distant from both the
+   AI-default violet and from every semantic state colour used in terminal
+   output.
+
+   THIS IS THE ONE PLACE THE PALETTE LIVES. To reshape the whole site's colour,
+   change a hue anchor (--h-accent, --h-ink, …) or a ramp value here; every
+   surface — the bespoke homepage AND the Starlight docs pages — reads these
+   custom properties. See ./starlight-theme.css for how the docs chrome maps
+   Starlight's own variables onto these tokens.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root{
+  /* ── hue anchors ─────────────────────────────────────────────────────── */
+  --h-ink: 222;        /* neutral ramp: cool ink, never pure grey            */
+  --h-accent: 41;      /* gold — brand signal                               */
+  --h-ok: 162;         /* conformance pass                                  */
+  --h-fail: 356;       /* conformance fail                                  */
+  --h-info: 199;       /* paths, references                                 */
+
+  /* ── type scale · major third (1.25) off a 16px base ─────────────────── */
+  --f--2: 0.6875rem;   /* 11px  · eyebrow, chip                             */
+  --f--1: 0.8125rem;   /* 13px  · mono body, caption                        */
+  --f-0:  1rem;        /* 16px  · body                                      */
+  --f-1:  1.25rem;     /* 20px  · lede                                      */
+  --f-2:  1.5625rem;   /* 25px  · h3                                        */
+  --f-3:  1.9531rem;   /* 31px  · h2 small                                  */
+  --f-4:  2.4414rem;   /* 39px  · h2                                        */
+  --f-5:  3.0518rem;   /* 49px  · h1 small                                  */
+  --f-6:  3.8147rem;   /* 61px  · h1                                        */
+  --lh-tight: 1.04; --lh-snug: 1.22; --lh-body: 1.65; --lh-mono: 1.7;
+  --tr-tight: -0.024em; --tr-snug: -0.014em; --tr-caps: 0.15em; --tr-mono: -0.005em;
+
+  --font-display: "Newsreader", ui-serif, Georgia, serif;
+  --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ── spacing · 4px base, geometric growth ────────────────────────────── */
+  --s-1: 0.25rem; --s-2: 0.5rem;  --s-3: 0.75rem; --s-4: 1rem;   --s-5: 1.5rem;
+  --s-6: 2rem;    --s-7: 3rem;    --s-8: 4rem;    --s-9: 6rem;   --s-10: 8rem;
+  --s-11: 11rem;
+
+  /* ── radii · restrained ladder ───────────────────────────────────────── */
+  --r-sm: 4px; --r-md: 8px; --r-lg: 12px; --r-xl: 20px; --r-full: 999px;
+
+  --measure: 64ch;
+  --rule: 1px;
+  --ease: cubic-bezier(.2,.7,.3,1);
+  --dur: 220ms;
+  --gutter: clamp(1.25rem, 4vw, 3.5rem);
+  --page: 1240px;
+}
+
+/* ── dark · the primary target ─────────────────────────────────────────── */
+:root, [data-theme="dark"]{
+  color-scheme: dark;
+  --bg:          hsl(var(--h-ink) 26% 6.5%);
+  --bg-sunken:   hsl(var(--h-ink) 30% 4.5%);
+  --surface:     hsl(var(--h-ink) 22% 9.5%);
+  --surface-2:   hsl(var(--h-ink) 19% 13%);
+  --surface-3:   hsl(var(--h-ink) 17% 17%);
+  --border:      hsl(var(--h-ink) 16% 19%);
+  --border-soft: hsl(var(--h-ink) 18% 14%);
+  --border-loud: hsl(var(--h-ink) 14% 30%);
+  --fg:          hsl(var(--h-ink) 24% 96%);
+  --fg-muted:    hsl(var(--h-ink) 12% 70%);
+  --fg-subtle:   hsl(var(--h-ink) 11% 62%);
+  --fg-faint:    hsl(var(--h-ink) 12% 50%);
+  --accent:      hsl(var(--h-accent) 94% 60%);
+  --accent-dim:  hsl(var(--h-accent) 60% 24%);
+  --accent-wash: hsl(var(--h-accent) 90% 60% / 0.10);
+  --on-accent:   hsl(var(--h-accent) 92% 8%);
+  --ok:          hsl(var(--h-ok) 58% 52%);
+  --ok-wash:     hsl(var(--h-ok) 58% 52% / 0.12);
+  --fail:        hsl(var(--h-fail) 78% 68%);
+  --fail-wash:   hsl(var(--h-fail) 78% 62% / 0.12);
+  --info:        hsl(var(--h-info) 74% 66%);
+  --term-bg:     hsl(var(--h-ink) 32% 5%);
+  --term-chrome: hsl(var(--h-ink) 24% 9%);
+  --term-fg:     hsl(var(--h-ink) 18% 88%);
+  --grid:        hsl(var(--h-ink) 16% 19% / 0.55);
+  --elev: none;
+  --elev-lg: 0 24px 60px -30px hsl(var(--h-ink) 60% 2% / 0.9);
+}
+
+/* ── light · authored, not inverted ────────────────────────────────────── *
+   Different model, on purpose: light separates with shadow + white surfaces
+   on a cool paper canvas; dark separates with hairlines + lifted surfaces.
+   The accent darkens to ochre for text contrast; terminals stay ink, because
+   a terminal is a terminal in either flavour.                              */
+[data-theme="light"]{
+  color-scheme: light;
+  --bg:          hsl(var(--h-ink) 34% 97.5%);
+  --bg-sunken:   hsl(var(--h-ink) 30% 94.5%);
+  --surface:     hsl(0 0% 100%);
+  --surface-2:   hsl(var(--h-ink) 34% 98.5%);
+  --surface-3:   hsl(var(--h-ink) 28% 95%);
+  --border:      hsl(var(--h-ink) 20% 87%);
+  --border-soft: hsl(var(--h-ink) 22% 91%);
+  --border-loud: hsl(var(--h-ink) 16% 74%);
+  --fg:          hsl(var(--h-ink) 34% 12%);
+  --fg-muted:    hsl(var(--h-ink) 14% 36%);
+  --fg-subtle:   hsl(var(--h-ink) 12% 43%);
+  --fg-faint:    hsl(var(--h-ink) 12% 52%);
+  --accent:      hsl(34 92% 32%);
+  --accent-dim:  hsl(var(--h-accent) 80% 82%);
+  --accent-wash: hsl(var(--h-accent) 90% 50% / 0.13);
+  --on-accent:   hsl(var(--h-accent) 96% 99%);
+  --ok:          hsl(var(--h-ok) 78% 26%);
+  --ok-wash:     hsl(var(--h-ok) 60% 40% / 0.13);
+  --fail:        hsl(var(--h-fail) 72% 42%);
+  --fail-wash:   hsl(var(--h-fail) 76% 55% / 0.11);
+  --info:        hsl(var(--h-info) 82% 32%);
+  --grid:        hsl(var(--h-ink) 20% 80% / 0.6);
+  --elev: 0 1px 2px hsl(var(--h-ink) 30% 40% / 0.06), 0 4px 12px -6px hsl(var(--h-ink) 30% 40% / 0.10);
+  --elev-lg: 0 2px 4px hsl(var(--h-ink) 30% 40% / 0.05), 0 24px 48px -24px hsl(var(--h-ink) 40% 30% / 0.20);
+}
+/* Light mode fills with the DARK ochre and reverses the label to near-white:
+   a bright-gold pill with dark text measures only 2.92:1 on this canvas. */
+[data-theme="light"]{ --accent-fill: hsl(34 92% 32%); }
+:root{ --accent-fill: var(--accent); }
+
+/* ── terminal-surface ink · fixed across both themes ───────────────────── *
+   Terminals stay dark in light mode by design, so the semantic colours used
+   INSIDE them cannot follow the theme — light mode's darkened ochre measures
+   3.04:1 on a near-black panel. These four are pinned to the dark-flavour
+   values and are the only colours permitted on a --term-bg surface.        */
+:root, [data-theme="light"], [data-theme="dark"]{
+  --t-accent: hsl(var(--h-accent) 94% 60%);   /*  9.35:1 on --term-bg */
+  --t-ok:     hsl(var(--h-ok) 58% 52%);
+  --t-fail:   hsl(var(--h-fail) 78% 68%);
+  --t-info:   hsl(var(--h-info) 74% 66%);
+  --t-dim:    hsl(var(--h-ink) 12% 62%);      /*  6.89:1 — stdout      */
+  --t-cm:     hsl(var(--h-ink) 12% 55%);      /*  4.86:1 — comments    */
+}

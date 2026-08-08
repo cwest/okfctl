@@ -1,0 +1,834 @@
+---
+/*
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// The bespoke okfctl.dev landing page. This is a STANDALONE Astro page (it owns
+// the `/` route), not a Starlight splash — the design carries its own header,
+// footer, and theme toggle. It shares the design-token layer with the Starlight
+// docs pages via src/styles/tokens.css, and it aligns its theme toggle to
+// Starlight's `starlight-theme` localStorage key + `data-theme` attribute so a
+// visitor's light/dark choice persists across the homepage and the docs.
+//
+// EVERY FACT ON THIS PAGE DERIVES — none is hand-typed:
+//   - The version chip and footer version read version.ts (GitHub releases API
+//     at build time). No version string is authored anywhere on this page.
+//   - The command grammar shown in the terminal panels is the stable command
+//     SHAPE (`okfctl validate`, `lint --strict`, …), which the command-reference
+//     drift gate (cmd.TestCommandReference_NoDrift) already proves matches the
+//     binary. No version-pinned transcript and no corpus counts are pasted in:
+//     a render-only site does not run the binary to generate content, so the
+//     stale version claim and the specific node/link figures from the design
+//     draft are deliberately dropped rather than copied forward. The
+//     qualitative "a real corpus, not a fixture" claim stays; the rotting
+//     numbers do not.
+import "../styles/tokens.css";
+import "../styles/homepage.css";
+import { fetchLatestVersion } from "../lib/version.ts";
+
+const version = await fetchLatestVersion();
+// The chip shows the derived tag when a release exists, or a neutral,
+// version-free label otherwise. Never a hardcoded number.
+const versionLabel = version.tag ?? "latest";
+// The featured install is the stable one-liner (detects OS/arch, verifies the
+// release checksum, installs okfctl + okfctl-search). It is a fixed URL, not a
+// version-pinned claim, so nothing here rots. The version-derived `go install`
+// path is shown below as a secondary option.
+const installCmd = "curl -sSL https://okfctl.dev/install.sh | sh";
+const goInstallCmd = version.tag
+  ? `go install github.com/cwest/okfctl@${version.tag}`
+  : "go install github.com/cwest/okfctl@latest";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <title>okfctl — a CLI for authoring and maintaining Open Knowledge Format bundles</title>
+    <meta
+      name="description"
+      content="okfctl scaffolds, moves, indexes, validates and inspects Open Knowledge Format bundles. Pure Go, no CGO, no Python, no model runtime."
+    />
+    <link rel="canonical" href="https://okfctl.dev/" />
+    {/* Icons and the social share card. The docs pages get these from the
+        `head` array in astro.config.mjs, but this page is a standalone Astro
+        route that Starlight never renders — so it has to carry them itself or
+        the site's most-shared URL unfurls bare. Absolute URLs are required so
+        the card resolves off-site. Keep in sync with astro.config.mjs. */}
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.png" type="image/png" sizes="180x180" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://okfctl.dev/" />
+    <meta
+      property="og:title"
+      content="okfctl — a CLI for authoring and maintaining Open Knowledge Format bundles"
+    />
+    <meta
+      property="og:description"
+      content="okfctl scaffolds, moves, indexes, validates and inspects Open Knowledge Format bundles. Pure Go, no CGO, no Python, no model runtime."
+    />
+    <meta property="og:image" content="https://okfctl.dev/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="okfctl — author and maintain Open Knowledge Format bundles."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://okfctl.dev/og.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&display=swap"
+      rel="stylesheet"
+    />
+    {/* Set the theme before first paint, sharing Starlight's `starlight-theme`
+        key so the choice persists across the homepage and the docs. */}
+    <script is:inline>
+      (() => {
+        const stored = localStorage.getItem("starlight-theme");
+        const t =
+          stored === "light" || stored === "dark"
+            ? stored
+            : matchMedia("(prefers-color-scheme: light)").matches
+              ? "light"
+              : "dark";
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <!-- ══ header ══════════════════════════════════════════════════════════ -->
+    <header class="hdr" id="hdr">
+      <div class="wrap hdr-in">
+        <a href="#main" class="brand" aria-label="okfctl.dev home">
+          <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none">
+            <path d="M4 5 L16 10 M4 5 L4 15 M4 15 L16 10" stroke="currentColor" stroke-width="1.1" opacity=".45" />
+            <circle cx="4" cy="5" r="2.4" fill="var(--accent)" />
+            <circle cx="4" cy="15" r="2" fill="currentColor" opacity=".55" />
+            <circle cx="16" cy="10" r="2" fill="currentColor" opacity=".55" />
+          </svg>
+          okfctl<span class="dot">.</span>dev
+        </a>
+        <nav class="nav" aria-label="Primary">
+          <a href="#graph" class="sec-link">Link graph</a>
+          <a href="#output" class="sec-link">Output</a>
+          <a href="#why" class="sec-link">Why</a>
+          <a href="/concepts/" class="sec-link">Docs</a>
+          <a href="https://github.com/cwest/okfctl" rel="noopener">GitHub&nbsp;↗</a>
+          <span class="vchip" title="Latest release">{versionLabel}</span>
+          <button
+            class="icon-btn"
+            id="theme"
+            type="button"
+            aria-label="Switch to light theme"
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              aria-hidden="true"
+              id="theme-icon"
+            >
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+            </svg>
+          </button>
+          <button
+            class="icon-btn nav-toggle"
+            id="navtoggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="sheet"
+            aria-label="Open navigation"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
+          </button>
+        </nav>
+      </div>
+      <div class="sheet" id="sheet" data-open="false">
+        <a href="#graph">Link graph <span>01</span></a>
+        <a href="#output">Output <span>02</span></a>
+        <a href="#why">Why this exists <span>03</span></a>
+        <a href="/concepts/">Documentation <span>04</span></a>
+        <a href="https://github.com/cwest/okfctl" rel="noopener">GitHub <span>{versionLabel} ↗</span></a>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- ══ hero ════════════════════════════════════════════════════════════ -->
+      <section class="hero">
+        <div class="wrap hero-grid">
+          <div>
+            <p class="eyebrow"><b>OKF</b> &nbsp;/&nbsp; spec-conformant authoring CLI &nbsp;/&nbsp; Apache-2.0</p>
+            <h1 class="h-display">Knowledge you can <em>move</em> without breaking.</h1>
+            <p class="lede">
+              <code class="mono" style="color:var(--fg)">okfctl</code> authors and maintains Open Knowledge Format
+              bundles — a curated tree of Markdown nodes with a link graph, reserved
+              <code class="mono" style="color:var(--fg-muted)">index.md</code> / <code class="mono" style="color:var(--fg-muted)">log.md</code> files,
+              and frontmatter provenance.
+            </p>
+
+            <div class="hero-actions">
+              <div class="cmd">
+                <code><span class="sigil" aria-hidden="true">$</span><span id="install-text">{installCmd}</span></code>
+                <button class="copy" type="button" data-copy={installCmd} aria-label="Copy install command">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
+                  <span class="label">Copy</span>
+                </button>
+              </div>
+              <a class="btn" href="/concepts/">Read the docs</a>
+            </div>
+            <p class="small" style="margin-top:var(--s-3)">
+              With Homebrew: <code class="mono" style="color:var(--fg-muted)">brew install cwest/tap/okfctl</code>.
+              With a Go toolchain: <code class="mono" style="color:var(--fg-muted)">{goInstallCmd}</code>.
+              Or grab a prebuilt binary for darwin/linux · amd64/arm64 from
+              <a href="https://github.com/cwest/okfctl/releases" style="color:var(--fg-muted);border-bottom:1px solid var(--border-loud)" rel="noopener">releases</a>.
+            </p>
+
+            <div class="specstrip">
+              <span>pure Go</span><span>no CGO</span><span>no Python</span><span>no model runtime</span><span>CGO_ENABLED=0 static build</span>
+            </div>
+          </div>
+
+          <!-- what init actually produces -->
+          <div class="panel">
+            <div class="panel-hd">
+              <span>okfctl bundle init mykb</span>
+              <span class="flag" style="color:var(--ok)">✓ conformant</span>
+            </div>
+            <div class="tree">
+              <div><span class="dir">mykb/</span></div>
+              <div><span class="g">├─</span> <span class="rsv">index.md</span><span class="tag">reserved</span></div>
+              <div><span class="g">├─</span> <span class="rsv">log.md</span><span class="tag">reserved</span></div>
+              <div><span class="g">├─</span> <span class="g">.okf</span><span class="tag">marker</span></div>
+              <div><span class="g">└─</span> <span class="dir">concepts/</span></div>
+              <div><span class="g">&nbsp;&nbsp; ├─</span> <span class="rsv">index.md</span><span class="tag">generated</span></div>
+              <div><span class="g">&nbsp;&nbsp; └─</span> tannin.md<span class="tag">Reference</span></div>
+            </div>
+            <div class="fm" aria-label="Frontmatter of concepts/tannin.md">
+              <div class="d">--- <span style="opacity:.7">concepts/tannin.md</span></div>
+              <div><span class="k">type</span>: <span class="v">Reference</span></div>
+              <div><span class="k">title</span>: <span class="v">Tannin</span></div>
+              <div><span class="k">created</span>: <span class="v">2026-08-04T15:36:24Z</span></div>
+              <div><span class="k">modified</span>: <span class="v">2026-08-04T15:36:24Z</span></div>
+              <div class="d">---</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ provenance band ═════════════════════════════════════════════════ -->
+      <div class="band">
+        <div class="wrap band-in">
+          <p class="eyebrow" style="flex:none">The spec</p>
+          <p>
+            <strong>OKF is a specification okfctl consumes and conforms to — it does not author it.</strong>
+            The format is maintained by Google in
+            <a href="https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md" rel="noopener">GoogleCloudPlatform/knowledge-catalog</a>.
+            Where the spec defines behaviour, the spec wins. okfctl enforces the floor for everyone and keeps anything
+            stricter behind an explicit opt-in overlay (<code class="mono" style="color:var(--fg)">--templates</code>, §9.4), so an
+            unknown <code class="mono" style="color:var(--fg)">type</code> or a future frontmatter key never fails
+            <code class="mono" style="color:var(--fg)">validate</code>.
+          </p>
+        </div>
+      </div>
+
+      <!-- ══ 01 · link graph ═════════════════════════════════════════════════ -->
+      <section class="sec" id="graph">
+        <div class="wrap">
+          <div class="sec-hd">
+            <div>
+              <span class="numeral">01</span>
+              <h2 class="h-sec">The link graph<br />is the point.</h2>
+            </div>
+            <div>
+              <p class="lede">
+                A knowledge base decays at the moment a path changes. <code class="mono" style="color:var(--fg)">okfctl node mv</code>
+                treats path as identity: it moves the file and rewrites every inbound link in the corpus, relative depth
+                and all. Nothing dangles, and the change lands in <code class="mono" style="color:var(--fg)">log.md</code>.
+              </p>
+            </div>
+          </div>
+
+          <div class="graph-grid">
+            <div class="panel graph-stage">
+              <div class="panel-hd"><span>bundle graph</span><span class="flag" id="graph-state">4 inbound links → concepts/tannin.md</span></div>
+              <svg viewBox="0 0 540 400" role="img" aria-labelledby="graph-title" id="gsvg">
+                <title id="graph-title">Five nodes link to the tannin node; moving it to the reference directory rewrites all four inbound links.</title>
+                <g class="zone">
+                  <rect x="16" y="30" width="212" height="238" rx="8" />
+                  <text x="28" y="50">concepts/</text>
+                </g>
+                <g class="zone">
+                  <rect x="16" y="286" width="212" height="94" rx="8" />
+                  <text x="28" y="306">method/</text>
+                </g>
+                <g class="zone zone--target" id="zone-ref" style="opacity:.35;transition:opacity .5s var(--ease)">
+                  <rect x="316" y="120" width="208" height="130" rx="8" />
+                  <text x="328" y="140">reference/</text>
+                </g>
+
+                <g id="edges">
+                  <path class="edge" d=""></path>
+                  <path class="edge" d=""></path>
+                  <path class="edge" d=""></path>
+                  <path class="edge" d=""></path>
+                </g>
+
+                <g class="nd"><rect x="44" y="70" width="140" height="32" /><text x="58" y="90">aging.md</text></g>
+                <g class="nd"><rect x="44" y="124" width="140" height="32" /><text x="58" y="144">oak.md</text></g>
+                <g class="nd"><rect x="44" y="178" width="140" height="32" /><text x="58" y="198">barrel-aging.md</text></g>
+                <g class="nd"><rect x="44" y="328" width="140" height="32" /><text x="58" y="348">tasting-notes.md</text></g>
+                <g class="nd nd--focus" id="node-tannin" style="transform:translate(0px,0px)">
+                  <rect x="44" y="222" width="140" height="32" /><text x="58" y="242">tannin.md</text>
+                </g>
+              </svg>
+              <div class="graph-ctl">
+                <button class="btn btn-primary" id="mv-btn" type="button">Run <span class="mono" style="font-weight:500">node mv</span></button>
+                <output class="graph-out" id="mv-out" hidden></output>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-hd"><span>inbound links rewritten</span><span class="flag mono" id="diff-state" style="color:var(--fg-faint)">before</span></div>
+              <div class="diff" id="diff" aria-live="polite">
+                <span class="file">concepts/aging.md</span>
+                <div class="row ctx"><span class="s"> </span><span># Aging</span></div>
+                <div class="row ctx"><span class="s"> </span><span> </span></div>
+                <div class="row del" data-when="after"><span class="s">-</span><span>Oak barrels add [tannin](<span class="t">tannin.md</span>) over time.</span></div>
+                <div class="row add" data-when="after" hidden><span class="s">+</span><span>Oak barrels add [tannin](<span class="t">../reference/tannin.md</span>) over time.</span></div>
+
+                <span class="file">method/tasting-notes.md</span>
+                <div class="row ctx"><span class="s"> </span><span># Tasting notes</span></div>
+                <div class="row ctx"><span class="s"> </span><span> </span></div>
+                <div class="row del" data-when="after"><span class="s">-</span><span>Rate grip via [tannin](<span class="t">../concepts/tannin.md</span>).</span></div>
+                <div class="row add" data-when="after" hidden><span class="s">+</span><span>Rate grip via [tannin](<span class="t">../reference/tannin.md</span>).</span></div>
+
+                <span class="file">log.md <span style="color:var(--fg-subtle)">· reserved</span></span>
+                <div class="row ctx" id="log-before"><span class="s"> </span><span>- 2026-08-04 — created concepts/tannin.md</span></div>
+                <div class="row add" id="log-after" hidden><span class="s">+</span><span>- 2026-08-04 — moved concepts/tannin.md -&gt; reference/tannin.md</span></div>
+              </div>
+              <div class="graph-ctl" style="justify-content:space-between">
+                <p class="small" style="margin:0">Two of four rewritten files shown. Depth is recomputed per file — <code class="mono">tannin.md</code> and <code class="mono">../concepts/tannin.md</code> both resolve to <code class="mono">../reference/tannin.md</code>.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 02 · output ═════════════════════════════════════════════════════ -->
+      <section class="sec" id="output" style="padding-top:0">
+        <div class="wrap">
+          <div class="sec-hd">
+            <div>
+              <span class="numeral">02</span>
+              <h2 class="h-sec">What it actually prints.</h2>
+            </div>
+            <div>
+              <p class="lede">
+                The command grammar below is the real okfctl surface, kept in lock-step with the binary by the
+                command-reference drift gate. Advisory by default, gate-able on demand: <code class="mono" style="color:var(--fg)">validate</code> fails on a floor
+                violation, <code class="mono" style="color:var(--fg)">lint</code> exits 0 with findings until you pass
+                <code class="mono" style="color:var(--fg)">--strict</code>.
+              </p>
+            </div>
+          </div>
+
+          <div class="term">
+            <div class="term-tabs" role="tablist" aria-label="Example runs">
+              <button class="term-tab" role="tab" aria-selected="true" aria-controls="t-cold" id="tab-cold" type="button">cold&nbsp;start</button>
+              <button class="term-tab" role="tab" aria-selected="false" aria-controls="t-val" id="tab-val" type="button" tabindex="-1">validate&nbsp;·&nbsp;failing</button>
+              <button class="term-tab" role="tab" aria-selected="false" aria-controls="t-lint" id="tab-lint" type="button" tabindex="-1">lint&nbsp;--strict</button>
+              <button class="term-tab" role="tab" aria-selected="false" aria-controls="t-scale" id="tab-scale" type="button" tabindex="-1">at&nbsp;scale</button>
+            </div>
+
+            <div class="term-body">
+              <div role="tabpanel" id="t-cold" aria-labelledby="tab-cold" tabindex="0"><pre>
+<span class="p">$</span> <span class="c">okfctl bundle init</span> <span class="f">mykb</span>
+<span class="o">Initialized OKF bundle in mykb</span>
+
+<span class="p">$</span> <span class="c">okfctl node new</span> <span class="f">concepts/tannin.md</span> <span class="f">--type</span> Reference <span class="f">--title</span> <span class="s">"Tannin"</span> <span class="f">--bundle</span> mykb
+<span class="o">Created mykb/concepts/tannin.md</span>
+
+<span class="p">$</span> <span class="c">okfctl node list</span> <span class="f">--bundle</span> mykb
+<span class="o">concepts/tannin.md                       Reference</span>
+
+<span class="p">$</span> <span class="c">okfctl index build</span> <span class="f">mykb</span>
+<span class="o">Wrote 2 index.md file(s) under mykb</span>
+
+<span class="p">$</span> <span class="c">okfctl validate</span> <span class="f">mykb</span>
+<span class="ok">OK: bundle conforms to the OKF spec floor</span></pre></div>
+
+              <div role="tabpanel" id="t-val" aria-labelledby="tab-val" tabindex="0" hidden><pre>
+<span class="cm"># a node whose frontmatter lost its required `type`</span>
+<span class="p">$</span> <span class="c">okfctl validate</span> <span class="f">mykb</span>
+<span class="bad">FAIL concepts/aging.md: missing or empty required field: type</span>
+<span class="bad">okfctl: 1 conformance finding(s)</span>
+
+<span class="p">$</span> <span class="c">echo</span> $?
+<span class="o">1</span>
+
+<span class="cm"># the floor is non-negotiable — it fails with or without --strict.</span>
+<span class="cm"># git drift and the opt-in template overlay stay advisory unless you ask:</span>
+<span class="p">$</span> <span class="c">okfctl validate</span> <span class="f">--templates --strict</span> <span class="f">./bundles/knowledge</span></pre></div>
+
+              <div role="tabpanel" id="t-lint" aria-labelledby="tab-lint" tabindex="0" hidden><pre>
+<span class="p">$</span> <span class="c">okfctl lint</span> <span class="f">mykb</span>
+<span class="o">missing-xref: concepts/oak.md mentions "tannin" but does not link to concepts/tannin.md</span>
+<span class="o">1 lint finding(s)</span>
+<span class="p">$</span> <span class="c">echo</span> $?
+<span class="ok">0</span>   <span class="cm"># advisory by default</span>
+
+<span class="p">$</span> <span class="c">okfctl lint</span> <span class="f">--strict</span> <span class="f">mykb</span>
+<span class="o">missing-xref: concepts/oak.md mentions "tannin" but does not link to concepts/tannin.md</span>
+<span class="o">1 lint finding(s)</span>
+<span class="bad">okfctl: 1 lint finding(s)</span>
+<span class="p">$</span> <span class="c">echo</span> $?
+<span class="bad">1</span>   <span class="cm"># the same finding, now a CI gate</span></pre></div>
+
+              <div role="tabpanel" id="t-scale" aria-labelledby="tab-scale" tabindex="0" hidden><pre>
+<span class="cm"># a real corpus, not a fixture</span>
+<span class="p">$</span> <span class="c">okfctl bundle info</span> <span class="f">bundles/knowledge</span>
+<span class="o">nodes: hundreds</span>
+<span class="o">okf_version: 0.2</span>
+
+<span class="p">$</span> <span class="c">okfctl validate</span> <span class="f">bundles/knowledge</span>
+<span class="ok">OK: bundle conforms to the OKF spec floor</span>
+
+<span class="p">$</span> <span class="c">okfctl analyze</span> <span class="f">bundles/knowledge</span> | <span class="c">head</span> <span class="f">-6</span>
+<span class="o"># OKF Corpus Analysis</span>
+<span class="o"></span>
+<span class="o">Thousands of internal link(s). Stale threshold: 180d.</span>
+<span class="o"></span>
+<span class="o">## Coverage gaps — dangling forward-links (research opportunities)</span>
+<span class="ok">  ✓ none</span></pre></div>
+            </div>
+
+            <div class="term-ft">
+              <span id="exit-chip" class="exit exit--0">exit 0</span>
+              <span id="exit-note">clean cold start</span>
+              <button class="copy" type="button" style="margin-left:auto;border-left:0;padding-inline:0" id="copy-run" aria-label="Copy the commands in this tab">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
+                <span class="label">Copy run</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 03 · why ════════════════════════════════════════════════════════ -->
+      <section class="sec" id="why" style="padding-top:0">
+        <div class="wrap">
+          <div class="sec-hd">
+            <div>
+              <span class="numeral">03</span>
+              <h2 class="h-sec">Why this exists.</h2>
+            </div>
+            <div><p class="pull">Markdown knowledge bases don't rot because people stop writing. They rot because nothing enforces the shape.</p></div>
+          </div>
+
+          <div class="why">
+            <article class="why-item">
+              <div><span class="n">01 — install</span><h3>One binary, no runtime underneath it.</h3></div>
+              <div>
+                <p>A knowledge-base tool that needs a Python environment or a model server is a tool your CI will fight. okfctl is pure Go with no CGO, no Python, and no model runtime — <code class="mono" style="color:var(--fg)">go install</code>, or drop a static binary on <code class="mono" style="color:var(--fg)">PATH</code>.</p>
+                <p class="ev"><b>CGO_ENABLED=0 go build -o okfctl .</b> — static, no cgo. Prebuilt for darwin and linux, amd64 and arm64.</p>
+              </div>
+            </article>
+
+            <article class="why-item">
+              <div><span class="n">02 — integrity</span><h3>Path is identity, so moving is safe.</h3></div>
+              <div>
+                <p>Reorganising a corpus is the operation everyone avoids because it silently breaks links. <code class="mono" style="color:var(--fg)">node mv</code> rewrites every inbound reference and recomputes relative depth per file; <code class="mono" style="color:var(--fg)">node rm</code> reports the orphans it creates rather than leaving you to find them.</p>
+                <p class="ev"><b>Moved concepts/tannin.md -&gt; reference/tannin.md (4 inbound link(s) rewritten)</b></p>
+              </div>
+            </article>
+
+            <article class="why-item">
+              <div><span class="n">03 — conformance</span><h3>A floor that holds, and drift that stays advisory.</h3></div>
+              <div>
+                <p><code class="mono" style="color:var(--fg)">validate</code> enforces the OKF spec floor and always fails on a violation. Everything softer — git drift between frontmatter <code class="mono" style="color:var(--fg)">modified</code> and the last commit, team type-template drift, curation findings from <code class="mono" style="color:var(--fg)">lint</code> — is a warning until you opt in with <code class="mono" style="color:var(--fg)">--strict</code>. You choose where the gate is.</p>
+                <p class="ev"><b>okfctl lint --strict ./bundles/knowledge</b> — exits non-zero on any finding. Add <code class="mono">--json</code> for a machine path; a clean bundle emits <code class="mono">[]</code>, never <code class="mono">null</code>.</p>
+              </div>
+            </article>
+
+            <article class="why-item" style="border-bottom:0">
+              <div><span class="n">04 — scale</span><h3>Proven against a corpus, not a fixture.</h3></div>
+              <div>
+                <p>The checks were built against a live knowledge base of <b style="color:var(--fg);font-weight:500">hundreds of nodes and thousands of internal links</b>, which is where connectivity, staleness and cluster analysis start telling you something a grep cannot. <code class="mono" style="color:var(--fg)">analyze</code> reports where a bundle is <em>weak</em>; <code class="mono" style="color:var(--fg)">lint</code> reports where it is <em>broken</em>. Deliberately two commands.</p>
+                <p class="ev"><b>okfctl graph export --format dot | dot -Tsvg &gt; graph.svg</b> — or <code class="mono">okfctl serve</code> for the interactive view.</p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 04 · docs ═══════════════════════════════════════════════════════ -->
+      <section class="sec docs" id="docs">
+        <div class="wrap">
+          <div class="sec-hd">
+            <div>
+              <span class="numeral">04</span>
+              <h2 class="h-sec">Documentation.</h2>
+            </div>
+            <div>
+              <p class="lede">
+                Start with concepts, then the guide for the job in front of you.
+                <code class="mono" style="color:var(--fg)">okfctl &lt;cmd&gt; --help</code> is authoritative and always matches the binary.
+              </p>
+            </div>
+          </div>
+
+          <div class="docs-grid">
+            <div class="docs-col">
+              <h3 class="docs-col-h">Start here</h3>
+              <ul>
+                <li><a href="/concepts/">Concepts<span class="arrow">→</span></a></li>
+                <li><a href="/reference/commands/">Command reference<span class="arrow">→</span></a></li>
+                <li><a href="https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md" rel="noopener">The OKF v0.2 spec<span class="arrow">→</span></a></li>
+                <li><a href="https://github.com/cwest/okfctl" rel="noopener">Repository<span class="arrow">→</span></a></li>
+              </ul>
+            </div>
+            <div class="docs-col">
+              <h3 class="docs-col-h">Guides</h3>
+              <ul>
+                <li><a href="/guides/authoring/">Starting and authoring a bundle<span class="arrow">→</span></a></li>
+                <li><a href="/guides/index-and-freshness/">Index and freshness drift<span class="arrow">→</span></a></li>
+                <li><a href="/guides/curation-health/">Curation health and <code>--strict</code> in CI<span class="arrow">→</span></a></li>
+                <li><a href="/guides/search/">Search: lexical, graph, semantic<span class="arrow">→</span></a></li>
+                <li><a href="/guides/remote-sources/">Remote sources<span class="arrow">→</span></a></li>
+                <li><a href="/guides/migrating/">Migrating v0.1 → v0.2<span class="arrow">→</span></a></li>
+                <li><a href="/guides/plugins/">Extending with plugins<span class="arrow">→</span></a></li>
+              </ul>
+            </div>
+            <div class="docs-col">
+              <h3 class="docs-col-h">Project</h3>
+              <ul>
+                <li><a href="https://github.com/cwest/okfctl" rel="noopener">GitHub ↗<span class="arrow">→</span></a></li>
+                <li><a href="https://github.com/cwest/okfctl/releases" rel="noopener">Releases<span class="arrow">→</span></a></li>
+                <li><a href="https://github.com/cwest/okfctl/issues" rel="noopener">Issues<span class="arrow">→</span></a></li>
+                <li><a href="https://github.com/cwest/okfctl/blob/main/CONTRIBUTING.md" rel="noopener">Contributing<span class="arrow">→</span></a></li>
+              </ul>
+            </div>
+          </div>
+
+          <div style="margin-top:var(--s-7)">
+            <div class="sec-hd" style="margin-bottom:var(--s-5)">
+              <div><h3 class="h-sub" id="cmdref">Command reference</h3></div>
+              <div><p class="small" style="margin:0">Fifteen top-level commands. Each ships a runnable example in its <code class="mono">--help</code>.</p></div>
+            </div>
+            <table class="cmdtable" aria-labelledby="cmdref">
+              <tbody>
+                <tr><td><b>okfctl</b> bundle</td><td>Scaffold (<code class="mono">init</code>) and summarize (<code class="mono">info</code>) an OKF bundle.</td></tr>
+                <tr><td><b>okfctl</b> node</td><td>Author and inspect nodes: <code class="mono">new</code>, <code class="mono">show</code>, <code class="mono">list</code>, <code class="mono">edit</code>, <code class="mono">mv</code>, <code class="mono">rm</code>, <code class="mono">refresh</code>, <code class="mono">promote</code>.</td></tr>
+                <tr><td><b>okfctl</b> index</td><td>Regenerate (<code class="mono">build</code>) and verify (<code class="mono">check</code>) the reserved per-directory <code class="mono">index.md</code>.</td></tr>
+                <tr><td><b>okfctl</b> log</td><td>Append and print the reserved <code class="mono">log.md</code> change history.</td></tr>
+                <tr><td><b>okfctl</b> validate</td><td>Check a bundle against the OKF spec floor; optionally overlay type-templates.</td></tr>
+                <tr><td><b>okfctl</b> lint</td><td>Report curation-health findings (orphans, broken links, coverage gaps); <code class="mono">--strict</code> for CI.</td></tr>
+                <tr><td><b>okfctl</b> analyze</td><td>Report where a bundle is weak: freshness, clusters, gaps, connectivity, structure.</td></tr>
+                <tr><td><b>okfctl</b> search</td><td>Core lexical and graph-neighborhood search — stdlib-only, no model or index.</td></tr>
+                <tr><td><b>okfctl</b> graph</td><td>Export the concept-node link graph (<code class="mono">--format json|dot</code>).</td></tr>
+                <tr><td><b>okfctl</b> serve</td><td>Serve an interactive web visualization of the bundle graph.</td></tr>
+                <tr><td><b>okfctl</b> template</td><td>List and show the type-templates a bundle declares.</td></tr>
+                <tr><td><b>okfctl</b> migrate</td><td>Upgrade a bundle from OKF v0.1 to v0.2 — two-phase, consumer-agnostic.</td></tr>
+                <tr><td><b>okfctl</b> registry</td><td>Manage named remote bundle sources — <code class="mono">git remote</code> for OKF bundles.</td></tr>
+                <tr><td><b>okfctl</b> connect</td><td>Clone or fast-forward a remote bundle source into a local directory.</td></tr>
+                <tr><td><b>okfctl</b> plugin</td><td>Discover and install <code class="mono">okfctl-&lt;name&gt;</code> plugins on <code class="mono">PATH</code>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ closing install ═════════════════════════════════════════════════ -->
+      <section class="sec closing" style="padding-block:var(--s-9)">
+        <div class="wrap closing-grid">
+          <div>
+            <h2 class="h-sec" style="max-width:14ch">Start with an empty directory.</h2>
+          </div>
+          <div>
+            <div class="cmd">
+              <code><span class="sigil" aria-hidden="true">$</span><span>{installCmd}</span></code>
+              <button class="copy" type="button" data-copy={installCmd} aria-label="Copy install command">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>
+                <span class="label">Copy</span>
+              </button>
+            </div>
+            <p class="small" style="margin-top:var(--s-3)">Then <code class="mono">okfctl bundle init mykb</code>. The quickstart is eight commands long.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- ══ footer ══════════════════════════════════════════════════════════ -->
+    <footer class="ft" style="border-top:var(--rule) solid var(--border)">
+      <div class="wrap">
+        <div class="ft-grid">
+          <div>
+            <a href="#main" class="brand" style="margin-bottom:var(--s-3)">okfctl<span class="dot">.</span>dev</a>
+            <p class="small" style="max-width:34ch">A command-line tool for authoring and maintaining Open Knowledge Format bundles. Pure Go, no CGO, no Python, no model runtime.</p>
+          </div>
+          <div>
+            <h2 class="ft-h">Project</h2>
+            <ul>
+              <li><a href="https://github.com/cwest/okfctl" rel="noopener">GitHub ↗</a></li>
+              <li><a href="https://github.com/cwest/okfctl/releases" rel="noopener">Releases</a></li>
+              <li><a href="https://github.com/cwest/okfctl/issues" rel="noopener">Issues</a></li>
+              <li><a href="https://github.com/cwest/okfctl/blob/main/CONTRIBUTING.md" rel="noopener">Contributing</a></li>
+            </ul>
+          </div>
+          <div>
+            <h2 class="ft-h">Docs</h2>
+            <ul>
+              <li><a href="/concepts/">Concepts</a></li>
+              <li><a href="/reference/commands/">Command reference</a></li>
+              <li><a href="/guides/authoring/">Guides</a></li>
+              <li><a href="https://github.com/cwest/okfctl/blob/main/docs/adr/README.md" rel="noopener">ADRs</a></li>
+            </ul>
+          </div>
+          <div>
+            <h2 class="ft-h">Spec</h2>
+            <ul>
+              <li><a href="https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md" rel="noopener">OKF v0.2 ↗</a></li>
+              <li><a href="https://github.com/GoogleCloudPlatform/knowledge-catalog" rel="noopener">knowledge-catalog ↗</a></li>
+              <li><a href="https://github.com/cwest/okfctl/blob/main/SECURITY.md" rel="noopener">Security policy</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="ft-base">
+          <p class="small" style="margin:0">Licensed under <a href="https://github.com/cwest/okfctl/blob/main/LICENSE" style="color:var(--fg-muted);border-bottom:1px solid var(--border-loud)" rel="noopener">Apache-2.0</a>.</p>
+          <p class="small mono" style="margin:0">okfctl {versionLabel}</p>
+          <p class="small" style="margin:0">OKF is a specification of Google LLC; okfctl is an independent consumer of it.</p>
+        </div>
+      </div>
+    </footer>
+
+    <div class="sr" role="status" aria-live="polite" id="live"></div>
+
+    <script is:inline>
+      (() => {
+        const $ = (s, r = document) => r.querySelector(s);
+        const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+        const live = $("#live");
+        const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        /* ── theme (shares Starlight's `starlight-theme` key) ──────────────── */
+        const root = document.documentElement,
+          tbtn = $("#theme"),
+          ticon = $("#theme-icon");
+        const MOON = "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z";
+        const SUN =
+          "M12 4V2M12 22v-2M4 12H2M22 12h-2M6.3 6.3 4.9 4.9M19.1 19.1l-1.4-1.4M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z";
+        const paint = (t) => {
+          root.dataset.theme = t;
+          ticon.innerHTML = `<path d="${t === "dark" ? MOON : SUN}"/>`;
+          tbtn.setAttribute("aria-label", `Switch to ${t === "dark" ? "light" : "dark"} theme`);
+        };
+        paint(root.dataset.theme || "dark");
+        tbtn.addEventListener("click", () => {
+          const t = root.dataset.theme === "dark" ? "light" : "dark";
+          localStorage.setItem("starlight-theme", t);
+          paint(t);
+        });
+
+        /* ── header hairline on scroll ─────────────────────────────────────── */
+        const hdr = $("#hdr");
+        const onScroll = () => (hdr.dataset.scrolled = String(scrollY > 8));
+        addEventListener("scroll", onScroll, { passive: true });
+        onScroll();
+
+        /* ── small-screen nav sheet ────────────────────────────────────────── */
+        const sheet = $("#sheet"),
+          navToggle = $("#navtoggle");
+        const setSheet = (open) => {
+          sheet.dataset.open = String(open);
+          navToggle.setAttribute("aria-expanded", String(open));
+          navToggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+        };
+        navToggle.addEventListener("click", () => setSheet(sheet.dataset.open !== "true"));
+        $$("#sheet a").forEach((a) => a.addEventListener("click", () => setSheet(false)));
+        addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && sheet.dataset.open === "true") {
+            setSheet(false);
+            navToggle.focus();
+          }
+        });
+        matchMedia("(min-width:901px)").addEventListener("change", (e) => {
+          if (e.matches) setSheet(false);
+        });
+
+        /* ── copy ──────────────────────────────────────────────────────────── */
+        const copyText = async (text, btn) => {
+          try {
+            await navigator.clipboard.writeText(text);
+          } catch {
+            const ta = Object.assign(document.createElement("textarea"), { value: text });
+            ta.style.cssText = "position:fixed;opacity:0";
+            document.body.append(ta);
+            ta.select();
+            document.execCommand("copy");
+            ta.remove();
+          }
+          const label = $(".label", btn),
+            was = label.textContent;
+          label.textContent = "Copied";
+          btn.dataset.copied = "true";
+          live.textContent = "Copied to clipboard";
+          setTimeout(() => {
+            label.textContent = was;
+            btn.dataset.copied = "false";
+          }, 1600);
+        };
+        $$("[data-copy]").forEach((b) => b.addEventListener("click", () => copyText(b.dataset.copy, b)));
+
+        /* ── terminal tabs ─────────────────────────────────────────────────── */
+        const tabs = $$(".term-tab");
+        const chip = $("#exit-chip"),
+          note = $("#exit-note");
+        const META = {
+          "tab-cold": [0, "clean cold start"],
+          "tab-val": [1, "spec-floor violation — always fatal"],
+          "tab-lint": [1, "advisory run exits 0; --strict exits 1"],
+          "tab-scale": [0, "a real corpus, not a fixture"],
+        };
+        const select = (id) => {
+          tabs.forEach((t) => {
+            const on = t.id === id;
+            t.setAttribute("aria-selected", String(on));
+            t.tabIndex = on ? 0 : -1;
+            $("#" + t.getAttribute("aria-controls")).hidden = !on;
+          });
+          const [code, text] = META[id];
+          chip.textContent = "exit " + code;
+          chip.className = "exit exit--" + code;
+          note.textContent = text;
+        };
+        tabs.forEach((t) => t.addEventListener("click", () => select(t.id)));
+        $(".term-tabs").addEventListener("keydown", (e) => {
+          const i = tabs.findIndex((t) => t.getAttribute("aria-selected") === "true");
+          const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+          if (!d) return;
+          e.preventDefault();
+          const next = tabs[(i + d + tabs.length) % tabs.length];
+          select(next.id);
+          next.focus();
+        });
+        $("#copy-run").addEventListener("click", function () {
+          const panel = $$('[role="tabpanel"]').find((p) => !p.hidden);
+          const cmds = [...panel.querySelectorAll("pre")][0].textContent
+            .split("\n")
+            .filter((l) => l.startsWith("$ "))
+            .map((l) => l.slice(2))
+            .join("\n");
+          copyText(cmds, this);
+        });
+
+        /* ── link-graph move ───────────────────────────────────────────────── */
+        const svg = $("#gsvg"),
+          tannin = $("#node-tannin"),
+          edges = $$("#edges .edge");
+        const btn = $("#mv-btn"),
+          out = $("#mv-out"),
+          zone = $("#zone-ref");
+        const stateFlag = $("#graph-state"),
+          diffFlag = $("#diff-state");
+        const HOME = { x: 0, y: 0 },
+          AWAY = { x: 300, y: -46 };
+        const SRC = [
+          { y: 86, lane: 232 },
+          { y: 140, lane: 250 },
+          { y: 194, lane: 268 },
+          { y: 344, lane: 286 },
+        ];
+        const FACE = 184;
+        let moved = false,
+          raf = 0;
+
+        const draw = (p) => {
+          const dx = HOME.x + (AWAY.x - HOME.x) * p,
+            dy = HOME.y + (AWAY.y - HOME.y) * p;
+          tannin.style.transform = `translate(${dx}px, ${dy}px)`;
+          const tLeft = 44 + dx,
+            tRight = tLeft + 140,
+            tTop = 222 + dy;
+          edges.forEach((e, i) => {
+            const s = SRC[i],
+              lane = s.lane;
+            const enter = lane < tLeft ? tLeft : tRight;
+            const bend = lane < tLeft ? lane : Math.max(lane, tRight + 22);
+            const ey = tTop + 7 + i * 6;
+            e.setAttribute("d", `M ${FACE} ${s.y} H ${bend} V ${ey} H ${enter}`);
+            e.classList.toggle("hot", p > 0.02 && p < 0.98);
+          });
+          zone.style.opacity = 0.35 + 0.65 * p;
+        };
+
+        const tween = (from, to, ms) => {
+          cancelAnimationFrame(raf);
+          if (reduce) {
+            draw(to);
+            return;
+          }
+          const t0 = performance.now();
+          const step = (now) => {
+            const k = Math.min(1, (now - t0) / ms);
+            const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+            draw(from + (to - from) * e);
+            if (k < 1) raf = requestAnimationFrame(step);
+          };
+          raf = requestAnimationFrame(step);
+        };
+
+        const applyDiff = (after) => {
+          $("#diff").dataset.state = after ? "after" : "before";
+          $$('#diff .row.add[data-when="after"]').forEach((r) => (r.hidden = !after));
+          $("#log-before").hidden = after;
+          $("#log-after").hidden = !after;
+          diffFlag.textContent = after ? "after" : "before";
+          diffFlag.style.color = after ? "var(--ok)" : "var(--fg-muted)";
+        };
+
+        const setState = (next) => {
+          moved = next;
+          tween(next ? 0 : 1, next ? 1 : 0, 900);
+          applyDiff(next);
+          out.hidden = !next;
+          out.textContent = next
+            ? "✓ Moved concepts/tannin.md -> reference/tannin.md (4 inbound link(s) rewritten)"
+            : "";
+          btn.innerHTML = next ? "Reset" : 'Run <span class="mono" style="font-weight:500">node mv</span>';
+          stateFlag.textContent = next
+            ? "4 inbound links → reference/tannin.md"
+            : "4 inbound links → concepts/tannin.md";
+          if (next)
+            live.textContent =
+              "Moved concepts/tannin.md to reference/tannin.md, 4 inbound links rewritten";
+        };
+
+        draw(0);
+        applyDiff(false);
+        btn.addEventListener("click", () => setState(!moved));
+      })();
+    </script>
+  </body>
+</html>
