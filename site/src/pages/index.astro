@@ -64,6 +64,33 @@ const goInstallCmd = version.tag
       content="okfctl scaffolds, moves, indexes, validates and inspects Open Knowledge Format bundles. Pure Go, no CGO, no Python, no model runtime."
     />
     <link rel="canonical" href="https://okfctl.dev/" />
+    {/* Icons and the social share card. The docs pages get these from the
+        `head` array in astro.config.mjs, but this page is a standalone Astro
+        route that Starlight never renders — so it has to carry them itself or
+        the site's most-shared URL unfurls bare. Absolute URLs are required so
+        the card resolves off-site. Keep in sync with astro.config.mjs. */}
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.png" type="image/png" sizes="180x180" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://okfctl.dev/" />
+    <meta
+      property="og:title"
+      content="okfctl — a CLI for authoring and maintaining Open Knowledge Format bundles"
+    />
+    <meta
+      property="og:description"
+      content="okfctl scaffolds, moves, indexes, validates and inspects Open Knowledge Format bundles. Pure Go, no CGO, no Python, no model runtime."
+    />
+    <meta property="og:image" content="https://okfctl.dev/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="okfctl — author and maintain Open Knowledge Format bundles."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://okfctl.dev/og.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
