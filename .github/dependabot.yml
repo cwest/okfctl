@@ -1,8 +1,26 @@
 # repo:managed
 version: 2
 updates:
-  # Adjust the ecosystems list as you add language manifests to this repo.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      # One PR for all Go module updates instead of a per-module storm.
+      go-modules:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/site"
+    schedule:
+      interval: "weekly"
+    groups:
+      site-npm:
+        patterns:
+          - "*"
