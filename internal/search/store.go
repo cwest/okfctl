@@ -191,12 +191,12 @@ func (s *Store) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(data, '\n'), 0o644)
+	return os.WriteFile(path, append(data, '\n'), 0o644) //nolint:gosec // G306: the search index is a tool-managed cache file; 0o644 is intended
 }
 
 // Load reads a store from path.
 func Load(path string) (*Store, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // G304: reading the tool's own index path is intended
 	if err != nil {
 		return nil, err
 	}

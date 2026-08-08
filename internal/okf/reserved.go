@@ -39,7 +39,8 @@ const (
 // okf_version is pinned by the .okf sidecar; `okfctl index build` surfaces it as
 // the sole permitted index frontmatter key (§12) once the index is regenerated.
 func Scaffold(dir string) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	// A scaffolded bundle dir holds shareable knowledge documents; 0o755 is intended.
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: shareable bundle content dir
 		return err
 	}
 	files := map[string]string{
@@ -48,7 +49,7 @@ func Scaffold(dir string) error {
 		".okf":     "okf_version: " + SpecVersion + "\n",
 	}
 	for name, body := range files {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil { //nolint:gosec // G306: a scaffolded reserved file is shareable bundle content; 0o644 is intended
 			return err
 		}
 	}

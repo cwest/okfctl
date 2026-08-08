@@ -295,7 +295,7 @@ func newIndexCmd(embedderName, modelPath *string) *cobra.Command {
 			}
 			prev, _ := search.Load(indexPath(dir)) // best-effort reuse; nil is fine
 			s := search.BuildIndex(b, e, prev)
-			if err := os.MkdirAll(filepath.Dir(indexPath(dir)), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(indexPath(dir)), 0o750); err != nil {
 				return err
 			}
 			if err := s.Save(indexPath(dir)); err != nil {

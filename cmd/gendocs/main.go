@@ -39,11 +39,12 @@ import (
 func main() {
 	out := referencePath()
 	content := cmd.GenerateCommandReference(cmd.NewRootCmd())
-	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+	// Generated docs are shareable reference files; 0o755/0o644 is intended.
+	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil { //nolint:gosec // G301: shareable generated-docs dir
 		fmt.Fprintln(os.Stderr, "gendocs:", err)
 		os.Exit(1)
 	}
-	if err := os.WriteFile(out, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(out, []byte(content), 0o644); err != nil { //nolint:gosec // G306: shareable generated-docs file
 		fmt.Fprintln(os.Stderr, "gendocs:", err)
 		os.Exit(1)
 	}

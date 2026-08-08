@@ -315,10 +315,10 @@ func WriteIndex(b *Bundle) error {
 	for _, dir := range IndexDirs(b) {
 		want[dir] = true
 		p := indexPathFor(b.Root, dir)
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil { //nolint:gosec // G301: shareable bundle content dir; 0o755 is intended
 			return err
 		}
-		if err := os.WriteFile(p, []byte(RenderDirIndex(b, dir)), 0o644); err != nil {
+		if err := os.WriteFile(p, []byte(RenderDirIndex(b, dir)), 0o644); err != nil { //nolint:gosec // G306: a bundle index file is shareable content; 0o644 is intended
 			return err
 		}
 	}
@@ -349,7 +349,7 @@ func IndexInSync(b *Bundle) (bool, string) {
 	for _, dir := range IndexDirs(b) {
 		want[dir] = true
 		p := indexPathFor(b.Root, dir)
-		onDisk, err := os.ReadFile(p)
+		onDisk, err := os.ReadFile(p) //nolint:gosec // G304: reading the tool's own generated index file
 		if err != nil {
 			return false, fmt.Sprintf("%s is missing or unreadable; run `okfctl index build`", filepath.ToSlash(rel(b.Root, p)))
 		}
@@ -393,21 +393,21 @@ func AppendLog(root, message string) error {
 	entry := fmt.Sprintf("- %s — %s\n", time.Now().UTC().Format("2006-01-02"), message)
 
 	p := filepath.Join(root, "log.md")
-	existing, err := os.ReadFile(p)
+	existing, err := os.ReadFile(p) //nolint:gosec // G304: reading the user's own bundle log.md
 	if err != nil {
-		return os.WriteFile(p, []byte(logHeader+entry), 0o644)
+		return os.WriteFile(p, []byte(logHeader+entry), 0o644) //nolint:gosec // G306: log.md is shareable bundle content; 0o644 is intended
 	}
 	// Strip the header, then drop the scaffold placeholder when it is the only
 	// content — otherwise the fresh-scaffold "no entries yet" hint stays pinned
 	// below every real entry.
 	rest := strings.TrimPrefix(string(existing), logHeader)
 	rest = strings.TrimPrefix(rest, logPlaceholder)
-	return os.WriteFile(p, []byte(logHeader+entry+rest), 0o644)
+	return os.WriteFile(p, []byte(logHeader+entry+rest), 0o644) //nolint:gosec // G306: log.md is shareable bundle content; 0o644 is intended
 }
 
 // ReadLog returns the log.md body (empty string if the file is absent).
 func ReadLog(root string) (string, error) {
-	data, err := os.ReadFile(filepath.Join(root, "log.md"))
+	data, err := os.ReadFile(filepath.Join(root, "log.md")) //nolint:gosec // G304: reading the user's own bundle log.md
 	if os.IsNotExist(err) {
 		return "", nil
 	}

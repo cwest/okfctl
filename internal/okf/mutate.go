@@ -195,7 +195,7 @@ func ApplyMove(root string, b *Bundle, old, new string, rewrites []LinkRewrite) 
 		}
 		content, ok := edited[rw.NodePath]
 		if !ok {
-			raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rw.NodePath)))
+			raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rw.NodePath))) //nolint:gosec // G304: reading a node from the user's own bundle
 			if err != nil {
 				return fmt.Errorf("read %s: %w", rw.NodePath, err)
 			}
@@ -217,12 +217,13 @@ func ApplyMove(root string, b *Bundle, old, new string, rewrites []LinkRewrite) 
 	}
 	for path, content := range edited {
 		abs := filepath.Join(root, filepath.FromSlash(path))
-		if err := os.WriteFile(abs, []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(abs, []byte(content), 0o644); err != nil { //nolint:gosec // G306: a bundle node is a shareable knowledge document; 0o644 is intended
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Dir(newAbs), 0o755); err != nil {
+	// Bundle directories hold shareable knowledge documents; 0o755 is intended.
+	if err := os.MkdirAll(filepath.Dir(newAbs), 0o755); err != nil { //nolint:gosec // G301: shareable bundle content dir
 		return fmt.Errorf("mkdir for %s: %w", new, err)
 	}
 	if err := os.Rename(oldAbs, newAbs); err != nil {

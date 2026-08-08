@@ -181,7 +181,7 @@ func PlanMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 func MigrateApply(root string, b *Bundle, plan MigratePlan) error {
 	for _, nm := range plan.Nodes {
 		abs := filepath.Join(root, filepath.FromSlash(nm.Path))
-		raw, err := os.ReadFile(abs)
+		raw, err := os.ReadFile(abs) //nolint:gosec // G304: reading a node from the user's own bundle
 		if err != nil {
 			return fmt.Errorf("read %s: %w", nm.Path, err)
 		}
@@ -192,7 +192,7 @@ func MigrateApply(root string, b *Bundle, plan MigratePlan) error {
 		if bytes.Equal(out, raw) {
 			continue
 		}
-		if err := os.WriteFile(abs, out, 0o644); err != nil {
+		if err := os.WriteFile(abs, out, 0o644); err != nil { //nolint:gosec // G306: a bundle node is a shareable knowledge document; 0o644 is intended
 			return fmt.Errorf("write %s: %w", nm.Path, err)
 		}
 	}
@@ -400,7 +400,7 @@ func bumpVersionMarkers(root, target string) error {
 // preserving every other line. Absent sidecar is a no-op.
 func bumpOkfSidecar(root, target string) error {
 	abs := filepath.Join(root, ".okf")
-	data, err := os.ReadFile(abs)
+	data, err := os.ReadFile(abs) //nolint:gosec // G304: reading the user's own bundle .okf sidecar
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -422,7 +422,7 @@ func bumpOkfSidecar(root, target string) error {
 	if !changed {
 		return nil
 	}
-	return os.WriteFile(abs, []byte(strings.Join(lines, "\n")), 0o644)
+	return os.WriteFile(abs, []byte(strings.Join(lines, "\n")), 0o644) //nolint:gosec // G306: the .okf sidecar is a shareable bundle artifact; 0o644 is intended
 }
 
 // bumpRootIndexMarker rewrites the bundle-root index.md okf_version marker to
@@ -430,7 +430,7 @@ func bumpOkfSidecar(root, target string) error {
 // a no-op — this never invents a marker where the author had none.
 func bumpRootIndexMarker(root, target string) error {
 	abs := filepath.Join(root, "index.md")
-	raw, err := os.ReadFile(abs)
+	raw, err := os.ReadFile(abs) //nolint:gosec // G304: reading the user's own bundle index.md
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -471,7 +471,7 @@ func bumpRootIndexMarker(root, target string) error {
 	if bytes.Equal(out.Bytes(), raw) {
 		return nil
 	}
-	return os.WriteFile(abs, out.Bytes(), 0o644)
+	return os.WriteFile(abs, out.Bytes(), 0o644) //nolint:gosec // G306: a bundle node is a shareable knowledge document; 0o644 is intended
 }
 
 // findScalar returns the scalar value of key in a mapping, or "".

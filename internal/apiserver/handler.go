@@ -283,6 +283,8 @@ func writeJSON(w http.ResponseWriter, v any) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write(out)
-	w.Write([]byte("\n"))
+	// Write errors here mean the client hung up mid-response; nothing to
+	// recover, and headers are already sent so http.Error is unavailable.
+	_, _ = w.Write(out)
+	_, _ = w.Write([]byte("\n"))
 }

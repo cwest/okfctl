@@ -32,6 +32,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/cwest/okfctl/internal/apiserver"
 	"github.com/cwest/okfctl/internal/okf"
@@ -99,7 +100,14 @@ func newServeCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "okfctl-api: http://%s/api/v1 (Ctrl-C to stop)\n", addr)
-			return http.ListenAndServe(addr, apiserver.NewHandler(b, embedder))
+			// ReadHeaderTimeout bounds slow-header (Slowloris) clients; the
+			// bare http.ListenAndServe has none (gosec G114).
+			srv := &http.Server{
+				Addr:              addr,
+				Handler:           apiserver.NewHandler(b, embedder),
+				ReadHeaderTimeout: 10 * time.Second,
+			}
+			return srv.ListenAndServe()
 		},
 	}
 	c.Flags().StringVar(&addr, "addr", "127.0.0.1:8931", "address to bind (loopback only; non-loopback is refused)")

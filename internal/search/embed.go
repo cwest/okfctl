@@ -22,7 +22,7 @@
 package search
 
 import (
-	"crypto/sha1"
+	"crypto/sha1" //nolint:gosec // G505: SHA1 is a non-cryptographic feature-hash bucket, not a security primitive
 	"encoding/binary"
 	"math"
 	"strings"
@@ -66,7 +66,10 @@ func (h *HashEmbedder) Encode(texts []string) [][]float64 {
 func (h *HashEmbedder) embedOne(text string) []float64 {
 	vec := make([]float64, h.dim)
 	for _, tok := range strings.Fields(strings.ToLower(text)) {
-		sum := sha1.Sum([]byte(tok))
+		// SHA1 here is a deterministic feature-hash bucket selector, not a
+		// security mechanism; it is ported byte-for-byte from the KB embedder so
+		// Go and Python produce identical vectors (see package doc).
+		sum := sha1.Sum([]byte(tok)) //nolint:gosec // G401: non-cryptographic feature hashing, cross-language parity required
 		idx := int(binary.BigEndian.Uint32(sum[:4])) % h.dim
 		sign := 1.0
 		if sum[4]%2 != 0 {

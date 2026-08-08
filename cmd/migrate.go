@@ -97,7 +97,7 @@ func runMigratePlan(cmd *cobra.Command, dir, planPath, generatedBy string) error
 		return fmt.Errorf("encode plan: %w", err)
 	}
 	data = append(data, '\n')
-	if err := os.WriteFile(planPath, data, 0o644); err != nil {
+	if err := os.WriteFile(planPath, data, 0o644); err != nil { //nolint:gosec // G306: migration plan is a shareable bundle artifact; 0o644 is intended
 		return fmt.Errorf("write plan %s: %w", planPath, err)
 	}
 	out := cmd.OutOrStdout()
@@ -119,7 +119,7 @@ func runMigratePlan(cmd *cobra.Command, dir, planPath, generatedBy string) error
 // runMigrateApply is phase 2: read the plan back and apply it, then re-validate.
 // --dry-run writes nothing.
 func runMigrateApply(cmd *cobra.Command, dir, planPath string, dry bool) error {
-	planData, err := os.ReadFile(planPath)
+	planData, err := os.ReadFile(planPath) //nolint:gosec // G304: reading the migration plan the tool just wrote is intended
 	if err != nil {
 		return fmt.Errorf("read plan %s: %w", planPath, err)
 	}

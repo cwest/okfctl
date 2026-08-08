@@ -39,7 +39,9 @@ func Clone(url, dir string) error {
 	if !GitAvailable() {
 		return fmt.Errorf("git is required to connect a remote bundle source but was not found on PATH")
 	}
-	cmd := exec.Command("git", "clone", "--", url, dir)
+	// Fixed git subcommand; url is passed after "--" so it cannot be an option,
+	// and cloning the user-named remote is the connect command's purpose.
+	cmd := exec.Command("git", "clone", "--", url, dir) //nolint:gosec // G204: fixed git subcommand, url guarded by "--"
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git clone %s: %w\n%s", url, err, strings.TrimSpace(string(out)))
 	}
@@ -53,7 +55,8 @@ func PullFastForward(dir string) error {
 	if !GitAvailable() {
 		return fmt.Errorf("git is required to update a remote bundle source but was not found on PATH")
 	}
-	cmd := exec.Command("git", "-C", dir, "pull", "--ff-only")
+	// Fixed git subcommand over the user's own checkout dir.
+	cmd := exec.Command("git", "-C", dir, "pull", "--ff-only") //nolint:gosec // G204: fixed git subcommand over the user's checkout
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git pull --ff-only in %s: %w\n%s", dir, err, strings.TrimSpace(string(out)))
 	}
@@ -67,7 +70,7 @@ func IsGitWorkTree(dir string) bool {
 	if !GitAvailable() {
 		return false
 	}
-	cmd := exec.Command("git", "-C", dir, "rev-parse", "--is-inside-work-tree")
+	cmd := exec.Command("git", "-C", dir, "rev-parse", "--is-inside-work-tree") //nolint:gosec // G204: fixed git subcommand over the user's own checkout
 	out, err := cmd.Output()
 	if err != nil {
 		return false

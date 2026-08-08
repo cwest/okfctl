@@ -53,7 +53,7 @@ func LoadModel2VecEmbedder(dir string) (*Model2VecEmbedder, error) {
 // explicit name in config.json, then the HuggingFace cache layout, then the
 // directory name.
 func modelName(dir string) string {
-	raw, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	raw, err := os.ReadFile(filepath.Join(dir, "config.json")) //nolint:gosec // G304: reading config.json from the user-supplied model dir is intended
 	if err == nil {
 		var cfg struct {
 			ModelName string `json:"model_name"`

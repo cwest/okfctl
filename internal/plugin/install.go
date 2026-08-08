@@ -60,7 +60,7 @@ func Install(source, destDir string) (Plugin, error) {
 		return Plugin{}, fmt.Errorf("plugin source %q is not a regular file", source)
 	}
 
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
+	if err := os.MkdirAll(destDir, 0o750); err != nil {
 		return Plugin{}, fmt.Errorf("create plugin dir: %w", err)
 	}
 	dest := filepath.Join(destDir, base)
@@ -73,27 +73,32 @@ func Install(source, destDir string) (Plugin, error) {
 // copyExecutable copies source to dest atomically (write to a temp file in the
 // same dir, then rename) with 0o755 permissions so the result is executable.
 func copyExecutable(source, dest string) error {
-	in, err := os.Open(source)
+	// source is the user-supplied plugin path (`okfctl plugin install <path>`);
+	// reading the file the user named is the command's whole purpose, and it was
+	// verified to be a regular file above.
+	in, err := os.Open(source) //nolint:gosec // G304: user-supplied plugin path is the intended input
 	if err != nil {
 		return fmt.Errorf("open plugin source: %w", err)
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
 	tmp, err := os.CreateTemp(filepath.Dir(dest), ".okfctl-install-*")
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName) // no-op after a successful rename
+	defer func() { _ = os.Remove(tmpName) }() // no-op after a successful rename
 
 	if _, err := io.Copy(tmp, in); err != nil {
-		tmp.Close()
+		_ = tmp.Close() // best-effort; the copy error is the one that matters
 		return fmt.Errorf("copy plugin: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("close temp file: %w", err)
 	}
-	if err := os.Chmod(tmpName, 0o755); err != nil {
+	// The installed artifact is an executable plugin binary; 0o755 is required
+	// so it can be exec'd. The source was verified to be a regular file above.
+	if err := os.Chmod(tmpName, 0o755); err != nil { //nolint:gosec // G302: executable plugin must be 0o755
 		return fmt.Errorf("chmod plugin: %w", err)
 	}
 	if err := os.Rename(tmpName, dest); err != nil {

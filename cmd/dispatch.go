@@ -34,7 +34,9 @@ func dispatch(name string, args []string, pathenv string) (int, error) {
 		return 1, errors.New("okfctl-" + name + " not found on PATH")
 	}
 
-	cmd := exec.Command(path, args...)
+	// path is a plugin binary resolved by plugin.Lookup from PATH; dispatching
+	// to the resolved plugin is the core git/kubectl-style plugin mechanism.
+	cmd := exec.Command(path, args...) //nolint:gosec // G204: resolved plugin binary is the intended dispatch target
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
