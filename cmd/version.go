@@ -16,6 +16,7 @@ package cmd
 
 import (
 	"fmt"
+	"runtime/debug"
 
 	"github.com/spf13/cobra"
 )
@@ -52,7 +53,28 @@ func SetVersionInfo(v, c, d string) [3]string {
 // versionString is the single source of truth for both the `version` subcommand
 // and the root `--version` flag.
 func versionString() string {
-	return fmt.Sprintf("okfctl %s (commit %s, built %s)", version, commit, date)
+	return fmt.Sprintf("okfctl %s (commit %s, built %s)", resolveVersion(version, debug.ReadBuildInfo), commit, date)
+}
+
+// resolveVersion returns the version string to report. A release build injects a
+// real tag via ldflags (injected), which always wins. A `go install
+// github.com/cwest/okfctl@latest` build injects nothing, leaving the "dev"
+// default — in that case we fall back to the main module's version recorded by
+// the Go toolchain (debug.ReadBuildInfo), so the binary can report the module
+// version it was installed from instead of "dev". A plain `go build` from a
+// checkout records "(devel)" (or nothing) for the main module, which is not a
+// real release, so the "dev" default is kept. readBuildInfo is injected for
+// testability; production passes debug.ReadBuildInfo.
+func resolveVersion(injected string, readBuildInfo func() (*debug.BuildInfo, bool)) string {
+	if injected != "" && injected != "dev" {
+		return injected
+	}
+	if info, ok := readBuildInfo(); ok {
+		if mv := info.Main.Version; mv != "" && mv != "(devel)" {
+			return mv
+		}
+	}
+	return injected
 }
 
 func newVersionCmd() *cobra.Command {
