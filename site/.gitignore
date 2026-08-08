@@ -7,3 +7,11 @@ node_modules/
 # scripts/prepare-content.mjs. Regenerated every build; never edited by hand,
 # never committed (committing it would let it drift from the source docs).
 src/content/docs/_generated/
+
+# Raster share assets generated at build time by scripts/generate-share-assets.mjs
+# from the brand tokens (scripts/brand.mjs) and public/favicon.svg. Regenerated
+# every build so they cannot drift from the theme; the SVG sources are committed,
+# these PNGs are not.
+public/og.png
+public/apple-touch-icon.png
+public/favicon.png

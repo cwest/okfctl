@@ -38,6 +38,52 @@ export default defineConfig({
       title: "okfctl",
       description:
         "A command-line tool for authoring and maintaining Open Knowledge Format (OKF) bundles.",
+      // The SVG mark shipped in public/favicon.svg (a placeholder typographic
+      // mark until the bespoke-design change lands a wordmark). Starlight emits
+      // the <link rel="icon"> for this; the PNG fallback + apple-touch-icon and
+      // the social-card tags are added via `head` below because Starlight has no
+      // first-party option for them.
+      favicon: "/favicon.svg",
+      head: [
+        // PNG favicon fallback for clients that do not render SVG icons, plus
+        // the iOS home-screen icon. Both are generated at build time by
+        // scripts/generate-share-assets.mjs from public/favicon.svg.
+        {
+          tag: "link",
+          attrs: { rel: "icon", href: "/favicon.png", type: "image/png", sizes: "180x180" },
+        },
+        {
+          tag: "link",
+          attrs: { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
+        },
+        // Social share card. Starlight already emits og:title/description/url and
+        // twitter:card=summary_large_image; it does NOT emit an image. Absolute
+        // URLs are required so the card resolves when a link is unfurled off-site.
+        // The 1200x630 PNG is generated at build time from the brand tokens.
+        {
+          tag: "meta",
+          attrs: { property: "og:image", content: "https://okfctl.dev/og.png" },
+        },
+        {
+          tag: "meta",
+          attrs: { property: "og:image:width", content: "1200" },
+        },
+        {
+          tag: "meta",
+          attrs: { property: "og:image:height", content: "630" },
+        },
+        {
+          tag: "meta",
+          attrs: {
+            property: "og:image:alt",
+            content: "okfctl — author and maintain Open Knowledge Format bundles.",
+          },
+        },
+        {
+          tag: "meta",
+          attrs: { name: "twitter:image", content: "https://okfctl.dev/og.png" },
+        },
+      ],
       social: [
         {
           icon: "github",

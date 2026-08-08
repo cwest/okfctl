@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "prebuild": "node scripts/prepare-content.mjs",
+    "prebuild": "node scripts/prepare-content.mjs && node scripts/generate-share-assets.mjs",
     "dev": "npm run prebuild && astro dev",
     "start": "npm run prebuild && astro dev",
     "build": "npm run prebuild && astro build",
@@ -20,5 +20,8 @@
     "@tailwindcss/vite": "4.3.3",
     "astro": "7.1.6",
     "tailwindcss": "4.3.3"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "2.6.2"
   }
 }
