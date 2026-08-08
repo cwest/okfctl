@@ -70,7 +70,7 @@ jobs:
         run: echo "No site/** or docs/** changes in this PR; nothing to build."
       - uses: actions/checkout@v7
         if: needs.changes.outputs.site == 'true'
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         if: needs.changes.outputs.site == 'true'
         with:
           node-version: 22
