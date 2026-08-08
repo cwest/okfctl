@@ -18,6 +18,7 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
+import { LEGACY_TO_CLEAN } from "./scripts/prepare-content.mjs";
 
 // https://astro.build/config
 export default defineConfig({
@@ -26,6 +27,13 @@ export default defineConfig({
   // docs.yml). The apex domain means the site is served from the root, so no
   // `base` path is needed.
   site: "https://okfctl.dev",
+  // Redirect the old _generated/* URLs (the build-artifact paths the docs were
+  // briefly published under) to their clean, permanent routes. Anything already
+  // shared keeps working instead of 404ing. The mapping is derived from the same
+  // page list prepare-content.mjs uses, so a new page's redirect cannot be
+  // forgotten. Astro emits these as static meta-refresh stubs — the only
+  // redirect mechanism GitHub Pages (no server) supports.
+  redirects: LEGACY_TO_CLEAN,
   vite: {
     // Tailwind v4 is wired via its first-party Vite plugin. This is the theming
     // SEAM for the follow-up design card: starlightTailwind() below tells
@@ -55,19 +63,31 @@ export default defineConfig({
       // (into _generated/) with Starlight frontmatter prepended — templating,
       // not generation. Authored site pages (the homepage) live directly under
       // src/content/docs/.
+      // Sidebar entries reference the pages' PUBLISHED slugs (clean URLs), not
+      // their on-disk _generated/ path. `autogenerate` keys off the on-disk
+      // directory and would fight the slug override, so the guides are listed
+      // explicitly in their intended order instead.
       sidebar: [
         {
           label: "Start here",
-          items: [{ label: "Concepts", slug: "_generated/concepts" }],
+          items: [{ label: "Concepts", slug: "concepts" }],
         },
         {
           label: "Guides",
-          items: [{ autogenerate: { directory: "_generated/guides" } }],
+          items: [
+            { label: "Authoring a bundle", slug: "guides/authoring" },
+            { label: "Index & freshness", slug: "guides/index-and-freshness" },
+            { label: "Curation health", slug: "guides/curation-health" },
+            { label: "Search", slug: "guides/search" },
+            { label: "Migrating", slug: "guides/migrating" },
+            { label: "Remote sources", slug: "guides/remote-sources" },
+            { label: "Plugins", slug: "guides/plugins" },
+          ],
         },
         {
           label: "Reference",
           items: [
-            { label: "Command reference", slug: "_generated/reference/commands" },
+            { label: "Command reference", slug: "reference/commands" },
           ],
         },
       ],
