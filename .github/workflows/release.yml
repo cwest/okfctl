@@ -7,19 +7,23 @@ permissions:
   # Keyless cosign signing needs an OIDC token from the workflow's identity
   # (Sigstore/Fulcio). See .goreleaser.yaml `signs:`.
   id-token: write
+  # actions/attest-build-provenance writes a signed provenance attestation to
+  # the repo's attestations store (and, being Sigstore-keyless, also uses the
+  # id-token above). Verify with `gh attestation verify <artifact>`.
+  attestations: write
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { fetch-depth: 0 }
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with: { go-version: '1.26' }
       # SBOM generation (goreleaser `sboms:` shells out to syft).
-      - uses: anchore/sbom-action/download-syft@v0
+      - uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
       # Keyless signing (goreleaser `signs:` shells out to cosign).
-      - uses: sigstore/cosign-installer@v3
-      - uses: goreleaser/goreleaser-action@v7
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: '~> v2'
           args: release --clean
@@ -32,3 +36,16 @@ jobs:
           # HOMEBREW_TAP_GITHUB_TOKEN secret. See .goreleaser.yaml
           # `homebrew_casks:`.
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+      # GitHub build-provenance attestation over the distributable artifacts
+      # goreleaser wrote to dist/ (archives + Linux packages). This is the
+      # verifiable "which workflow run built this binary" record that cosign
+      # signatures and syft SBOMs do not provide on their own. Verify with:
+      #   gh attestation verify <archive-or-package> --repo cwest/okfctl
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.deb
+            dist/*.rpm
