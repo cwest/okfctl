@@ -2,7 +2,30 @@ name: ci
 on:
   push: { branches: [main] }
   pull_request:
+
+permissions:
+  contents: read
+
 jobs:
+  # Detect which parts of the tree a PR touches so the site build can skip its
+  # expensive steps on Go-only PRs. The `site` job still always runs (so it can
+  # serve as a required status check) — only its install/build steps are gated.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      site: ${{ steps.filter.outputs.site }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            site:
+              - 'site/**'
+              - 'docs/**'
+
   build-test:
     runs-on: ubuntu-latest
     steps:
@@ -17,3 +40,45 @@ jobs:
         run: CGO_ENABLED=0 go build ./...
       - name: test
         run: go test ./... -race
+      - name: govulncheck
+        # Fails the build on a known CVE in the module graph or the toolchain.
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version: '1.26' }
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+
+  # Gates the Astro site build. The site's prebuild templates content out of
+  # ../docs, so a docs change can break the build too — both paths are filtered
+  # by the `changes` job. This job ALWAYS runs so it can be a required status
+  # check; on a PR that touches neither site/ nor docs/, it is a fast no-op.
+  site:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: no site/docs changes — skipping build
+        if: needs.changes.outputs.site != 'true'
+        run: echo "No site/** or docs/** changes in this PR; nothing to build."
+      - uses: actions/checkout@v7
+        if: needs.changes.outputs.site == 'true'
+      - uses: actions/setup-node@v6
+        if: needs.changes.outputs.site == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: install
+        if: needs.changes.outputs.site == 'true'
+        run: npm ci --prefix site
+      - name: build
+        if: needs.changes.outputs.site == 'true'
+        run: npm run build --prefix site

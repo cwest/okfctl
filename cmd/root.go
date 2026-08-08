@@ -93,16 +93,18 @@ func Execute() error {
 // candidate name, the remaining args after it, and ok=false when the first arg
 // is a flag, is empty, or names a real built-in.
 func unknownSubcommand(root *cobra.Command, args []string) (name string, rest []string, ok bool) {
-	for i, a := range args {
-		if strings.HasPrefix(a, "-") {
-			return "", nil, false // a leading flag (e.g. --help) is cobra's
-		}
-		for _, c := range root.Commands() {
-			if c.Name() == a || c.HasAlias(a) {
-				return "", nil, false // built-in wins
-			}
-		}
-		return a, args[i+1:], true
+	// Only the first positional arg can name a subcommand; inspect it alone.
+	if len(args) == 0 {
+		return "", nil, false
 	}
-	return "", nil, false
+	a := args[0]
+	if strings.HasPrefix(a, "-") {
+		return "", nil, false // a leading flag (e.g. --help) is cobra's
+	}
+	for _, c := range root.Commands() {
+		if c.Name() == a || c.HasAlias(a) {
+			return "", nil, false // built-in wins
+		}
+	}
+	return a, args[1:], true
 }

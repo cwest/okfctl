@@ -53,7 +53,7 @@ func PromotableIndexes(b *Bundle) []string {
 		if rel == "index.md" {
 			continue // bundle-root index: §12 carve-out, never promoted
 		}
-		if n.Frontmatter == nil || len(n.Frontmatter) == 0 {
+		if len(n.Frontmatter) == 0 {
 			continue // unparseable (different class) or conformant (nothing to do)
 		}
 		out = append(out, rel)
