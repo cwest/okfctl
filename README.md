@@ -1,15 +1,30 @@
 # okfctl
 
+[![CI](https://github.com/cwest/okfctl/actions/workflows/ci.yml/badge.svg)](https://github.com/cwest/okfctl/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/cwest/okfctl?sort=semver)](https://github.com/cwest/okfctl/releases/latest)
+[![Go Reference](https://pkg.go.dev/badge/github.com/cwest/okfctl.svg)](https://pkg.go.dev/github.com/cwest/okfctl)
+[![Go Report Card](https://goreportcard.com/badge/github.com/cwest/okfctl)](https://goreportcard.com/report/github.com/cwest/okfctl)
+[![License](https://img.shields.io/github/license/cwest/okfctl)](LICENSE)
+
 `okfctl` is a command-line tool for authoring and maintaining
 [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
 (OKF) bundles — a curated tree of Markdown "nodes" with a link graph, reserved
 `index.md`/`log.md` files, and frontmatter provenance.
 
-OKF is a specification this tool **consumes and conforms to**; okfctl does not
-author the spec. Where the spec defines behavior, the spec wins. The tool
-enforces the spec *floor* for everyone and keeps anything stricter behind an
-explicit opt-in overlay (`--templates`, §9.4), so an unknown `type` or a future
-frontmatter key never fails `validate`.
+**Website:** [okfctl.dev](https://okfctl.dev) &nbsp;•&nbsp;
+**Docs:** [`docs/`](docs/README.md) &nbsp;•&nbsp;
+**Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md) &nbsp;•&nbsp;
+**Security:** [SECURITY.md](SECURITY.md) &nbsp;•&nbsp;
+**Conduct:** [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+
+> **OKF is a specification `okfctl` consumes — it does not author it.** The
+> [Open Knowledge Format spec](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+> is the authority; where the spec defines behavior, the spec wins. The tool
+> enforces the spec *floor* for everyone and keeps anything stricter behind an
+> explicit opt-in overlay (`--templates`, §9.4), so an unknown `type` or a future
+> frontmatter key never fails `validate`.
+
+![okfctl quickstart: bundle init through validate and bundle info](docs/assets/quickstart.gif)
 
 Use it to scaffold a bundle, add and move nodes without breaking links, keep the
 reserved index and change log current, check a corpus against the spec, and
@@ -37,7 +52,7 @@ sudo mv okfctl okfctl-search /usr/local/bin/
 Verify the install and the reported version:
 
 ```sh
-okfctl version        # e.g. okfctl v1.2.3 (commit abc1234, built 2026-...)
+okfctl version        # e.g. okfctl v0.2.0 (commit <sha>, built <date>)
 okfctl --version      # same string
 ```
 
