@@ -28,9 +28,10 @@ export default defineConfig({
   site: "https://okfctl.dev",
   vite: {
     // Tailwind v4 is wired via its first-party Vite plugin. This is the theming
-    // SEAM for the follow-up design card: starlightTailwind() below tells
-    // Starlight to defer to Tailwind's design tokens. We do NOT restyle here —
-    // the default Starlight look ships as-is.
+    // SEAM the bespoke design restyles through: starlightTailwind() below tells
+    // Starlight to defer to Tailwind's design tokens, and src/styles/global.css
+    // maps Starlight's --sl-* variables onto the shared tokens (src/styles/
+    // tokens.css). See site/README.md for how the palette is changed in one place.
     plugins: [tailwindcss()],
   },
   integrations: [
@@ -47,8 +48,8 @@ export default defineConfig({
       ],
       // Tailwind v4 is wired via its first-party Vite plugin (see `vite` above)
       // plus the Starlight Tailwind preset, imported from src/styles/global.css.
-      // This is the theming SEAM for the follow-up design pass; intentionally no
-      // custom palette or component CSS here — the default Starlight look ships.
+      // global.css also imports the bespoke design tokens and the Starlight token
+      // mapping, so the docs pages inherit the homepage's design language.
       customCss: ["./src/styles/global.css"],
       // Pages are sourced from src/content/docs/. The user-facing docs under
       // ../docs are copied in at build time by scripts/prepare-content.mjs

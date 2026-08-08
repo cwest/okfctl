@@ -15,12 +15,13 @@
  */
 
 /*
- * Theming SEAM for the follow-up bespoke-design change. This wires Tailwind v4
- * and the first-party Starlight Tailwind preset so Starlight's design tokens
- * defer to Tailwind's. It deliberately adds NO custom palette, NO fonts, and NO
- * component overrides — the site ships the DEFAULT Starlight look. The design
- * pass restyles by adding @theme rules and overrides below this line; the
- * plumbing is already here so that change touches only styling, not wiring.
+ * Theming SEAM for the bespoke okfctl.dev design. This wires Tailwind v4 and
+ * the first-party Starlight Tailwind preset so Starlight's design tokens defer
+ * to Tailwind's, then layers on the bespoke design: the web fonts, the shared
+ * design tokens (tokens.css), and the Starlight token mapping
+ * (starlight-theme.css) that restyles the docs pages through the CSS
+ * custom-property seam without forking any Starlight component. The palette
+ * lives in ONE place — tokens.css; see site/README.md.
  */
 
 @layer base, starlight, theme, components, utilities;
@@ -28,3 +29,15 @@
 @import "@astrojs/starlight-tailwind";
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
+
+/*
+ * BESPOKE DESIGN — restyle through the seam.
+ * tokens.css is the single source of truth for the palette/type/spacing (see
+ * that file's header). starlight-theme.css maps Starlight's own --sl-* design
+ * variables onto those tokens so the docs pages inherit the homepage's design
+ * language without forking any Starlight component. The web fonts load here so
+ * they are present on every docs page as well as the standalone homepage.
+ */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&display=swap");
+@import "./tokens.css";
+@import "./starlight-theme.css";
