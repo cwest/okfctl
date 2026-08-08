@@ -8,7 +8,7 @@
 #
 # Verify locally:
 #   goreleaser check
-#   goreleaser release --snapshot --clean
+#   goreleaser release --snapshot --clean   # signing/sbom/publish steps skip
 version: 2
 
 project_name: okfctl
@@ -33,6 +33,7 @@ builds:
     goos:
       - darwin
       - linux
+      - windows
     goarch:
       - amd64
       - arm64
@@ -49,6 +50,7 @@ builds:
     goos:
       - darwin
       - linux
+      - windows
     goarch:
       - amd64
       - arm64
@@ -60,8 +62,13 @@ archives:
       - okfctl-search
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    # Unix archives are tar.gz; Windows gets a zip so it unpacks natively.
     formats:
       - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
     files:
       - README.md
       - LICENSE
@@ -69,8 +76,84 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
-snapshot:
-  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
+# Linux system packages so `apt`/`dnf` users get first-class installs.
+nfpms:
+  - id: okfctl
+    package_name: okfctl
+    ids:
+      - okfctl
+      - okfctl-search
+    vendor: Casey West
+    homepage: https://okfctl.dev
+    maintainer: Casey West <casey@geeknest.com>
+    description: |-
+      A command-line tool for authoring and maintaining Open Knowledge Format
+      (OKF) bundles.
+    license: Apache-2.0
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+
+# Software Bill of Materials (syft) for every archive — provenance is table
+# stakes for a tool people run against their own corpus.
+sboms:
+  - id: archive
+    artifacts: archive
+
+# Keyless signing via cosign, using the release workflow's OIDC token
+# (Sigstore / Fulcio). Produces a detached signature and the signing
+# certificate for the checksums file, which transitively covers every
+# artifact listed in it. Verify with:
+#   cosign verify-blob \
+#     --certificate checksums.txt.pem \
+#     --signature checksums.txt.sig \
+#     --certificate-identity-regexp 'https://github.com/cwest/okfctl/.*' \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+#     checksums.txt
+signs:
+  - id: cosign-checksum
+    cmd: cosign
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+# Homebrew tap so `brew install cwest/tap/okfctl` works for the macOS
+# developers who are this tool's core audience. A Cask (not a formula) ships
+# the prebuilt binaries directly. The formula is pushed to the
+# cwest/homebrew-tap repo on release using HOMEBREW_TAP_GITHUB_TOKEN.
+homebrew_casks:
+  - name: okfctl
+    ids:
+      - okfctl
+    # The archive bundles both binaries; put each onto PATH.
+    binaries:
+      - okfctl
+      - okfctl-search
+    repository:
+      owner: cwest
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://okfctl.dev
+    description: A command-line tool for authoring and maintaining Open Knowledge Format (OKF) bundles.
+    license: Apache-2.0
+    # The binaries are cosign-signed but not Apple-notarized, so strip the
+    # Gatekeeper quarantine bit on install to avoid the "damaged and cannot be
+    # opened" alert. See goreleaser homebrew_casks signing notes.
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/okfctl"]
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/okfctl-search"]
+          end
 
 changelog:
   sort: asc
@@ -79,6 +162,9 @@ changelog:
       - "^docs:"
       - "^test:"
       - "^chore:"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}"
 
 release:
   draft: true
