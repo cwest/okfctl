@@ -70,11 +70,11 @@ func LoadWordPiece(dir string) (*WordPiece, error) {
 // loadWordPieceFromVocabTxt reads dir/vocab.txt (line N == token id N) with the
 // BERT defaults potion-base-8M's tokenizer.json declares.
 func loadWordPieceFromVocabTxt(dir string) (*WordPiece, error) {
-	f, err := os.Open(filepath.Join(dir, "vocab.txt"))
+	f, err := os.Open(filepath.Join(dir, "vocab.txt")) //nolint:gosec // G304: reading vocab.txt from the user-supplied model dir is intended
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	vocab := map[string]int{}
 	sc := bufio.NewScanner(f)
@@ -118,7 +118,7 @@ type tokenizerJSON struct {
 // shape. An absent file returns fs.ErrNotExist so the caller can distinguish
 // "not present" from "present but broken".
 func loadWordPieceFromTokenizerJSON(path string) (*WordPiece, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) //nolint:gosec // G304: reading the user-supplied tokenizer.json path is intended
 	if err != nil {
 		return nil, err // includes fs.ErrNotExist when absent
 	}

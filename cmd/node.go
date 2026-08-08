@@ -264,7 +264,9 @@ func newNodeCmd() *cobra.Command {
 				return fmt.Errorf("node not found: %s", p)
 			}
 			editor := resolveEditor()
-			ed := exec.Command(editor, abs)
+			// Launching the user's configured $EDITOR on the node file is the
+			// entire purpose of `node edit`; the variable command is the feature.
+			ed := exec.Command(editor, abs) //nolint:gosec // G204: invoking the user's own $EDITOR is the command's purpose
 			ed.Stdin, ed.Stdout, ed.Stderr = os.Stdin, cmd.OutOrStdout(), cmd.ErrOrStderr()
 			if err := ed.Run(); err != nil {
 				return fmt.Errorf("editor %q exited: %w", editor, err)

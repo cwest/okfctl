@@ -59,12 +59,12 @@ func Load() (map[string]string, error) {
 // Save writes the config map as indented JSON, creating the parent dir.
 func Save(m map[string]string) error {
 	p := Path()
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(p, data, 0o644)
+	return os.WriteFile(p, data, 0o600)
 }

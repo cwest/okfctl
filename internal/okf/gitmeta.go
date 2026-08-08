@@ -61,7 +61,9 @@ func GitLastCommitDateIgnoring(root, relPath string, ignore map[string]bool) (ti
 	// (RFC3339). "-C root" runs git as if from the bundle root so relPath
 	// resolves correctly. Without -1 we get the full history for the path,
 	// newest first, so we can walk back past ignored (mechanical) commits.
-	cmd := exec.Command("git", "-C", root, "log", "--format=%H %cI", "--", relPath)
+	// Fixed git subcommand; root/relPath are separated by "--" and are the
+	// user's own bundle path, not arbitrary shell input.
+	cmd := exec.Command("git", "-C", root, "log", "--format=%H %cI", "--", relPath) //nolint:gosec // G204: fixed git subcommand over the user's bundle
 	out, err := cmd.Output()
 	if err != nil {
 		// A non-repo directory makes git exit non-zero ("not a git repository").

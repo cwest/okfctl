@@ -43,7 +43,9 @@ type model2vecConfig struct {
 // dir/model.safetensors (the F32 embedding matrix), cross-checking that the matrix
 // dimension matches the config's hidden_dim.
 func LoadStaticModel(dir string) (*StaticModel, error) {
-	cfgRaw, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	// dir is the user-supplied --model-path; reading config.json from the model
+	// directory the user named is this loader's intended function.
+	cfgRaw, err := os.ReadFile(filepath.Join(dir, "config.json")) //nolint:gosec // G304: user-supplied model dir is the intended input
 	if err != nil {
 		return nil, err
 	}

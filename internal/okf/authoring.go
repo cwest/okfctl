@@ -65,7 +65,9 @@ func NewNodeFromTemplate(root, relPath, typ, title string, t Template) (string, 
 	if _, err := os.Stat(abs); err == nil {
 		return "", fmt.Errorf("node already exists: %s", relPath)
 	}
-	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+	// Bundle directories hold shareable knowledge documents committed to git and
+	// read by others; 0o755 is the intended, conventional mode for content dirs.
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil { //nolint:gosec // G301: shareable bundle content dir
 		return "", err
 	}
 
@@ -130,7 +132,9 @@ func NewNodeFromTemplate(root, relPath, typ, title string, t Template) (string, 
 	for _, section := range sections {
 		sb.WriteString("\n## " + section + "\n")
 	}
-	if err := os.WriteFile(abs, []byte(sb.String()), 0o644); err != nil {
+	// A bundle node is a shareable knowledge document (committed to git, read by
+	// others); 0o644 is the intended, conventional mode for content files.
+	if err := os.WriteFile(abs, []byte(sb.String()), 0o644); err != nil { //nolint:gosec // G306: shareable bundle content file
 		return "", err
 	}
 	return abs, nil

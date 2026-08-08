@@ -156,7 +156,9 @@ func Load(root string, opts ...LoadOption) (*Bundle, error) {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
-		src, err := os.ReadFile(p)
+		// p is a bundle file discovered by walking the user's bundle root;
+		// reading the user's own bundle is the loader's purpose.
+		src, err := os.ReadFile(p) //nolint:gosec // G304: reading a file from the user's own bundle root
 		if err != nil {
 			return err
 		}
@@ -191,7 +193,8 @@ func Load(root string, opts ...LoadOption) (*Bundle, error) {
 // small YAML document (e.g. "okf_version: 0.1"); a missing or unreadable file is
 // not an error here — Load stays lenient and falls back to the build's version.
 func readOkfVersion(root string) string {
-	data, err := os.ReadFile(filepath.Join(root, ".okf"))
+	// root is the user's bundle root; reading its .okf sidecar is intended.
+	data, err := os.ReadFile(filepath.Join(root, ".okf")) //nolint:gosec // G304: reading the user's own bundle sidecar
 	if err != nil {
 		return SpecVersion
 	}

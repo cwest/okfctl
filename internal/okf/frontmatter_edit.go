@@ -35,7 +35,8 @@ import (
 // the frontmatter block only, so it cannot drop the body the way rewriting a
 // parsed sub-region over the whole file would.
 func TouchModifiedFile(abs string, at time.Time) error {
-	raw, err := os.ReadFile(abs)
+	// abs is the user's node file being refreshed; reading it is intended.
+	raw, err := os.ReadFile(abs) //nolint:gosec // G304: reading the user's own bundle node
 	if err != nil {
 		return fmt.Errorf("read %s: %w", abs, err)
 	}
@@ -49,7 +50,8 @@ func TouchModifiedFile(abs string, at time.Time) error {
 		var out bytes.Buffer
 		out.WriteString("---\nmodified: " + stamp + "\n---\n")
 		out.Write(raw)
-		return os.WriteFile(abs, out.Bytes(), 0o644)
+		// A bundle node is a shareable knowledge document; 0o644 is intended.
+		return os.WriteFile(abs, out.Bytes(), 0o644) //nolint:gosec // G306: shareable bundle content file
 	}
 
 	var doc yaml.Node
@@ -77,7 +79,8 @@ func TouchModifiedFile(abs string, at time.Time) error {
 	// rawAfter is the body region verbatim (including any blank separator line),
 	// so the only bytes that change are inside the frontmatter block.
 	out.Write(rawAfter)
-	return os.WriteFile(abs, out.Bytes(), 0o644)
+	// A bundle node is a shareable knowledge document; 0o644 is intended.
+	return os.WriteFile(abs, out.Bytes(), 0o644) //nolint:gosec // G306: shareable bundle content file
 }
 
 // frontmatterMapping unwraps a decoded yaml document to its top-level mapping

@@ -1,33 +1,33 @@
 # golangci-lint configuration (schema v2).
 #
-# Deliberately scoped to high-signal, low-false-positive detectors that catch
-# REAL defects on THIS codebase — not the everything-firehose that produces
-# hundreds of findings nobody triages. Each linter below was verified against the
-# current tree; genuine findings were fixed rather than suppressed, and the few
-# suppressions here are documented false positives, not baselined bugs.
-#
-# Left out on purpose (measured, not guessed):
-#   - errcheck: 15 findings, every one idiomatic unchecked fmt.Fprint* to stdout
-#     or `defer x.Close()` — not defects, and forcing `_ =` everywhere is exactly
-#     the noise diff this scoping avoids.
-#   - gosec: 18 findings, all non-security patterns on this tool (dev-server
-#     ListenAndServe, git subprocess, feature-hashing SHA1, local file perms).
-#     Enabling it means a wall of //nosec annotations, not safer code.
-#   - unparam / revive(unused-parameter): 8 findings, all unused test-helper
-#     params — noise, not defects.
+# Scoped to high-signal detectors that catch REAL defects on THIS codebase. Every
+# finding was triaged individually against the current tree (not baselined): real
+# ones were fixed, and each remaining suppression is either a per-site
+# `//nolint:gosec` with a stated reason at the call site, or a narrowly scoped
+# rule below with its rationale. There is NO blanket linter disable.
 version: "2"
 
 linters:
   # `standard` = govet, staticcheck, errcheck, ineffassign, unused.
-  # errcheck is disabled below (see rationale above); the rest are kept.
   default: standard
-  disable:
-    - errcheck
   enable:
-    - bodyclose      # HTTP response bodies must be closed (real leak class).
-    - errorlint      # correct error comparison/wrapping (errors.Is/As).
-    - misspell       # typos in comments and strings.
-    - unconvert      # redundant type conversions.
+    - gosec         # security scanner; every finding triaged (see below + per-site //nolint).
+    - bodyclose     # HTTP response bodies must be closed (real leak class).
+    - errorlint     # correct error comparison/wrapping (errors.Is/As).
+    - misspell      # typos in comments and strings.
+    - unconvert     # redundant type conversions.
+  settings:
+    errcheck:
+      # errcheck is ENABLED (2026-08-08 re-triage). The only findings excluded are
+      # unchecked writes to an io.Writer via the fmt.Fprint* family — writing to
+      # stdout / a cobra command's output stream, where a write error is neither
+      # recoverable nor actionable at the call site. Every OTHER unchecked error
+      # (including deferred Close/Remove) is caught; the three that existed were
+      # fixed in code (explicit `_ =`), not excluded.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
   exclusions:
     generated: lax
     rules:
@@ -43,14 +43,6 @@ linters:
         text: "SA4000"
         linters:
           - staticcheck
-      # SA5011 (possible nil deref) false-positives in tests using the standard
-      # `if x == nil { t.Fatalf(...) }` guard: staticcheck does not model
-      # t.Fatalf as terminating the goroutine (it calls runtime.Goexit, not
-      # panic/os.Exit), so it flags the guaranteed-non-nil use after the guard.
-      - path: _test\.go
-        text: "SA5011"
-        linters:
-          - staticcheck
       # This is a multi-line, user-facing CLI guidance message printed verbatim,
       # not a wrapped error fragment; the trailing period and embedded newlines
       # are intentional formatting. ST1005 assumes error strings get concatenated.
@@ -58,6 +50,19 @@ linters:
         text: "ST1005"
         linters:
           - staticcheck
+      # gosec on TEST files only (2026-08-08 re-triage). Every gosec finding in
+      # production code is fixed or carries a per-site `//nolint:gosec` with a
+      # reason. In _test.go the residue is 179 findings of one benign class:
+      # test scaffolding under t.TempDir() — G301/G306 (0o755/0o644 fixture
+      # perms), G304 (reading fixtures the test just wrote), G204 (git run with
+      # fixed args in a throwaway repo). None touch shipped code paths; annotating
+      # 179 sites would bury the test suite in noise for zero security value, so
+      # gosec is scoped OUT of test files here rather than suppressed per line.
+      # gosec stays FULLY ENFORCING on all production code — this is a
+      # test-file scope, not a linter disable.
+      - path: _test\.go
+        linters:
+          - gosec
 
 formatters:
   enable:

@@ -18,6 +18,7 @@ import (
 	_ "embed"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/cwest/okfctl/internal/okf"
 	"github.com/spf13/cobra"
@@ -50,7 +51,9 @@ func newServeHandler(b *okf.Bundle) http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write(indexHTML)
+		// Write errors here mean the client hung up mid-response; nothing to
+		// recover, and headers are already sent so http.Error is unavailable.
+		_, _ = w.Write(indexHTML)
 	})
 
 	return mux
@@ -79,7 +82,14 @@ func newServeCmd() *cobra.Command {
 				return fmt.Errorf("load bundle: %w", err)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "okfctl serve: http://%s (Ctrl-C to stop)\n", addr)
-			return http.ListenAndServe(addr, newServeHandler(b))
+			// ReadHeaderTimeout bounds slow-header (Slowloris) clients; the
+			// bare http.ListenAndServe has none (gosec G114).
+			srv := &http.Server{
+				Addr:              addr,
+				Handler:           newServeHandler(b),
+				ReadHeaderTimeout: 10 * time.Second,
+			}
+			return srv.ListenAndServe()
 		},
 	}
 	c.Flags().StringVar(&addr, "addr", "127.0.0.1:8080", "address to bind (loopback by default)")

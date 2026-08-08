@@ -292,7 +292,7 @@ func PromoteApply(root string, b *Bundle, changes []PromoteChange) error {
 		for _, rw := range ch.Rewrites {
 			content, ok := edited[rw.NodePath]
 			if !ok {
-				raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rw.NodePath)))
+				raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rw.NodePath))) //nolint:gosec // G304: reading a node from the user's own bundle
 				if err != nil {
 					return fmt.Errorf("read %s: %w", rw.NodePath, err)
 				}
@@ -317,7 +317,7 @@ func PromoteApply(root string, b *Bundle, changes []PromoteChange) error {
 	}
 	for p, content := range edited {
 		abs := filepath.Join(root, filepath.FromSlash(p))
-		if err := os.WriteFile(abs, []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(abs, []byte(content), 0o644); err != nil { //nolint:gosec // G306: a bundle node is a shareable knowledge document; 0o644 is intended
 			return fmt.Errorf("write %s: %w", p, err)
 		}
 	}
@@ -327,7 +327,7 @@ func PromoteApply(root string, b *Bundle, changes []PromoteChange) error {
 	for _, ch := range changes {
 		oldAbs := filepath.Join(root, filepath.FromSlash(ch.OldPath))
 		newAbs := filepath.Join(root, filepath.FromSlash(ch.NewPath))
-		raw, err := os.ReadFile(oldAbs)
+		raw, err := os.ReadFile(oldAbs) //nolint:gosec // G304: reading a node from the user's own bundle
 		if err != nil {
 			return fmt.Errorf("read %s: %w", ch.OldPath, err)
 		}
@@ -340,7 +340,7 @@ func PromoteApply(root string, b *Bundle, changes []PromoteChange) error {
 		// frontmatter (created untouched) and the same verbatim body. Only its
 		// PATH changes; that alone flips it from an illegal directory index to a
 		// legal concept node.
-		if err := os.WriteFile(newAbs, raw, 0o644); err != nil {
+		if err := os.WriteFile(newAbs, raw, 0o644); err != nil { //nolint:gosec // G306: a bundle node is a shareable knowledge document; 0o644 is intended
 			return fmt.Errorf("write %s: %w", ch.NewPath, err)
 		}
 		if err := os.Remove(oldAbs); err != nil {

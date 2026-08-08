@@ -36,7 +36,7 @@ type safetensorsEntry struct {
 // no CGO. F32 is the only dtype this loader supports (potion-base-8M is F32); any
 // other dtype errors rather than silently misreading.
 func ReadSafetensorsMatrix(path string) ([][]float64, int, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) //nolint:gosec // G304: reading the user-supplied model.safetensors path is intended
 	if err != nil {
 		return nil, 0, err
 	}
@@ -73,7 +73,9 @@ func ReadSafetensorsMatrix(path string) ([][]float64, int, error) {
 	if end-start != v*d*4 {
 		return nil, 0, fmt.Errorf("safetensors: data span %d != %d (V*D*4)", end-start, v*d*4)
 	}
-	dataStart := int(8 + hlen)
+	// hlen was validated above (8+hlen <= len(raw)), so it fits in int; the
+	// conversion cannot overflow on any platform where len(raw) is representable.
+	dataStart := int(8 + hlen) //nolint:gosec // G115: bounded by the header-length check above
 	if dataStart+end > len(raw) {
 		return nil, 0, fmt.Errorf("safetensors: data section truncated (need %d bytes, have %d)",
 			end, len(raw)-dataStart)
