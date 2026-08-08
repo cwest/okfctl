@@ -21,6 +21,28 @@ built to avoid: it could drift from the first and defeat the whole point.
 never commit it. Edit the source under `../docs/` instead (and for the command
 reference, run `go generate ./cmd` in the Go tree).
 
+## Clean URLs: the `_generated/` staging dir is never a public path
+
+The templated files live on disk under `_generated/`, but that build-artifact
+prefix **never appears in a URL**. Each generated page carries an explicit
+`slug:` in its frontmatter (derived from the page's `out` path in
+`prepare-content.mjs`), so the docs publish at clean, permanent routes:
+
+- `/concepts/`
+- `/guides/<slug>/`
+- `/reference/commands/`
+
+`prepare-content.mjs` exports `LEGACY_TO_CLEAN`, the single source of truth
+mapping every old `/_generated/...` path to its clean route; `astro.config.mjs`
+imports it and feeds it to Astro's `redirects`, so any `/_generated/...` link
+already shared keeps working (a static meta-refresh stub, `noindex`, kept out of
+the sitemap) instead of 404ing. Add a page to the `pages` list and its slug,
+sidebar-eligibility, and redirect all follow from that one entry.
+
+`npm test` builds the site and asserts these invariants against the emitted
+`dist/` — clean routes resolve, `_generated/*` redirects rather than 404s, and
+the sitemap lists only clean URLs.
+
 ## Version numbers derive, never copied
 
 `src/lib/version.ts` fetches
