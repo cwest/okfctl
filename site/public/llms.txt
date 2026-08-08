@@ -11,10 +11,10 @@ reports on its health and link graph.
 
 ## Docs
 
-- [Command reference](https://okfctl.dev/_generated/reference/commands/): Every command, its flags, and a runnable example — generated from and kept in sync with the binary.
-- [Concepts](https://okfctl.dev/_generated/concepts/): Bundles, nodes, the link graph, and the reserved files.
-- [Authoring a bundle](https://okfctl.dev/_generated/guides/authoring/): From an empty directory to a validated bundle.
-- [Curation health](https://okfctl.dev/_generated/guides/curation-health/): Using `lint`, `analyze`, and `--strict` in CI.
+- [Command reference](https://okfctl.dev/reference/commands/): Every command, its flags, and a runnable example — generated from and kept in sync with the binary.
+- [Concepts](https://okfctl.dev/concepts/): Bundles, nodes, the link graph, and the reserved files.
+- [Authoring a bundle](https://okfctl.dev/guides/authoring/): From an empty directory to a validated bundle.
+- [Curation health](https://okfctl.dev/guides/curation-health/): Using `lint`, `analyze`, and `--strict` in CI.
 
 ## Specification
 
