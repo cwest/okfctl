@@ -57,6 +57,39 @@ jobs:
         with:
           version: v2.12.2
 
+  # Bounded fuzz pass over the untrusted-input parsers (frontmatter, node/
+  # Markdown link scanning, apiserver query params). Each target runs a short
+  # -fuzztime so a regression that introduces a crasher surfaces on the PR
+  # without making the build slow. `go test -fuzz` runs exactly ONE target per
+  # package invocation, so the targets are listed explicitly. The committed
+  # testdata/fuzz seed corpora (regression inputs for fixed crashers) are also
+  # replayed by the plain `go test ./... -race` step in build-test, so a fixed
+  # crasher can never silently regress even outside this job.
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with: { go-version: '1.26' }
+      - name: fuzz untrusted-input parsers (negative control — normal input passes)
+        run: |
+          set -euo pipefail
+          go test ./internal/okf/       -run '^$' -fuzz '^FuzzParseFrontmatter$'   -fuzztime=30s
+          go test ./internal/okf/       -run '^$' -fuzz '^FuzzSplitFrontmatterRaw$' -fuzztime=30s
+          go test ./internal/okf/       -run '^$' -fuzz '^FuzzLoadBundle$'          -fuzztime=30s
+          go test ./internal/apiserver/ -run '^$' -fuzz '^FuzzSearchQueryParams$'   -fuzztime=30s
+          go test ./internal/apiserver/ -run '^$' -fuzz '^FuzzCanonicalizeQuery$'   -fuzztime=30s
+      - name: positive control — a guaranteed crasher MUST fail the fuzz gate
+        run: |
+          # The fuzzcontrol-tagged FuzzPositiveControl always crashes. If the
+          # fuzz command does NOT exit non-zero, the gate is broken (it would
+          # green-light real crashers), so a zero exit here fails CI on purpose.
+          if go test -tags fuzzcontrol ./internal/okf/ -run '^$' -fuzz '^FuzzPositiveControl$' -fuzztime=10s; then
+            echo "::error::fuzz gate did not fail on a guaranteed crasher — the fuzz gate is broken"
+            exit 1
+          fi
+          echo "positive control failed as required — the fuzz gate catches crashers"
+
   # Gates the Astro site build. The site's prebuild templates content out of
   # ../docs, so a docs change can break the build too — both paths are filtered
   # by the `changes` job. This job ALWAYS runs so it can be a required status
