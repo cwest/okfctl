@@ -33,6 +33,16 @@ func ParseFrontmatter(src []byte) (map[string]any, string, error) {
 	if err := yaml.Unmarshal(rest.yamlBlock, &fm); err != nil {
 		return nil, "", err
 	}
+	// yaml.Unmarshal of a null document (a bare `!` tag, a literal `null`, or a
+	// block that reduces to null) into a map leaves fm nil and returns NO error.
+	// A nil Frontmatter is the sentinel Load/validate treat as "unparseable"
+	// (validate.go), so returning it here on a successful parse would both
+	// masquerade as a parse failure and drop the body. The success contract is a
+	// usable, non-nil map — a node with zero frontmatter fields is legal at parse
+	// time (§7's required `type` is a validate concern, not a parser crash).
+	if fm == nil {
+		fm = map[string]any{}
+	}
 	return fm, string(rest.body), nil
 }
 
