@@ -1,0 +1,25 @@
+# okfctl
+
+> A command-line tool for authoring and maintaining Open Knowledge Format (OKF)
+> bundles. Pure Go — no CGO, no Python, no model runtime. okfctl does not author
+> the OKF specification; it is a conformant consumer that enforces the spec floor
+> and keeps anything stricter behind an explicit opt-in overlay.
+
+okfctl scaffolds a bundle, adds and moves nodes without breaking links, keeps the
+reserved `index.md`/`log.md` files current, checks a corpus against the spec, and
+reports on its health and link graph.
+
+## Docs
+
+- [Command reference](https://okfctl.dev/_generated/reference/commands/): Every command, its flags, and a runnable example — generated from and kept in sync with the binary.
+- [Concepts](https://okfctl.dev/_generated/concepts/): Bundles, nodes, the link graph, and the reserved files.
+- [Authoring a bundle](https://okfctl.dev/_generated/guides/authoring/): From an empty directory to a validated bundle.
+- [Curation health](https://okfctl.dev/_generated/guides/curation-health/): Using `lint`, `analyze`, and `--strict` in CI.
+
+## Specification
+
+- [Open Knowledge Format spec (SPEC.md)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md): The authoritative OKF specification, owned by Google (`GoogleCloudPlatform/knowledge-catalog`). Where the spec defines behavior, the spec wins.
+
+## Source
+
+- [GitHub repository](https://github.com/cwest/okfctl): Source, releases, and issues.

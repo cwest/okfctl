@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="okfctl">
+  <!-- Placeholder typographic mark until the bespoke-design change lands a
+       wordmark. Tokens match the site theme (indigo accent #4f46e5). A CLI
+       prompt glyph (>_) reads at 16px in a browser tab and says "command-line
+       tool" at a glance. -->
+  <rect width="64" height="64" rx="14" fill="#1e1b4b"/>
+  <rect x="3" y="3" width="58" height="58" rx="11.5" fill="none" stroke="#4f46e5" stroke-width="2.5"/>
+  <path d="M17 22 L29 32 L17 42" fill="none" stroke="#c7d2fe" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="34" y1="43" x2="48" y2="43" stroke="#4f46e5" stroke-width="5.5" stroke-linecap="round"/>
+</svg>
