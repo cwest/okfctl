@@ -1,0 +1,35 @@
+name: codeql
+# Static security analysis for Go. Results appear in the repo Security tab and,
+# on PRs, as inline alerts.
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+  schedule:
+    - cron: '41 8 * * 1' # Mondays 08:41 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      matrix:
+        language: [go]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version: '1.26' }
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v4
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"

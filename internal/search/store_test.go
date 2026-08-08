@@ -15,6 +15,7 @@
 package search
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -138,7 +139,7 @@ func TestStore_ModelMismatchGuard(t *testing.T) {
 	s := BuildIndex(b, NewHashEmbedder(), nil)
 	s.Model = "some-other-model" // simulate a store built under a different model
 	other := NewHashEmbedder()
-	if _, err := Query(s, other, "tannin", 3); err != ErrModelMismatch {
+	if _, err := Query(s, other, "tannin", 3); !errors.Is(err, ErrModelMismatch) {
 		t.Errorf("Query across models = %v, want ErrModelMismatch", err)
 	}
 }

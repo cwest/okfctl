@@ -607,7 +607,7 @@ func isCapitalizedWord(w string) bool {
 	}
 	for i := 1; i < len(w); i++ {
 		c := w[i]
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') {
 			return false
 		}
 	}
