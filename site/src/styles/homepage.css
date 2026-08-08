@@ -1,0 +1,403 @@
+/*
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   okfctl.dev — bespoke homepage layout + components
+   Consumes the shared design tokens from ./tokens.css. This file styles ONLY
+   the standalone landing page (src/pages/index.astro); the Starlight docs
+   chrome is mapped onto the same tokens in ./starlight-theme.css. Nothing here
+   invents a token value — every colour/size resolves to a custom property.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ══ base ═══════════════════════════════════════════════════════════════ */
+*,*::before,*::after{ box-sizing:border-box }
+html{ -webkit-text-size-adjust:100% }
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:var(--font-ui); font-size:var(--f-0); line-height:var(--lh-body);
+  font-feature-settings:"cv05" 1,"cv11" 1; -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+h1,h2,h3,h4{ margin:0; font-weight:500 }
+p{ margin:0 }
+a{ color:inherit; text-decoration:none }
+:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:var(--r-sm) }
+::selection{ background:var(--accent-wash); color:var(--fg) }
+hr{ border:0; border-top:var(--rule) solid var(--border); margin:0 }
+
+.wrap{ max-width:var(--page); margin-inline:auto; padding-inline:var(--gutter) }
+/* Grid and flex children default to min-width:auto, so a single nowrap mono
+   string (an install command, a tree row) can widen the whole document. Every
+   layout track here is explicitly allowed to shrink below its content. */
+.hero-grid > *, .graph-grid > *, .sec-hd > *, .closing-grid > *,
+.why-item > *, .docs-grid > *, .ft-grid > *{ min-width:0 }
+.panel, .term, .cmd{ min-width:0 }
+.mono{ font-family:var(--font-mono); font-variant-ligatures:none; letter-spacing:var(--tr-mono) }
+.serif{ font-family:var(--font-display) }
+
+.eyebrow{
+  font-family:var(--font-mono); font-size:var(--f--2); font-weight:500;
+  letter-spacing:var(--tr-caps); text-transform:uppercase; color:var(--fg-subtle);
+}
+.eyebrow b{ color:var(--accent); font-weight:500 }
+
+.h-display{
+  font-family:var(--font-display); font-weight:400; line-height:var(--lh-tight);
+  letter-spacing:var(--tr-tight); font-size:clamp(2.6rem, 6.4vw, var(--f-6));
+  font-variation-settings:"opsz" 48;
+}
+.h-sec{
+  font-family:var(--font-display); font-weight:400; line-height:1.08;
+  letter-spacing:var(--tr-tight); font-size:clamp(2rem, 4.4vw, var(--f-4));
+  font-variation-settings:"opsz" 36;
+}
+.h-sub{ font-size:var(--f-1); font-weight:500; letter-spacing:var(--tr-snug) }
+.lede{ font-size:var(--f-1); line-height:1.55; color:var(--fg-muted); max-width:var(--measure) }
+.small{ font-size:var(--f--1); color:var(--fg-subtle); line-height:1.6 }
+
+/* ══ chrome ═════════════════════════════════════════════════════════════ */
+.hdr{
+  position:sticky; top:0; z-index:60;
+  background:color-mix(in oklab, var(--bg) 82%, transparent);
+  backdrop-filter:blur(14px) saturate(1.4);
+  border-bottom:var(--rule) solid transparent; transition:border-color var(--dur) var(--ease);
+}
+.hdr[data-scrolled="true"]{ border-bottom-color:var(--border) }
+.hdr-in{ display:flex; align-items:center; gap:var(--s-5); height:60px }
+.brand{ display:flex; align-items:center; gap:var(--s-3); font-family:var(--font-mono); font-weight:700; letter-spacing:-0.02em }
+.brand .dot{ color:var(--accent) }
+.nav{ display:flex; align-items:center; gap:var(--s-2); margin-left:auto }
+.nav a{
+  font-size:var(--f--1); color:var(--fg); padding:var(--s-2) var(--s-3);
+  border-radius:var(--r-sm); transition:color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.nav a:hover{ color:var(--accent); background:var(--surface-2) }
+.vchip{
+  font-family:var(--font-mono); font-size:var(--f--2); color:var(--fg-subtle);
+  border:var(--rule) solid var(--border); border-radius:var(--r-full);
+  padding:2px var(--s-2); white-space:nowrap;
+}
+.icon-btn{
+  display:grid; place-items:center; width:34px; height:34px; border-radius:var(--r-sm);
+  border:var(--rule) solid var(--border); background:var(--surface); color:var(--fg-muted);
+  cursor:pointer; transition:all var(--dur) var(--ease);
+}
+.icon-btn:hover{ color:var(--fg); border-color:var(--border-loud) }
+
+/* ── small-screen header ────────────────────────────────────────────────  *
+   Below 900px the inline nav cannot fit, so the section links move into a
+   disclosure sheet rather than simply disappearing. The theme toggle and the
+   GitHub link stay on the bar — they are the two a visitor reaches for. */
+.nav-toggle{ display:none }
+.sheet{ display:none }
+@media (max-width:900px){
+  .nav .sec-link, .nav .vchip{ display:none }
+  .nav-toggle{ display:grid }
+  .sheet{
+    display:block; position:fixed; inset:60px 0 auto; z-index:55;
+    background:var(--bg); border-bottom:var(--rule) solid var(--border);
+    padding:var(--s-3) var(--gutter) var(--s-5); box-shadow:var(--elev-lg);
+    transform:translateY(-8px); opacity:0; visibility:hidden;
+    transition:opacity var(--dur) var(--ease), transform var(--dur) var(--ease), visibility var(--dur);
+  }
+  .sheet[data-open="true"]{ transform:none; opacity:1; visibility:visible }
+  .sheet a{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:var(--s-3) 0; font-size:var(--f-0); color:var(--fg);
+    border-bottom:var(--rule) solid var(--border-soft); min-height:44px;
+  }
+  .sheet a:last-of-type{ border-bottom:0 }
+  .sheet a span{ font-family:var(--font-mono); font-size:var(--f--2); color:var(--fg-subtle) }
+  .hdr-in{ gap:var(--s-3) }
+}
+/* iPhone SE / 320px: the GitHub link yields to the two icon controls */
+@media (max-width:380px){
+  .nav > a[href*="github"]{ display:none }
+  .hdr-in{ gap:var(--s-2) }
+}
+@media (min-width:901px){ .sheet{ display:none !important } }
+
+/* ══ buttons ════════════════════════════════════════════════════════════ */
+.btn{
+  display:inline-flex; align-items:center; gap:var(--s-2); font-size:var(--f--1);
+  font-weight:500; padding:var(--s-3) var(--s-5); border-radius:var(--r-sm);
+  border:var(--rule) solid var(--border-loud); background:transparent; color:var(--fg);
+  cursor:pointer; transition:all var(--dur) var(--ease); white-space:nowrap;
+}
+.btn:hover{ border-color:var(--fg-subtle); background:var(--surface-2) }
+.btn-primary{ background:var(--accent-fill); border-color:var(--accent-fill); color:var(--on-accent); font-weight:600 }
+.btn-primary:hover{ background:hsl(var(--h-accent) 96% 66%); border-color:hsl(var(--h-accent) 96% 66%) }
+[data-theme="light"] .btn-primary:hover{ background:hsl(28 90% 25%); border-color:hsl(28 90% 25%) }
+
+/* ══ command bar (copyable install) ═════════════════════════════════════ */
+.cmd{
+  display:flex; align-items:stretch; gap:0; background:var(--term-bg);
+  border:var(--rule) solid var(--border); border-radius:var(--r-md); overflow:hidden;
+  box-shadow:var(--elev);
+}
+[data-theme="light"] .cmd{ border-color:hsl(var(--h-ink) 28% 22%) }
+.cmd code{
+  font-family:var(--font-mono); font-size:var(--f--1); color:hsl(var(--h-ink) 18% 88%);
+  padding:var(--s-4) var(--s-4); flex:1; min-width:0; overflow-x:auto; white-space:nowrap;
+  display:flex; align-items:center; gap:var(--s-3); scrollbar-width:thin;
+}
+.cmd .sigil{ color:var(--t-accent); user-select:none; font-weight:700 }
+.copy{
+  flex:none; display:inline-flex; align-items:center; gap:var(--s-2); padding-inline:var(--s-4);
+  border:0; border-left:var(--rule) solid hsl(var(--h-ink) 16% 20%); background:transparent;
+  color:hsl(var(--h-ink) 12% 62%); font-family:var(--font-mono); font-size:var(--f--2);
+  letter-spacing:var(--tr-caps); text-transform:uppercase; cursor:pointer;
+  transition:color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.copy:hover{ color:var(--t-accent); background:hsl(var(--h-accent) 90% 60% / .07) }
+.copy[data-copied="true"]{ color:var(--t-ok) }
+
+/* ══ hero ═══════════════════════════════════════════════════════════════ */
+.hero{ position:relative; padding-block:clamp(var(--s-8), 9vw, var(--s-11)) var(--s-9) }
+.hero::before{
+  content:""; position:absolute; inset:0; z-index:-1; pointer-events:none;
+  background-image:linear-gradient(var(--grid) var(--rule), transparent var(--rule)),
+                   linear-gradient(90deg, var(--grid) var(--rule), transparent var(--rule));
+  background-size:56px 56px; background-position:center top;
+  mask-image:radial-gradient(120% 70% at 22% 0%, #000 0%, transparent 68%);
+  opacity:.5;
+}
+.hero-grid{ display:grid; grid-template-columns:minmax(0,7fr) minmax(0,5fr); gap:clamp(var(--s-6), 4vw, var(--s-8)); align-items:start }
+@media (max-width:1000px){ .hero-grid{ grid-template-columns:1fr; gap:var(--s-8) } }
+.hero h1{ margin-block:var(--s-5) var(--s-5); max-width:15ch }
+.hero h1 em{ font-style:italic; font-weight:300; color:var(--accent) }
+.hero-actions{ display:flex; flex-wrap:wrap; gap:var(--s-3); margin-top:var(--s-5) }
+.hero-actions > .cmd{ flex:1 1 380px; min-width:0 }
+/* The install command is `nowrap` by nature (it must be copyable verbatim),
+   so below ~480px the bar itself scrolls instead of widening the document. */
+@media (max-width:520px){
+  .hero-actions > .cmd{ flex:1 1 100%; min-width:0 }
+  .cmd code{ white-space:nowrap; overflow-x:auto; padding-inline:var(--s-3) }
+  .copy .label{ display:none }
+  .copy{ padding-inline:var(--s-3) }
+  .tree .tag{ display:none }
+  .tree div{ font-size:var(--f--2) }
+  /* the scaffold panel's mono content sets its own floor — let the panel
+     scroll internally rather than widening the page */
+  .tree, .fm{ overflow-x:auto; font-size:var(--f--2) }
+  .panel-hd{ font-size:9.5px; gap:var(--s-2) }
+  .panel-hd .flag{ white-space:nowrap }
+  .hero{ padding-block:var(--s-7) var(--s-7) }
+}
+
+.specstrip{
+  display:flex; flex-wrap:wrap; gap:var(--s-2) var(--s-5); margin-top:var(--s-7);
+  padding-top:var(--s-5); border-top:var(--rule) solid var(--border);
+}
+.specstrip span{
+  font-family:var(--font-mono); font-size:var(--f--2); color:var(--fg-subtle);
+  display:inline-flex; align-items:center; gap:var(--s-2);
+}
+.specstrip span::before{ content:""; width:5px; height:5px; border-radius:1px; background:var(--accent); opacity:.85 }
+
+/* ══ panels ═════════════════════════════════════════════════════════════ */
+.panel{ background:var(--surface); border:var(--rule) solid var(--border); border-radius:var(--r-lg); box-shadow:var(--elev); overflow:hidden }
+.panel-hd{
+  display:flex; align-items:center; gap:var(--s-3); padding:var(--s-3) var(--s-4);
+  border-bottom:var(--rule) solid var(--border-soft); background:var(--surface-2);
+  font-family:var(--font-mono); font-size:var(--f--2); color:var(--fg-subtle);
+  letter-spacing:var(--tr-caps); text-transform:uppercase;
+}
+.panel-hd .flag{ margin-left:auto; text-transform:none; letter-spacing:0; color:var(--fg-muted) }
+
+/* file tree */
+.tree{ padding:var(--s-4) var(--s-4) var(--s-5); font-family:var(--font-mono); font-size:var(--f--1); line-height:1.95 }
+.tree div{ display:flex; gap:var(--s-2); white-space:nowrap; color:var(--fg-muted) }
+.tree .g{ color:var(--fg-subtle) }
+.tree .dir{ color:var(--info) }
+.tree .rsv{ color:var(--accent) }
+.tree .tag{
+  margin-left:auto; font-size:var(--f--2); color:var(--fg-subtle); letter-spacing:var(--tr-caps);
+  text-transform:uppercase; padding-left:var(--s-4);
+}
+.fm{
+  border-top:var(--rule) solid var(--border-soft); background:var(--bg-sunken);
+  padding:var(--s-4); font-family:var(--font-mono); font-size:var(--f--1); line-height:1.85;
+}
+.fm .k{ color:var(--info) } .fm .v{ color:var(--fg) } .fm .d{ color:var(--fg-subtle) }
+
+/* ══ attribution band ═══════════════════════════════════════════════════ */
+.band{ border-block:var(--rule) solid var(--border); background:var(--surface-2) }
+.band-in{ display:flex; flex-wrap:wrap; align-items:baseline; gap:var(--s-3) var(--s-6); padding-block:var(--s-5) }
+.band p{ font-size:var(--f--1); color:var(--fg-muted); max-width:78ch }
+.band strong{ color:var(--fg); font-weight:500 }
+.band a{ color:var(--accent); border-bottom:var(--rule) solid var(--accent-dim); padding-bottom:1px }
+.band a:hover{ border-bottom-color:var(--accent) }
+
+/* ══ section scaffolding ════════════════════════════════════════════════ */
+.sec{ padding-block:clamp(var(--s-8), 8vw, var(--s-10)) }
+.sec-hd{ display:grid; grid-template-columns:minmax(0,5fr) minmax(0,7fr); gap:var(--s-6); align-items:end; margin-bottom:var(--s-8) }
+@media (max-width:860px){ .sec-hd{ grid-template-columns:1fr; align-items:start; gap:var(--s-4) } }
+.numeral{
+  font-family:var(--font-display); font-size:var(--f-2); color:var(--fg-subtle);
+  font-variant-numeric:tabular-nums; display:block; margin-bottom:var(--s-3);
+}
+
+/* ══ graph ══════════════════════════════════════════════════════════════ */
+.graph-grid{ display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,1fr); gap:var(--s-6); align-items:stretch }
+@media (max-width:960px){ .graph-grid{ grid-template-columns:1fr } }
+.graph-stage{ background:var(--bg-sunken); position:relative }
+.graph-stage svg{ display:block; width:100%; height:auto }
+/* the node labels stop being legible below ~420px of stage width, so the
+   stage scrolls rather than shrinking the graph into illegibility */
+@media (max-width:520px){
+  .graph-stage > svg{ min-width:440px }
+  .graph-stage{ overflow-x:auto }
+}
+.zone rect{ fill:var(--surface); stroke:var(--border); stroke-dasharray:3 4 }
+[data-theme="light"] .zone rect{ fill:var(--surface-3); stroke:var(--border-loud) }
+.zone text{ font-family:var(--font-mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; fill:var(--fg-faint) }
+.zone--target rect{ stroke:var(--accent-dim) }
+.zone--target text{ fill:var(--accent) }
+.edge{ stroke:var(--border-loud); stroke-width:1.25; fill:none }
+.edge.hot{ stroke:var(--accent); stroke-width:1.75 }
+[data-theme="light"] .edge{ stroke:hsl(var(--h-ink) 14% 58%) }
+.nd rect{ fill:var(--surface-2); stroke:var(--border-loud); rx:6 }
+[data-theme="light"] .nd rect{ fill:var(--surface); stroke:var(--border-loud) }
+.nd text{ font-family:var(--font-mono); font-size:11px; fill:var(--fg-muted) }
+.nd--focus rect{ fill:var(--accent-wash); stroke:var(--accent); stroke-width:1.5 }
+.nd--focus text{ fill:var(--accent); font-weight:700 }
+.graph-ctl{ display:flex; flex-wrap:wrap; align-items:center; gap:var(--s-3); padding:var(--s-4); border-top:var(--rule) solid var(--border-soft) }
+.graph-out{
+  font-family:var(--font-mono); font-size:var(--f--1); color:var(--ok);
+  display:flex; align-items:center; gap:var(--s-2); min-height:1.7em;
+}
+.graph-out[hidden]{ display:none }
+
+/* diff */
+.diff{ font-family:var(--font-mono); font-size:var(--f--1); line-height:1.85; padding:var(--s-4) 0 }
+.diff .row{ display:grid; grid-template-columns:2.6ch 1fr; padding-inline:var(--s-4); white-space:pre-wrap; word-break:break-word }
+.diff .row .s{ color:var(--fg-faint); user-select:none }
+.diff .file{ color:var(--fg-subtle); padding:var(--s-2) var(--s-4); background:var(--surface-2); border-block:var(--rule) solid var(--border-soft); display:block }
+.diff .del{ background:var(--fail-wash) } .diff .del .s{ color:var(--fail) } .diff .del span.t{ color:var(--fail) }
+.diff .add{ background:var(--ok-wash) }  .diff .add .s{ color:var(--ok) }   .diff .add span.t{ color:var(--ok) }
+.diff .ctx{ color:var(--fg-subtle) }
+/* Before the move these lines are simply the current file, not a deletion:
+   neutralise the marker and the wash until the move has actually run. */
+.diff[data-state="before"] .del{ background:transparent; color:var(--fg-subtle) }
+.diff[data-state="before"] .del .s{ color:transparent }
+.diff[data-state="before"] .del span.t{ color:var(--info) }
+
+/* ══ terminal ═══════════════════════════════════════════════════════════ */
+.term{
+  background:var(--term-bg); border:var(--rule) solid var(--border); border-radius:var(--r-lg);
+  overflow:hidden; box-shadow:var(--elev-lg);
+}
+[data-theme="light"] .term{ border-color:hsl(var(--h-ink) 28% 20%) }
+.term-tabs{
+  display:flex; gap:0; background:var(--term-chrome); border-bottom:var(--rule) solid hsl(var(--h-ink) 16% 16%);
+  overflow-x:auto; scrollbar-width:none;
+}
+.term-tabs::-webkit-scrollbar{ display:none }
+.term-tab{
+  font-family:var(--font-mono); font-size:var(--f--1); color:hsl(var(--h-ink) 12% 55%);
+  padding:var(--s-3) var(--s-5); border:0; background:transparent; cursor:pointer; white-space:nowrap;
+  border-bottom:2px solid transparent; margin-bottom:-1px; transition:color var(--dur) var(--ease);
+}
+.term-tab:hover{ color:hsl(var(--h-ink) 14% 76%) }
+.term-tab[aria-selected="true"]{ color:var(--t-accent); border-bottom-color:var(--t-accent); background:hsl(var(--h-accent) 90% 60% / .05) }
+.term-body{ padding:var(--s-5) var(--s-5) var(--s-6); overflow-x:auto }
+.term pre{
+  margin:0; font-family:var(--font-mono); font-size:13.5px; line-height:var(--lh-mono);
+  letter-spacing:var(--tr-mono); color:var(--term-fg); font-variant-ligatures:none;
+  tab-size:2; white-space:pre;
+}
+.term .p{ color:var(--t-accent); user-select:none } /* prompt sigil */
+.term .c{ color:hsl(var(--h-ink) 16% 96%); font-weight:500 } /* command */
+.term .f{ color:var(--t-info) }      /* flag / path */
+.term .s{ color:hsl(var(--h-accent) 40% 72%) } /* string literal */
+.term .o{ color:var(--t-dim) }                 /* stdout, de-emphasised */
+.term .ok{ color:var(--t-ok); font-weight:500 }
+.term .bad{ color:var(--t-fail); font-weight:500 }
+.term .cm{ color:var(--t-cm); font-style:italic }
+.term-ft{
+  display:flex; align-items:center; gap:var(--s-3); padding:var(--s-3) var(--s-5);
+  border-top:var(--rule) solid hsl(var(--h-ink) 16% 14%); background:var(--term-chrome);
+  font-family:var(--font-mono); font-size:var(--f--2); color:var(--t-cm);
+}
+.exit{ display:inline-flex; align-items:center; gap:var(--s-2); padding:2px var(--s-2); border-radius:var(--r-sm); font-weight:700 }
+.exit--0{ color:var(--t-ok); background:hsl(var(--h-ok) 58% 52% / .13) }
+.exit--1{ color:var(--t-fail); background:hsl(var(--h-fail) 78% 62% / .14) }
+
+/* ══ rationale list ═════════════════════════════════════════════════════ */
+.why{ border-top:var(--rule) solid var(--border) }
+.why-item{
+  display:grid; grid-template-columns:minmax(0,5fr) minmax(0,7fr); gap:var(--s-6);
+  padding-block:var(--s-7); border-bottom:var(--rule) solid var(--border);
+}
+@media (max-width:860px){ .why-item{ grid-template-columns:1fr; gap:var(--s-4); padding-block:var(--s-6) } }
+.why-item h3{ font-family:var(--font-display); font-size:var(--f-2); letter-spacing:var(--tr-snug); line-height:1.15; font-weight:400 }
+.why-item .n{ font-family:var(--font-mono); font-size:var(--f--2); color:var(--accent); letter-spacing:var(--tr-caps); display:block; margin-bottom:var(--s-3) }
+.why-item p{ color:var(--fg-muted); max-width:var(--measure) }
+.why-item .ev{
+  margin-top:var(--s-4); font-family:var(--font-mono); font-size:var(--f--1); color:var(--fg-subtle);
+  border-left:2px solid var(--border-loud); padding:var(--s-1) 0 var(--s-1) var(--s-4);
+}
+.why-item .ev b{ color:var(--fg); font-weight:500 }
+
+.pull{
+  font-family:var(--font-display); font-style:italic; font-weight:300;
+  font-size:clamp(1.5rem, 3vw, var(--f-3)); line-height:1.3; letter-spacing:var(--tr-snug);
+  color:var(--fg); max-width:34ch;
+}
+
+.closing-grid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:var(--s-7); align-items:end }
+@media (max-width:820px){ .closing-grid{ grid-template-columns:1fr; gap:var(--s-5) } }
+
+/* ══ docs ═══════════════════════════════════════════════════════════════ */
+.docs{ background:var(--bg-sunken); border-block:var(--rule) solid var(--border) }
+.docs-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(230px,1fr)); gap:var(--rule); background:var(--border); border:var(--rule) solid var(--border); border-radius:var(--r-lg); overflow:hidden }
+.docs-col{ background:var(--bg); padding:var(--s-5) }
+.docs-col h4, .docs-col-h{ font-family:var(--font-mono); font-size:var(--f--2); font-weight:500; letter-spacing:var(--tr-caps); text-transform:uppercase; color:var(--fg-subtle); margin:0 0 var(--s-4) }
+.docs-col ul{ list-style:none; margin:0; padding:0; display:grid; gap:var(--s-1) }
+.docs-col li a{
+  display:flex; align-items:baseline; gap:var(--s-2); padding:var(--s-2) var(--s-2); margin-inline:calc(var(--s-2) * -1);
+  border-radius:var(--r-sm); font-size:var(--f--1); color:var(--fg-muted);
+  transition:color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.docs-col li a:hover{ color:var(--fg); background:var(--surface-2) }
+.docs-col li a code{ font-family:var(--font-mono); color:var(--accent); font-size:0.95em }
+.docs-col li a .arrow{ margin-left:auto; color:var(--fg-faint); opacity:0; transition:opacity var(--dur) var(--ease) }
+.docs-col li a:hover .arrow{ opacity:1 }
+
+.cmdtable{ width:100%; border-collapse:collapse; font-size:var(--f--1) }
+.cmdtable td{ padding:var(--s-3) var(--s-4) var(--s-3) 0; border-bottom:var(--rule) solid var(--border-soft); vertical-align:baseline; color:var(--fg-muted) }
+.cmdtable tr:last-child td{ border-bottom:0 }
+.cmdtable td:first-child{ width:1%; white-space:nowrap; font-family:var(--font-mono); color:var(--fg); padding-right:var(--s-6) }
+.cmdtable td:first-child b{ color:var(--accent); font-weight:500 }
+
+/* ══ footer ═════════════════════════════════════════════════════════════ */
+.ft{ padding-block:var(--s-8) var(--s-7) }
+.ft-grid{ display:grid; grid-template-columns:minmax(0,2fr) repeat(3, minmax(0,1fr)); gap:var(--s-6) }
+@media (max-width:760px){ .ft-grid{ grid-template-columns:1fr 1fr; gap:var(--s-5) } }
+.ft h5, .ft-h{ font-family:var(--font-mono); font-size:var(--f--2); letter-spacing:var(--tr-caps); text-transform:uppercase; color:var(--fg-subtle); margin:0 0 var(--s-3); font-weight:500 }
+.ft ul{ list-style:none; margin:0; padding:0; display:grid; gap:var(--s-2) }
+.ft a{ font-size:var(--f--1); color:var(--fg-muted) }
+.ft a:hover{ color:var(--accent) }
+.ft-base{ display:flex; flex-wrap:wrap; gap:var(--s-3) var(--s-5); align-items:center; margin-top:var(--s-7); padding-top:var(--s-5); border-top:var(--rule) solid var(--border) }
+
+.sr{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0 }
+.skip{ position:absolute; left:var(--s-4); top:-3rem; z-index:99; background:var(--accent-fill); color:var(--on-accent); padding:var(--s-2) var(--s-4); border-radius:var(--r-sm); font-size:var(--f--1); transition:top var(--dur) var(--ease) }
+.skip:focus{ top:var(--s-3) }
+
+@media (prefers-reduced-motion: reduce){
+  *{ animation-duration:.01ms !important; transition-duration:.01ms !important }
+}

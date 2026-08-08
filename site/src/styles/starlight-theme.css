@@ -1,0 +1,132 @@
+/*
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/* ══════════════════════════════════════════════════════════════════════════
+   okfctl.dev — Starlight docs theming
+   Maps Starlight's own design variables (--sl-color-*, --sl-font*) onto the
+   shared tokens in ./tokens.css so a reader who clicks from the bespoke
+   homepage into the docs does not fall off a design cliff. This restyles
+   through the CSS-custom-property SEAM only — no Starlight component is forked.
+
+   Starlight's dark theme is the default `:root`; light is `:root[data-theme=
+   'light']`. Both flavours below read the SAME tokens the homepage does, so
+   changing a hue anchor in tokens.css reshapes the homepage AND the docs from
+   one place.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── typography · the tri-font hierarchy the homepage uses ─────────────── */
+:root {
+  --sl-font: var(--font-ui);
+  --sl-font-mono: var(--font-mono);
+}
+
+/* ── dark (default) · map Starlight surfaces onto the ink + gold ramps ── */
+:root {
+  /* neutral ramp — gray-1 lightest text down to gray-6 darkest surface */
+  --sl-color-white: var(--fg);
+  --sl-color-gray-1: var(--fg);
+  --sl-color-gray-2: var(--fg-muted);
+  --sl-color-gray-3: var(--fg-subtle);
+  --sl-color-gray-4: var(--fg-faint);
+  --sl-color-gray-5: var(--surface-3);
+  --sl-color-gray-6: var(--surface);
+  --sl-color-gray-7: var(--surface-2);
+  --sl-color-black: var(--bg);
+
+  /* gold accent ramp */
+  --sl-color-accent-low: var(--accent-dim);
+  --sl-color-accent: var(--accent);
+  --sl-color-accent-high: var(--accent);
+  --sl-color-text-accent: var(--accent);
+
+  --sl-color-bg: var(--bg);
+  --sl-color-bg-nav: color-mix(in oklab, var(--bg) 82%, transparent);
+  --sl-color-bg-sidebar: var(--bg);
+  --sl-color-bg-inline-code: var(--surface-2);
+  --sl-color-bg-accent: var(--accent);
+  --sl-color-text-invert: var(--on-accent);
+  --sl-color-hairline: var(--border-soft);
+  --sl-color-hairline-light: var(--border);
+  --sl-color-hairline-shade: var(--border-soft);
+}
+
+/* ── light · read the authored (not inverted) light ramp ───────────────── */
+:root[data-theme='light'] {
+  --sl-color-white: var(--fg);
+  --sl-color-gray-1: var(--fg);
+  --sl-color-gray-2: var(--fg-muted);
+  --sl-color-gray-3: var(--fg-subtle);
+  --sl-color-gray-4: var(--fg-faint);
+  --sl-color-gray-5: var(--border-loud);
+  --sl-color-gray-6: var(--surface-3);
+  --sl-color-gray-7: var(--surface-2);
+  --sl-color-black: var(--bg);
+
+  --sl-color-accent-low: var(--accent-dim);
+  --sl-color-accent: var(--accent);
+  --sl-color-accent-high: var(--accent);
+  --sl-color-text-accent: var(--accent);
+
+  --sl-color-bg: var(--bg);
+  --sl-color-bg-nav: color-mix(in oklab, var(--bg) 88%, transparent);
+  --sl-color-bg-sidebar: var(--bg-sunken);
+  --sl-color-bg-inline-code: var(--surface-3);
+  --sl-color-bg-accent: var(--accent);
+  --sl-color-text-invert: var(--on-accent);
+  --sl-color-hairline: var(--border-soft);
+  --sl-color-hairline-light: var(--border);
+  --sl-color-hairline-shade: var(--border-soft);
+}
+
+/* ── headings in the display serif, matching the homepage voice ────────── */
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3,
+.content-panel h1,
+main h1#_top {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: var(--tr-tight);
+}
+
+/* ── code blocks · align with the homepage terminal ink ────────────────── */
+.sl-markdown-content code {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  letter-spacing: var(--tr-mono);
+}
+.sl-markdown-content :not(pre) > code {
+  color: var(--accent);
+  background: var(--sl-color-bg-inline-code);
+}
+/* Expressive-Code / shiki blocks inherit Starlight's own frame; nudge the
+   frame border onto our hairline so it reads as one system. */
+.expressive-code .frame {
+  border-color: var(--border);
+}
+
+/* ── links pick up the gold accent ─────────────────────────────────────── */
+.sl-markdown-content a {
+  color: var(--accent);
+  text-underline-offset: 0.15em;
+}
+
+/* ── the site title in the header uses the mono wordmark voice ──────────── */
+.site-title {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
