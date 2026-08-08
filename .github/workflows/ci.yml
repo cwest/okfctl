@@ -79,6 +79,11 @@ jobs:
       - name: install
         if: needs.changes.outputs.site == 'true'
         run: npm ci --prefix site
-      - name: build
+      - name: build and test
+        # `npm test` chains the build, then asserts on the built HTML in dist/:
+        # clean URLs, no _generated links, and the social-card/icon tags. Those
+        # regressions produce a clean, green build — the assertions are the only
+        # thing that catches them, so running the build alone would leave the
+        # guards in the repo but not in CI.
         if: needs.changes.outputs.site == 'true'
-        run: npm run build --prefix site
+        run: npm test --prefix site
