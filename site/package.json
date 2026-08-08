@@ -12,6 +12,7 @@
     "start": "npm run prebuild && astro dev",
     "build": "npm run prebuild && astro build",
     "preview": "astro preview",
+    "test": "npm run build && node --test 'tests/**/*.test.mjs'",
     "astro": "astro"
   },
   "dependencies": {

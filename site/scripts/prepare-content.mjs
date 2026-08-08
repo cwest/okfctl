@@ -49,8 +49,14 @@ function yamlString(s) {
 
 // Build a Starlight frontmatter block. `body` is appended verbatim — no fact is
 // added, only the header Starlight needs to render the page.
-function withFrontmatter({ title, sidebarLabel, sidebarOrder, description }, body) {
+//
+// `slug` sets the page's PUBLISHED route, decoupling it from the on-disk path.
+// Starlight uses the frontmatter `slug` as the canonical URL, so a file written
+// under _generated/concepts.md publishes at /concepts/ — the build-artifact
+// prefix never reaches the public URL space.
+function withFrontmatter({ title, slug, sidebarLabel, sidebarOrder, description }, body) {
   const lines = ["---", `title: ${yamlString(title)}`];
+  if (slug) lines.push(`slug: ${yamlString(slug)}`);
   if (description) lines.push(`description: ${yamlString(description)}`);
   if (sidebarLabel || sidebarOrder !== undefined) {
     lines.push("sidebar:");
@@ -68,6 +74,13 @@ function withFrontmatter({ title, sidebarLabel, sidebarOrder, description }, bod
 // must exist; a missing source is a hard error (better a red build than a
 // silently missing page). No entry points at docs/PRD.md, docs/plans/,
 // docs/specs/, or docs/adr/ — those are internal and stay unpublished.
+//
+// `out` is where the page is WRITTEN on disk — under the private _generated/
+// staging dir (gitignored). `slug` is where the page is PUBLISHED — the clean,
+// permanent URL. The two are decoupled on purpose: keep the templated files out
+// of the tracked tree, but never leak the _generated/ build-artifact prefix into
+// a public URL. The slug is derived from `out` (drop the ".md") so the two
+// cannot drift; a bespoke slug can still be set explicitly if ever needed.
 const pages = [
   {
     src: "concepts.md",
@@ -137,6 +150,24 @@ const pages = [
   },
 ];
 
+// slugFor derives the clean, published route from the on-disk `out` path by
+// dropping the trailing ".md". This is the single source of truth for a page's
+// URL: prepare-content stamps it into frontmatter, and astro.config imports the
+// same mapping to build the legacy-path redirects, so the two cannot drift.
+export function slugFor(out) {
+  return out.replace(/\.md$/, "");
+}
+
+// LEGACY_TO_CLEAN maps each old _generated/* route (paths people may already
+// have shared) to its clean replacement. Consumed by astro.config.mjs to emit
+// redirect stubs so a shared /_generated/... link never 404s.
+export const LEGACY_TO_CLEAN = Object.fromEntries(
+  pages.map((p) => {
+    const clean = slugFor(p.out);
+    return [`/_generated/${clean}`, `/${clean}`];
+  }),
+);
+
 async function main() {
   // Start clean so a removed/renamed source cannot leave a stale page behind.
   await rm(genRoot, { recursive: true, force: true });
@@ -153,14 +184,22 @@ async function main() {
     const body = await readFile(srcPath, "utf8");
     const outPath = join(genRoot, page.out);
     await mkdir(dirname(outPath), { recursive: true });
-    await writeFile(outPath, withFrontmatter(page, body), "utf8");
-    console.log(`prepared ${page.src} -> _generated/${page.out}`);
+    // Publish at the clean slug derived from `out`; the file stays under the
+    // private _generated/ staging dir but its URL drops that prefix.
+    const slug = slugFor(page.out);
+    await writeFile(outPath, withFrontmatter({ ...page, slug }, body), "utf8");
+    console.log(`prepared ${page.src} -> _generated/${page.out} (published at /${slug}/)`);
   }
 
   console.log(`prepare-content: wrote ${pages.length} pages to ${genRoot}`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Only run the copy step when invoked directly (`node prepare-content.mjs`).
+// astro.config.mjs imports this module for LEGACY_TO_CLEAN and must not trigger
+// a rebuild as a side effect of the import.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
