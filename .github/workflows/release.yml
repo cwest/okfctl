@@ -4,6 +4,9 @@ on:
     tags: ['v*']
 permissions:
   contents: write
+  # Keyless cosign signing needs an OIDC token from the workflow's identity
+  # (Sigstore/Fulcio). See .goreleaser.yaml `signs:`.
+  id-token: write
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
@@ -12,9 +15,20 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-go@v7
         with: { go-version: '1.26' }
+      # SBOM generation (goreleaser `sboms:` shells out to syft).
+      - uses: anchore/sbom-action/download-syft@v0
+      # Keyless signing (goreleaser `signs:` shells out to cosign).
+      - uses: sigstore/cosign-installer@v3
       - uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pushing the Homebrew cask to cwest/homebrew-tap needs a token with
+          # write access to that separate repo — the default GITHUB_TOKEN is
+          # scoped to this repo only. Store a PAT (or fine-grained token with
+          # contents:write on cwest/homebrew-tap) as the
+          # HOMEBREW_TAP_GITHUB_TOKEN secret. See .goreleaser.yaml
+          # `homebrew_casks:`.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

@@ -25,7 +25,21 @@ export const version = await fetchLatestVersion();
 
 ## Install
 
-Install the latest tagged release with `go install`:
+On macOS (or Linux with Homebrew), install with `brew`:
+
+```sh
+brew install cwest/tap/okfctl
+```
+
+On any macOS or Linux machine, install with the one-liner — it detects your
+OS/arch, downloads the matching release archive, verifies its checksum, and puts
+both `okfctl` and `okfctl-search` on your `PATH`:
+
+```sh
+curl -sSL https://okfctl.dev/install.sh | sh
+```
+
+If you have a Go toolchain, install from source:
 
 <pre><code>{version.tag
   ? `go install github.com/cwest/okfctl@${version.tag}`
@@ -38,9 +52,11 @@ Install the latest tagged release with `go install`:
 )}
 
 Or download a prebuilt binary for your platform from the
-[releases page](https://github.com/cwest/okfctl/releases) (darwin and linux,
-amd64 and arm64). Each archive bundles both `okfctl` and the `okfctl-search`
-plugin.
+[releases page](https://github.com/cwest/okfctl/releases) — macOS, Linux, and
+Windows, on amd64 and arm64. Each archive bundles both `okfctl` and the
+`okfctl-search` plugin. Linux users can also grab a `.deb` or `.rpm`. Release
+artifacts ship with an SBOM and are signed with cosign (keyless), verifiable
+with `cosign verify-blob`.
 
 ## What it is
 

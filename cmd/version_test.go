@@ -16,6 +16,7 @@ package cmd
 
 import (
 	"bytes"
+	"runtime/debug"
 	"strings"
 	"testing"
 )
@@ -79,4 +80,61 @@ func TestVersion_FlagReportsSameValue(t *testing.T) {
 // it, keeping package state clean across tests.
 func restoreVersionInfo(prev [3]string) {
 	SetVersionInfo(prev[0], prev[1], prev[2])
+}
+
+// buildInfoOf builds a minimal *debug.BuildInfo whose Main.Version is v, for
+// exercising the go-install fallback without depending on the test binary's
+// own module metadata.
+func buildInfoOf(v string) *debug.BuildInfo {
+	return &debug.BuildInfo{Main: debug.Module{Version: v}}
+}
+
+func TestResolveVersion_PrefersInjectedLdflags(t *testing.T) {
+	// A goreleaser build injects a real tag; that always wins over build info,
+	// even when module metadata is also present.
+	got := resolveVersion("v1.2.3", func() (*debug.BuildInfo, bool) {
+		return buildInfoOf("v9.9.9"), true
+	})
+	if got != "v1.2.3" {
+		t.Fatalf("resolveVersion = %q, want the injected ldflags value %q", got, "v1.2.3")
+	}
+}
+
+func TestResolveVersion_FallsBackToModuleVersionOnGoInstall(t *testing.T) {
+	// A `go install github.com/cwest/okfctl@latest` build injects nothing, so
+	// the ldflags value is the "dev" default; the module version from
+	// debug.ReadBuildInfo() must fill in instead of reporting "dev".
+	got := resolveVersion("dev", func() (*debug.BuildInfo, bool) {
+		return buildInfoOf("v0.2.0"), true
+	})
+	if got != "v0.2.0" {
+		t.Fatalf("resolveVersion = %q, want the module version %q", got, "v0.2.0")
+	}
+}
+
+func TestResolveVersion_KeepsDevWhenModuleVersionUnusable(t *testing.T) {
+	// When the Go toolchain cannot derive a real module version it records
+	// "(devel)" (or leaves it empty) for the main module — e.g. a build with no
+	// usable VCS/module metadata. That is not a real release, so the "dev"
+	// default is kept rather than surfacing the useless placeholder. (A build
+	// inside a git checkout instead gets a real pseudo-version, which is a
+	// usable value the fallback happily reports.)
+	for _, mv := range []string{"", "(devel)"} {
+		got := resolveVersion("dev", func() (*debug.BuildInfo, bool) {
+			return buildInfoOf(mv), true
+		})
+		if got != "dev" {
+			t.Fatalf("resolveVersion with module version %q = %q, want %q", mv, got, "dev")
+		}
+	}
+}
+
+func TestResolveVersion_KeepsDevWhenBuildInfoUnavailable(t *testing.T) {
+	// debug.ReadBuildInfo() can fail (ok=false); the "dev" default stands.
+	got := resolveVersion("dev", func() (*debug.BuildInfo, bool) {
+		return nil, false
+	})
+	if got != "dev" {
+		t.Fatalf("resolveVersion = %q, want %q when build info is unavailable", got, "dev")
+	}
 }

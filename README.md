@@ -33,20 +33,56 @@ model runtime.
 
 ## Install
 
-Install the latest tagged release with `go install`:
+The quickest paths, in order of least friction:
+
+**Homebrew** (macOS, or Linux with Homebrew):
+
+```sh
+brew install cwest/tap/okfctl
+```
+
+**One-liner** (macOS and Linux) — detects your OS/arch, downloads the matching
+release archive, verifies its checksum against the release's `checksums.txt`, and
+installs both `okfctl` and `okfctl-search` onto your `PATH`. It refuses to
+install on a checksum mismatch:
+
+```sh
+curl -sSL https://okfctl.dev/install.sh | sh
+```
+
+**Go toolchain** — install from source:
 
 ```sh
 go install github.com/cwest/okfctl@latest
 ```
 
-Or download a prebuilt binary for your platform from the
-[releases page](https://github.com/cwest/okfctl/releases) (darwin and
-linux, amd64 and arm64). Each archive bundles both `okfctl` and the
+**Prebuilt binaries** — download for your platform from the
+[releases page](https://github.com/cwest/okfctl/releases): macOS, Linux, and
+Windows, on amd64 and arm64. Each archive bundles both `okfctl` and the
 `okfctl-search` plugin — extract them onto your `PATH`:
 
 ```sh
-tar -xzf okfctl_<version>_<os>_<arch>.tar.gz
+tar -xzf okfctl_<version>_<os>_<arch>.tar.gz     # or unzip the .zip on Windows
 sudo mv okfctl okfctl-search /usr/local/bin/
+```
+
+Linux users can also install a system package:
+
+```sh
+sudo dpkg -i okfctl_<version>_linux_<arch>.deb    # Debian/Ubuntu
+sudo rpm -i  okfctl_<version>_linux_<arch>.rpm    # Fedora/RHEL
+```
+
+Every release ships an SBOM (syft) and is signed with cosign (keyless via
+Sigstore). Verify the checksums file, which covers every artifact:
+
+```sh
+cosign verify-blob \
+  --certificate checksums.txt.pem \
+  --signature checksums.txt.sig \
+  --certificate-identity-regexp 'https://github.com/cwest/okfctl/.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
 ```
 
 Verify the install and the reported version:
