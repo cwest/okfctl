@@ -44,7 +44,7 @@ curl -sL https://raw.githubusercontent.com/GoogleCloudPlatform/knowledge-catalog
 |---|---|
 | Upstream spec | **0.2** |
 | `SpecVersion` (`internal/okf/reserved.go`) | `0.2` |
-| Real corpus (`knowledge-base` bundle-root `index.md` `okf_version`) | `0.2` |
+| A real corpus's bundle-root `index.md` `okf_version` | `0.2` |
 
 The tool, the corpus, and the spec are all v0.2. v0.2 is a minor bump
 (§13) with two deliberate breaking renames: `timestamp` → `generated.at`, and the
@@ -90,14 +90,14 @@ gofmt -l . && go vet ./... && go test ./... -race
 
 # 3. REAL CORPUS — the layer fixtures cannot substitute for.
 go build -o /tmp/okfctl-check . && \
-  /tmp/okfctl-check validate ~/src/knowledge-base/bundles/knowledge && \
-  /tmp/okfctl-check lint --strict ~/src/knowledge-base/bundles/knowledge
+  /tmp/okfctl-check validate <path/to/a/real/bundle> && \
+  /tmp/okfctl-check lint --strict <path/to/a/real/bundle>
 ```
 
 **Layer 3 is not optional and fixtures do not replace it.** A hand-built fixture
-holds a handful of nodes that the author already had in mind; the real corpus
-(`~/src/knowledge-base`, bundle `bundles/knowledge`, ~239 nodes) holds the shapes
-nobody anticipated. Increment 8's history is the argument: 319 ALLCAPS false hits
+holds a handful of nodes that the author already had in mind; a real corpus
+(a sizable OKF bundle of a couple hundred nodes) holds the shapes nobody
+anticipated. Increment 8's history is the argument: 319 ALLCAPS false hits
 from frontmatter (`VERIFIED` ×219), 159 findings on reserved `index.md`/`log.md`,
 129 of 137 `missing-xref` hits that were the bare words "index"/"log", and 1,333
 sentence-initial-cap false positives — **every one invisible at fixture scale.**
@@ -146,9 +146,9 @@ decision nobody reviewed.
 
 ## Repo conventions
 
-- **Deploy checkout stays on `main`, permanently.** All in-flight work happens in
-  `.worktrees/<card-id>` on a `wt/<card-id>` branch. A topic branch checked out on
-  the deploy clone breaks the post-merge `git pull --ff-only`.
+- **Keep the deploy/publish checkout on `main`.** Do in-flight work on a topic
+  branch in a separate checkout or worktree, never by checking a topic branch out
+  on the checkout that publishes — that breaks a post-merge `git pull --ff-only`.
 - **Apache headers read `Copyright <year> Google LLC`** — not Casey West. Match
   the existing files exactly.
 - **Commits are SSH-signed** as `Casey West <casey@geeknest.com>`, Conventional
