@@ -18,7 +18,7 @@ jobs:
       site: ${{ steps.filter.outputs.site }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -70,7 +70,7 @@ jobs:
         run: echo "No site/** or docs/** changes in this PR; nothing to build."
       - uses: actions/checkout@v7
         if: needs.changes.outputs.site == 'true'
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         if: needs.changes.outputs.site == 'true'
         with:
           node-version: 22
