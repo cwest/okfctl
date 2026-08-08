@@ -130,6 +130,33 @@ export default defineConfig({
       // global.css also imports the bespoke design tokens and the Starlight token
       // mapping, so the docs pages inherit the homepage's design language.
       customCss: ["./src/styles/global.css"],
+      // The bespoke web fonts (Newsreader/Inter/JetBrains Mono) load via <link>
+      // in the docs <head> — the same proven path the standalone homepage uses
+      // (src/pages/index.astro). A CSS `@import url(...)` in customCss is dropped
+      // by the Tailwind v4 optimizer: a font @import that follows the Tailwind
+      // rule-emitting @imports is an invalid non-leading @import per the CSS
+      // spec, so the docs would otherwise fall back to system fonts.
+      head: [
+        {
+          tag: "link",
+          attrs: { rel: "preconnect", href: "https://fonts.googleapis.com" },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "preconnect",
+            href: "https://fonts.gstatic.com",
+            crossorigin: true,
+          },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&display=swap",
+          },
+        },
+      ],
       // Pages are sourced from src/content/docs/. The user-facing docs under
       // ../docs are copied in at build time by scripts/prepare-content.mjs
       // (into _generated/) with Starlight frontmatter prepended — templating,

@@ -35,9 +35,10 @@
  * tokens.css is the single source of truth for the palette/type/spacing (see
  * that file's header). starlight-theme.css maps Starlight's own --sl-* design
  * variables onto those tokens so the docs pages inherit the homepage's design
- * language without forking any Starlight component. The web fonts load here so
- * they are present on every docs page as well as the standalone homepage.
+ * language without forking any Starlight component. The web fonts are loaded via
+ * <link> in the docs <head> (Starlight `head` config in astro.config.mjs) — the
+ * same path the standalone homepage uses — rather than a CSS `@import`, which the
+ * Tailwind v4 optimizer drops when it follows the rule-emitting @imports above.
  */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&display=swap");
 @import "./tokens.css";
 @import "./starlight-theme.css";
