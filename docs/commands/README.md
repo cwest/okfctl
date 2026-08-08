@@ -211,6 +211,90 @@ Example:
 ```
 
 
+## okfctl eval
+
+Measure KB-node trustworthiness (TACA): a Transparency gate + a spot-check sampler
+
+eval decomposes node trust the way the TACA lens prescribes — Transparency, Accuracy, Calibration, Alignment — as far as a pure-Go, offline, no-model tool honestly can.
+
+'eval transparency' is the deterministic gate: it checks that provenance is present (a grade + citations) and that internal citations resolve. It is the first machine gate that touches trust rather than format.
+
+'eval sample' scaffolds the three dimensions okfctl CANNOT automate (Accuracy, Alignment, Calibration) into an eval-set for a human or an out-of-band LLM judge to complete. okfctl never computes a truth verdict itself — checking a claim against a source needs a model or the network, which core deliberately does not do.
+
+
+### okfctl eval sample
+
+Emit a spot-check eval-set scaffold for Accuracy/Alignment/Calibration
+
+sample selects a spot-check sample of nodes and emits a structured eval-set for the three TACA dimensions okfctl cannot automate — Accuracy (are the claims supported by the cited source?), Alignment (does the node answer the question it set out to?), and Calibration (does the grade hold up on re-check?). Every field okfctl can extract is pre-populated; the judgment slots are left empty for a human or an out-of-band LLM judge to fill in. okfctl computes NO truth verdict.
+
+Selection: --changed-since <ref> samples nodes changed since a git ref (the curation/CI hook); otherwise --sample N draws a deterministic seeded random sample.
+
+```
+okfctl eval sample [bundle-dir] [flags]
+```
+
+Example:
+
+```
+# A worksheet for 5 random nodes
+  okfctl eval sample --sample 5 --format md ./bundles/knowledge
+
+  # Machine eval-set for nodes changed on this branch (curation hook)
+  okfctl eval sample --changed-since origin/main ./bundles/knowledge
+```
+
+Flags:
+
+```
+      --changed-since string   sample only nodes changed since this git ref (e.g. origin/main)
+      --format string          output format: json (machine eval-set) or md (human worksheet) (default "json")
+      --no-ignore              walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --sample int             size of a deterministic random sample (ignored when --changed-since is set)
+      --seed int               seed for reproducible --sample selection (default: a fixed seed)
+```
+
+
+### okfctl eval transparency
+
+Gate TACA-Transparency: grade present, cited, internal citations resolve
+
+transparency runs the deterministic, offline TACA-Transparency checks over a bundle. Like lint it is advisory (exit 0) by default and never mutates the bundle; pass --strict to exit non-zero on any finding (the CI gate). The four checks:
+
+  grade-missing        a node carries no epistemic OR authority grade
+  grade-vocabulary     a grade value is off-vocabulary for the corpus (a likely typo)
+  uncited              a node carries no citations of any kind
+  citation-unresolved  an internal citation resolves to no node in the bundle
+
+External http(s) citations are deliberately out of scope — verifying them needs the network, which is the eval-sample / human pass, not this gate.
+
+```
+okfctl eval transparency [bundle-dir] [flags]
+```
+
+Example:
+
+```
+# Report transparency findings (advisory, exit 0)
+  okfctl eval transparency ./bundles/knowledge
+
+  # Fail CI on any finding
+  okfctl eval transparency --strict ./bundles/knowledge
+
+  # Machine-readable findings
+  okfctl eval transparency --json ./bundles/knowledge
+```
+
+Flags:
+
+```
+      --grade-vocabulary-floor int   min nodes carrying a grade value for it to count as corpus vocabulary (default 2)
+      --json                         emit findings as a machine-readable JSON array (sorted path, then check)
+      --no-ignore                    walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --strict                       exit non-zero if there are any findings (default: advisory, exit 0)
+```
+
+
 ## okfctl graph
 
 Query and export the bundle's knowledge graph
