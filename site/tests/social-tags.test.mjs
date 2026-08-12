@@ -62,11 +62,16 @@ async function walk(dir) {
   return out;
 }
 
-// Redirect stubs under _generated/ are intentionally minimal: a meta-refresh
-// and a noindex, nothing else. They are never shared or indexed, so requiring
-// social tags on them would be wrong.
-function isIndexable(rel) {
-  return rel.endsWith(".html") && !rel.startsWith("_generated/");
+// Redirect stubs are intentionally minimal: a meta-refresh and a noindex,
+// nothing else. They are never shared or indexed, so requiring social tags on
+// them would be wrong. Two flavours exist — the _generated/* legacy stubs and
+// hand-authored redirects (e.g. /commands/ -> /reference/commands/) — so detect
+// them by their meta-refresh signature rather than a single path prefix.
+function isIndexable(rel, html) {
+  if (!rel.endsWith(".html")) return false;
+  if (rel.startsWith("_generated/")) return false;
+  if (/http-equiv=["']?refresh/i.test(html)) return false;
+  return true;
 }
 
 test("dist/ exists (build ran first)", () => {
@@ -74,16 +79,21 @@ test("dist/ exists (build ran first)", () => {
 });
 
 test("every indexable page carries the social card and icon tags", async () => {
-  const pages = (await walk(dist))
+  const htmlFiles = (await walk(dist))
     .map((f) => relative(dist, f))
-    .filter(isIndexable)
+    .filter((rel) => rel.endsWith(".html"))
     .sort();
+
+  const pages = [];
+  for (const rel of htmlFiles) {
+    const html = await readFile(join(dist, rel), "utf8");
+    if (isIndexable(rel, html)) pages.push({ rel, html });
+  }
 
   assert.ok(pages.length > 0, "found no indexable pages in dist/");
 
   const failures = [];
-  for (const rel of pages) {
-    const html = await readFile(join(dist, rel), "utf8");
+  for (const { rel, html } of pages) {
     const missing = REQUIRED_TAGS.filter((t) => !t.pattern.test(html)).map((t) => t.name);
     if (missing.length) failures.push(`${rel} is missing: ${missing.join(", ")}`);
   }

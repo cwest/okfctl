@@ -49,6 +49,64 @@ vocabulary"; with `--embedder model2vec` it means genuinely related subject
 matter. Build the index with `model2vec` if you intend to act on these findings.
 See the [search guide](search.md) for embedder setup.
 
+## `eval` — TACA-style trustworthiness
+
+`validate` and `lint` check **format**; `eval` is the first machine gate that
+touches **trust**. It decomposes node trust the way the TACA lens prescribes —
+**T**ransparency, **A**ccuracy, **C**alibration, **A**lignment — as far as a
+pure-Go, offline, no-model tool honestly can. Only Transparency is machine-
+decidable without a model or the network; the other three are *scaffolded* for a
+human or an out-of-band LLM judge, never auto-graded.
+
+### `eval transparency` — the gate
+
+Deterministic and offline, mirroring `lint`: advisory (exit 0) by default,
+`--strict` to fail CI, `--json` for tooling. Four checks:
+
+| check | meaning |
+|---|---|
+| `grade-missing` | a node carries no `epistemic` **and** no `authority` grade |
+| `grade-vocabulary` | a grade value is off-vocabulary for the corpus (a likely typo/drift) |
+| `uncited` | a node carries no citations of any kind (no `sources`, no `# Citations`, no internal reference) |
+| `citation-unresolved` | an internal citation resolves to no node in the bundle |
+
+The grade vocabulary is **derived from the corpus**, not hardcoded: a value
+carried by at least `--grade-vocabulary-floor` nodes (default 2) counts as the
+vocabulary; rarer values are flagged as drift. This catches the one-off typo
+(`authority: high`) without inventing an enum the OKF spec deliberately leaves
+open. External `http(s)` citations are out of scope — verifying them needs the
+network (that is the sampler / human pass, see the `verifying-citation-link-fit`
+discipline).
+
+```sh
+okfctl eval transparency --strict ./bundles/knowledge   # CI gate
+okfctl eval transparency --json ./bundles/knowledge     # tooling
+```
+
+Wire it alongside `validate --strict` and `lint --strict` as a third
+conformance gate.
+
+### `eval sample` — the spot-check scaffold
+
+Selects a sample of nodes and emits a structured eval-set for the three
+dimensions okfctl cannot automate. It computes **no truth verdict** — it
+pre-populates every field it can extract (title, description, grades, sources,
+candidate claims) and leaves the judgment slots empty for a reviewer to fill in.
+
+```sh
+# A worksheet for 5 random nodes (deterministic, seeded)
+okfctl eval sample --sample 5 --format md ./bundles/knowledge
+
+# Machine eval-set for nodes changed on this branch (the curation/CI hook)
+okfctl eval sample --changed-since origin/main ./bundles/knowledge
+```
+
+`--changed-since` is the curation hook: a pre-merge job runs
+`eval transparency --strict` as the gate and `eval sample --changed-since` to
+drop a spot-check worksheet on the touched nodes. A periodic
+`eval sample --sample N` draws a re-verification sample to measure Calibration
+(do our `VERIFIED` labels hold up on re-check?) over time.
+
 ## Skipping vendored and derived directories
 
 Every command that walks a bundle (`validate`, `lint`, `analyze`, `search`,
