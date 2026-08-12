@@ -48,7 +48,7 @@ Flags:
       --coverage-threshold int          min distinct nodes mentioning a term to report a coverage gap (default 3)
       --json                            emit machine-readable JSON instead of the human report
       --no-ignore                       walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
-      --stale-days int                  age (days) past which a node's modified/created is flagged stale (default 180)
+      --stale-days int                  age (days) past which a node's freshness basis (verified/generated/modified/created) is flagged stale (default 180)
       --thin-lines int                  body line count below which a node is thin (default 15)
       --time-sensitive-fraction float   surface a time-sensitive node once its age >= fraction*stale-days (default 0.5); undated marked nodes always surface
 ```
