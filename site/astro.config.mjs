@@ -33,7 +33,13 @@ export default defineConfig({
   // page list prepare-content.mjs uses, so a new page's redirect cannot be
   // forgotten. Astro emits these as static meta-refresh stubs — the only
   // redirect mechanism GitHub Pages (no server) supports.
-  redirects: LEGACY_TO_CLEAN,
+  //
+  // The homepage names "Command reference"; a developer guessing the obvious
+  // /commands/ URL would otherwise dead-end, so point it at the real page.
+  redirects: {
+    ...LEGACY_TO_CLEAN,
+    "/commands/": "/reference/commands/",
+  },
   vite: {
     // Tailwind v4 is wired via its first-party Vite plugin. This is the theming
     // SEAM the bespoke design restyles through: starlightTailwind() below tells
