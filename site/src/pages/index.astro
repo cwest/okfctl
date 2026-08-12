@@ -61,7 +61,7 @@ const goInstallCmd = version.tag
     <title>okfctl — a CLI for authoring and maintaining Open Knowledge Format bundles</title>
     <meta
       name="description"
-      content="okfctl scaffolds, moves, indexes, validates and inspects Open Knowledge Format bundles. Pure Go, no CGO, no Python, no model runtime."
+      content="okfctl scaffolds, moves, indexes, validates and inspects Open Knowledge Format bundles. A single static Go binary — nothing else to install."
     />
     <link rel="canonical" href="https://okfctl.dev/" />
     {/* Icons and the social share card. The docs pages get these from the
@@ -80,7 +80,7 @@ const goInstallCmd = version.tag
     />
     <meta
       property="og:description"
-      content="okfctl scaffolds, moves, indexes, validates and inspects Open Knowledge Format bundles. Pure Go, no CGO, no Python, no model runtime."
+      content="okfctl scaffolds, moves, indexes, validates and inspects Open Knowledge Format bundles. A single static Go binary — nothing else to install."
     />
     <meta property="og:image" content="https://okfctl.dev/og.png" />
     <meta property="og:image:width" content="1200" />
@@ -183,7 +183,7 @@ const goInstallCmd = version.tag
             <h1 class="h-display">Knowledge you can <em>move</em> without breaking.</h1>
             <p class="lede">
               <code class="mono" style="color:var(--fg)">okfctl</code> authors and maintains Open Knowledge Format
-              bundles — a curated tree of Markdown nodes with a link graph, reserved
+              bundles — a curated tree of Markdown nodes with a link graph, reserved{" "}
               <code class="mono" style="color:var(--fg-muted)">index.md</code> / <code class="mono" style="color:var(--fg-muted)">log.md</code> files,
               and frontmatter provenance.
             </p>
@@ -247,7 +247,7 @@ const goInstallCmd = version.tag
             <a href="https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md" rel="noopener">GoogleCloudPlatform/knowledge-catalog</a>.
             Where the spec defines behaviour, the spec wins. okfctl enforces the floor for everyone and keeps anything
             stricter behind an explicit opt-in overlay (<code class="mono" style="color:var(--fg)">--templates</code>, §9.4), so an
-            unknown <code class="mono" style="color:var(--fg)">type</code> or a future frontmatter key never fails
+            unknown <code class="mono" style="color:var(--fg)">type</code> or a future frontmatter key never fails{" "}
             <code class="mono" style="color:var(--fg)">validate</code>.
           </p>
         </div>
@@ -259,11 +259,10 @@ const goInstallCmd = version.tag
           <div class="sec-hd">
             <div>
               <span class="numeral">01</span>
-              <h2 class="h-sec">The link graph<br />is the point.</h2>
             </div>
             <div>
               <p class="lede">
-                A knowledge base decays at the moment a path changes. <code class="mono" style="color:var(--fg)">okfctl node mv</code>
+                A knowledge base decays at the moment a path changes. <code class="mono" style="color:var(--fg)">okfctl node mv</code>{" "}
                 treats path as identity: it moves the file and rewrites every inbound link in the corpus, relative depth
                 and all. Nothing dangles, and the change lands in <code class="mono" style="color:var(--fg)">log.md</code>.
               </p>
@@ -346,9 +345,9 @@ const goInstallCmd = version.tag
             </div>
             <div>
               <p class="lede">
-                The command grammar below is the real okfctl surface, kept in lock-step with the binary by the
+                The command grammar below is the real okfctl command set, kept in lock-step with the binary by the
                 command-reference drift gate. Advisory by default, gate-able on demand: <code class="mono" style="color:var(--fg)">validate</code> fails on a floor
-                violation, <code class="mono" style="color:var(--fg)">lint</code> exits 0 with findings until you pass
+                violation, <code class="mono" style="color:var(--fg)">lint</code> exits 0 with findings until you pass{" "}
                 <code class="mono" style="color:var(--fg)">--strict</code>.
               </p>
             </div>
@@ -359,6 +358,7 @@ const goInstallCmd = version.tag
               <button class="term-tab" role="tab" aria-selected="true" aria-controls="t-cold" id="tab-cold" type="button">cold&nbsp;start</button>
               <button class="term-tab" role="tab" aria-selected="false" aria-controls="t-val" id="tab-val" type="button" tabindex="-1">validate&nbsp;·&nbsp;failing</button>
               <button class="term-tab" role="tab" aria-selected="false" aria-controls="t-lint" id="tab-lint" type="button" tabindex="-1">lint&nbsp;--strict</button>
+              <button class="term-tab" role="tab" aria-selected="false" aria-controls="t-eval" id="tab-eval" type="button" tabindex="-1">eval&nbsp;transparency</button>
               <button class="term-tab" role="tab" aria-selected="false" aria-controls="t-scale" id="tab-scale" type="button" tabindex="-1">at&nbsp;scale</button>
             </div>
 
@@ -406,6 +406,25 @@ const goInstallCmd = version.tag
 <span class="p">$</span> <span class="c">echo</span> $?
 <span class="bad">1</span>   <span class="cm"># the same finding, now a CI gate</span></pre></div>
 
+              <div role="tabpanel" id="t-eval" aria-labelledby="tab-eval" tabindex="0" hidden><pre>
+<span class="cm"># the first gate that touches provenance, not just format:</span>
+<span class="cm"># grade-missing · grade-vocabulary · uncited · citation-unresolved</span>
+<span class="p">$</span> <span class="c">okfctl eval transparency</span> <span class="f">mykb</span>
+<span class="o">uncited: concepts/aging.md carries no citations of any kind</span>
+<span class="o">grade-missing: concepts/aging.md has neither an epistemic nor an authority grade</span>
+<span class="p">$</span> <span class="c">echo</span> $?
+<span class="ok">0</span>   <span class="cm"># advisory by default, like lint</span>
+
+<span class="p">$</span> <span class="c">okfctl eval transparency</span> <span class="f">--strict</span> <span class="f">mykb</span>
+<span class="bad">okfctl: 2 transparency finding(s)</span>
+<span class="p">$</span> <span class="c">echo</span> $?
+<span class="bad">1</span>   <span class="cm"># the CI gate</span>
+
+<span class="cm"># Transparency is the one TACA dimension a no-model tool can gate.</span>
+<span class="cm"># Accuracy, Calibration and Alignment are SCAFFOLDED for a human</span>
+<span class="cm"># or an out-of-band judge — okfctl never computes a truth verdict.</span>
+<span class="p">$</span> <span class="c">okfctl eval sample</span> <span class="f">--changed-since</span> <span class="f">origin/main</span> <span class="f">mykb</span></pre></div>
+
               <div role="tabpanel" id="t-scale" aria-labelledby="tab-scale" tabindex="0" hidden><pre>
 <span class="cm"># a real corpus, not a fixture</span>
 <span class="p">$</span> <span class="c">okfctl bundle info</span> <span class="f">bundles/knowledge</span>
@@ -442,16 +461,16 @@ const goInstallCmd = version.tag
           <div class="sec-hd">
             <div>
               <span class="numeral">03</span>
-              <h2 class="h-sec">Why this exists.</h2>
+              <h2 class="h-sec">Why this exists</h2>
             </div>
-            <div><p class="pull">Markdown knowledge bases don't rot because people stop writing. They rot because nothing enforces the shape.</p></div>
+            <div><p class="pull">Markdown knowledge bases don't rot because people stop writing. They rot because nothing enforces the structure.</p></div>
           </div>
 
           <div class="why">
             <article class="why-item">
               <div><span class="n">01 — install</span><h3>One binary, no runtime underneath it.</h3></div>
               <div>
-                <p>A knowledge-base tool that needs a Python environment or a model server is a tool your CI will fight. okfctl is pure Go with no CGO, no Python, and no model runtime — <code class="mono" style="color:var(--fg)">go install</code>, or drop a static binary on <code class="mono" style="color:var(--fg)">PATH</code>.</p>
+                <p>A knowledge-base tool that needs a Python environment or a model server is a tool your CI will fight. okfctl is a single static Go binary that runs with nothing installed alongside it: <code class="mono" style="color:var(--fg)">go install</code> it, or drop the binary on <code class="mono" style="color:var(--fg)">PATH</code>, and it runs.</p>
                 <p class="ev"><b>CGO_ENABLED=0 go build -o okfctl .</b> — static, no cgo. Prebuilt for darwin and linux, amd64 and arm64.</p>
               </div>
             </article>
@@ -489,7 +508,7 @@ const goInstallCmd = version.tag
           <div class="sec-hd">
             <div>
               <span class="numeral">04</span>
-              <h2 class="h-sec">Documentation.</h2>
+              <h2 class="h-sec">Documentation</h2>
             </div>
             <div>
               <p class="lede">
@@ -564,7 +583,7 @@ const goInstallCmd = version.tag
       <section class="sec closing" style="padding-block:var(--s-9)">
         <div class="wrap closing-grid">
           <div>
-            <h2 class="h-sec" style="max-width:14ch">Start with an empty directory.</h2>
+            <h2 class="h-sec" style="max-width:14ch">Start with an empty directory</h2>
           </div>
           <div>
             <div class="cmd">
@@ -586,7 +605,7 @@ const goInstallCmd = version.tag
         <div class="ft-grid">
           <div>
             <a href="#main" class="brand" style="margin-bottom:var(--s-3)">okfctl<span class="dot">.</span>dev</a>
-            <p class="small" style="max-width:34ch">A command-line tool for authoring and maintaining Open Knowledge Format bundles. Pure Go, no CGO, no Python, no model runtime.</p>
+            <p class="small" style="max-width:34ch">A command-line tool for authoring and maintaining Open Knowledge Format bundles. One static Go binary you drop on your PATH.</p>
           </div>
           <div>
             <h2 class="ft-h">Project</h2>
@@ -709,6 +728,7 @@ const goInstallCmd = version.tag
           "tab-cold": [0, "clean cold start"],
           "tab-val": [1, "spec-floor violation — always fatal"],
           "tab-lint": [1, "advisory run exits 0; --strict exits 1"],
+          "tab-eval": [1, "provenance gate — advisory exits 0; --strict exits 1"],
           "tab-scale": [0, "a real corpus, not a fixture"],
         };
         const select = (id) => {
