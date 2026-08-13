@@ -33,7 +33,13 @@ export default defineConfig({
   // page list prepare-content.mjs uses, so a new page's redirect cannot be
   // forgotten. Astro emits these as static meta-refresh stubs — the only
   // redirect mechanism GitHub Pages (no server) supports.
-  redirects: LEGACY_TO_CLEAN,
+  //
+  // The homepage names "Command reference"; a developer guessing the obvious
+  // /commands/ URL would otherwise dead-end, so point it at the real page.
+  redirects: {
+    ...LEGACY_TO_CLEAN,
+    "/commands/": "/reference/commands/",
+  },
   vite: {
     // Tailwind v4 is wired via its first-party Vite plugin. This is the theming
     // SEAM the bespoke design restyles through: starlightTailwind() below tells
@@ -47,6 +53,14 @@ export default defineConfig({
       title: "okfctl",
       description:
         "A command-line tool for authoring and maintaining Open Knowledge Format (OKF) bundles.",
+      // Override the built-in footer so every docs page carries the author
+      // credit. src/components/Footer.astro wraps Starlight's default footer
+      // and appends the credit; the standalone homepage route (src/pages/
+      // index.astro) never renders this component, so it carries its own copy
+      // of the credit in its own footer.
+      components: {
+        Footer: "./src/components/Footer.astro",
+      },
       // The SVG mark shipped in public/favicon.svg (a placeholder typographic
       // mark until the bespoke-design change lands a wordmark). Starlight emits
       // the <link rel="icon"> for this; the PNG fallback + apple-touch-icon and
