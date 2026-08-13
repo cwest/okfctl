@@ -7,11 +7,28 @@ permissions:
   contents: read
   pages: write
   id-token: write
-concurrency:
-  group: pages
-  cancel-in-progress: true
 jobs:
+  # A release publish runs this workflow at the TAG ref (refs/tags/vX.Y.Z). The
+  # github-pages environment permits deployments only from `main`, so a deploy
+  # attempted from a tag is rejected by environment protection (1s / 0 steps).
+  # Instead of attempting an env-rejected deploy from the tag, re-dispatch this
+  # workflow on `main`, which re-enters via workflow_dispatch at an env-permitted
+  # ref and performs the real build+deploy with a freshly-read version chip. This
+  # is the automated form of the manual workflow_dispatch rerun that was
+  # previously required after each release.
+  redispatch:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: rebuild docs on main
+        run: gh workflow run docs.yml --ref main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
   build:
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,9 +52,16 @@ jobs:
         with:
           path: site/dist
   deploy:
+    if: github.event_name != 'release'
     needs: build
     runs-on: ubuntu-latest
     environment: github-pages
+    # Only the deploy holds the single-in-flight Pages lock. A newer deploy
+    # supersedes an in-flight one rather than erroring on the environment's
+    # one-deployment-per-environment rule.
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     steps:
       - id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
