@@ -78,8 +78,7 @@ Sigstore). Verify the checksums file, which covers every artifact:
 
 ```sh
 cosign verify-blob \
-  --certificate checksums.txt.pem \
-  --signature checksums.txt.sig \
+  --bundle checksums.txt.sigstore.json \
   --certificate-identity-regexp 'https://github.com/cwest/okfctl/.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   checksums.txt
