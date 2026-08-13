@@ -53,6 +53,14 @@ export default defineConfig({
       title: "okfctl",
       description:
         "A command-line tool for authoring and maintaining Open Knowledge Format (OKF) bundles.",
+      // Override the built-in footer so every docs page carries the author
+      // credit. src/components/Footer.astro wraps Starlight's default footer
+      // and appends the credit; the standalone homepage route (src/pages/
+      // index.astro) never renders this component, so it carries its own copy
+      // of the credit in its own footer.
+      components: {
+        Footer: "./src/components/Footer.astro",
+      },
       // The SVG mark shipped in public/favicon.svg (a placeholder typographic
       // mark until the bespoke-design change lands a wordmark). Starlight emits
       // the <link rel="icon"> for this; the PNG fallback + apple-touch-icon and
