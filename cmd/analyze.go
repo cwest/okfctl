@@ -81,7 +81,7 @@ func newAnalyzeCmd() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&jsonOut, "json", false, "emit machine-readable JSON instead of the human report")
-	c.Flags().IntVar(&staleDays, "stale-days", 0, "age (days) past which a node's modified/created is flagged stale (default 180)")
+	c.Flags().IntVar(&staleDays, "stale-days", 0, "age (days) past which a node's freshness basis (verified/generated/modified/created) is flagged stale (default 180)")
 	c.Flags().Float64Var(&timeSensitiveFraction, "time-sensitive-fraction", 0, "surface a time-sensitive node once its age >= fraction*stale-days (default 0.5); undated marked nodes always surface")
 	c.Flags().IntVar(&thinLines, "thin-lines", 0, "body line count below which a node is thin (default 15)")
 	c.Flags().IntVar(&clusterMin, "cluster-min", 0, "min nodes sharing a tag to flag a synthesis cluster (default 3)")

@@ -475,14 +475,27 @@ func analyzeFreshness(b *Bundle, opts AnalyzeOptions) FreshnessReport {
 
 // freshnessBasis returns the basis date string, its parsed time, and whether a
 // usable date was found. Resolution order:
-//  1. n.Generated() — the spec's canonical `generated.at` (§5.2) with the legacy
+//  1. n.Verified() — the LATEST §5.2 `verified[].at` content-verification
+//     instant. This is the freshness axis: it records when a node's CLAIMS were
+//     last re-confirmed, which is distinct from `modified` (a mechanical edit).
+//     A corpus-wide reformat that only rewrites `modified` must NOT reset the
+//     freshness clock, so a present `verified` date takes precedence over every
+//     mechanical-edit key below.
+//  2. n.Generated() — the spec's canonical `generated.at` (§5.2) with the legacy
 //     `timestamp` fallback (§13.1). Generated() returns ok=false when neither
 //     yields a usable date, so a zero-value `generated` mapping (an empty/absent
 //     `at` and no legacy timestamp) is never read as a valid basis.
-//  2. modified -> created — okfctl-native compatibility, unchanged. These keys
+//  3. modified -> created — okfctl-native compatibility, unchanged. These keys
 //     are not spec-defined; they carry our own v0.1 corpus, which records no
-//     `generated`/`timestamp`.
+//     `generated`/`timestamp`/`verified`.
 func freshnessBasis(n *Node) (string, time.Time, bool) {
+	// §5.2: the latest content-verification instant is the truest freshness
+	// basis — a node re-verified recently is fresh regardless of a mechanical
+	// `modified` bump, and a node never re-verified since a bulk reformat is
+	// correctly surfaced as aged. Take the max `at` across the event list.
+	if latest, ok := latestVerifiedAt(n); ok {
+		return latest.Format("2006-01-02"), latest, true
+	}
 	// §5.2 / §13.1: prefer the spec fields via the shared provenance reader.
 	// Generated() reports ok on `by` alone (§5.2 requires `by`), which leaves a
 	// zero `At`; freshness needs a real DATE, so require a non-zero time here.
@@ -497,6 +510,26 @@ func freshnessBasis(n *Node) (string, time.Time, bool) {
 		}
 	}
 	return "", time.Time{}, false
+}
+
+// latestVerifiedAt returns the most recent §5.2 `verified[].at` instant across a
+// node's verification events, and whether any usable date was found. Events with
+// a zero `at` (a verifier recorded without a date) are ignored — freshness needs
+// a real instant. When no event carries a date, ok is false and the caller falls
+// through to the generated/modified/created chain.
+func latestVerifiedAt(n *Node) (time.Time, bool) {
+	var latest time.Time
+	found := false
+	for _, v := range n.Verified() {
+		if v.At.IsZero() {
+			continue
+		}
+		if !found || v.At.After(latest) {
+			latest = v.At
+			found = true
+		}
+	}
+	return latest, found
 }
 
 // frontmatterTimeString renders a frontmatter date value back to a short string
