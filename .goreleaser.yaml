@@ -102,24 +102,27 @@ sboms:
     artifacts: archive
 
 # Keyless signing via cosign, using the release workflow's OIDC token
-# (Sigstore / Fulcio). Produces a detached signature and the signing
-# certificate for the checksums file, which transitively covers every
-# artifact listed in it. Verify with:
+# (Sigstore / Fulcio). Produces a single sigstore bundle (signature, signing
+# certificate, and Rekor inclusion proof in one .sigstore.json file) for the
+# checksums file, which transitively covers every artifact listed in it.
+# Verify with:
 #   cosign verify-blob \
-#     --certificate checksums.txt.pem \
-#     --signature checksums.txt.sig \
+#     --bundle checksums.txt.sigstore.json \
 #     --certificate-identity-regexp 'https://github.com/cwest/okfctl/.*' \
 #     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
 #     checksums.txt
 signs:
   - id: cosign-checksum
     cmd: cosign
-    signature: "${artifact}.sig"
-    certificate: "${artifact}.pem"
+    # cosign's new-bundle-format (the default since the sigstore/cosign-installer
+    # v4 line) writes the signature, certificate, and Rekor inclusion proof into
+    # ONE bundle file and IGNORES the legacy --output-signature/--output-certificate
+    # pair. Pass --bundle so cosign has a real output path; the .sigstore.json
+    # extension is the sigstore bundle convention.
+    signature: "${artifact}.sigstore.json"
     args:
       - sign-blob
-      - "--output-signature=${signature}"
-      - "--output-certificate=${certificate}"
+      - "--bundle=${signature}"
       - "${artifact}"
       - "--yes"
     artifacts: checksum
