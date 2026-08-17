@@ -1,0 +1,5 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "Okfctl-INVALID",
+  "bogus_top_level_key": "this violates additionalProperties:false and the name pattern"
+}
