@@ -3,7 +3,6 @@
 [![CI](https://github.com/cwest/okfctl/actions/workflows/ci.yml/badge.svg)](https://github.com/cwest/okfctl/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/cwest/okfctl?sort=semver)](https://github.com/cwest/okfctl/releases/latest)
 [![Go Reference](https://pkg.go.dev/badge/github.com/cwest/okfctl.svg)](https://pkg.go.dev/github.com/cwest/okfctl)
-[![Go Report Card](https://goreportcard.com/badge/github.com/cwest/okfctl)](https://goreportcard.com/report/github.com/cwest/okfctl)
 [![License](https://img.shields.io/github/license/cwest/okfctl)](LICENSE)
 
 `okfctl` is a command-line tool for authoring and maintaining
