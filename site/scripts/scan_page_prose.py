@@ -62,15 +62,26 @@ import sys
 from pathlib import Path
 
 # A negative-listing chain: "no X, no Y" (optionally longer, optionally "...and
-# no Z"). Anchored on repeated "no <word>" separated by ordinary punctuation and
+# no Z"). Anchored on repeated "no <item>" separated by ordinary punctuation and
 # whitespace only -- em/en dashes are intentionally NOT separators, because the
 # chip row is dash-free and the running-prose tic uses commas/"and". The chain
-# needs at least TWO "no <word>" members so a bare "no cache" never trips.
+# needs at least TWO "no <item>" members so a bare "no cache" never trips.
+#
+# Each ITEM is "no" followed by ONE-to-THREE words, not a single token: the slop
+# the gate exists to catch routinely uses multi-word items -- the OKF spec's own
+# wording, "no schema registry, no central authority, and no required tooling",
+# is three two-word items. A single-token matcher ("no <word>") silently passed
+# that entire class and even truncated "no model runtime" to "no model". The
+# inner-word negative lookahead (?!and\b|no\b) stops an item from swallowing the
+# next separator, so "no cache, no index and it just works" matches exactly the
+# chain and not the trailing clause.
+_WORD = r"(?!and\b|no\b)[A-Za-z][\w-]*"       # a word that is not a separator token
+_ITEM = rf"no\s+{_WORD}(?:\s+{_WORD}){{0,2}}"  # no <1-3 words>
 NEG_LISTING = re.compile(
-    r"\bno\s+[A-Za-z][\w-]*"          # no X
-    r"(?:\s*,\s*(?:and\s+)?no\s+[A-Za-z][\w-]*)+"  # , no Y (, and no Z ...)
-    r"|"
-    r"\bno\s+[A-Za-z][\w-]*\s+and\s+no\s+[A-Za-z][\w-]*",  # no X and no Y
+    rf"\b{_ITEM}"                              # no X
+    rf"(?:\s*,\s*(?:and\s+)?{_ITEM})+"         # , [and] no Y (, no Z ...)
+    rf"|"
+    rf"\b{_ITEM}\s+and\s+{_ITEM}",             # no X and no Y
     re.IGNORECASE,
 )
 

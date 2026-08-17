@@ -114,6 +114,77 @@ class NegativeListingInRunningProse(unittest.TestCase):
         self.assertIn("No CGO, no Python", r.stdout)
 
 
+class MultiWordNegativeItems(unittest.TestCase):
+    """Regression: each negative item may be MORE than one word. A single-token
+    matcher ('no <word>') silently passes a chain of multi-word items — the
+    exact gap that let the OKF spec's own wording ('no schema registry, no
+    central authority, and no required tooling') through the gate. The item
+    'schema registry' / 'central authority' / 'required tooling' each spans two
+    words; the detector must still fire.
+    """
+
+    SPEC_PHRASE = (
+        "No schema registry, no central authority, and no required tooling."
+    )
+
+    def test_multiword_items_in_meta_description_fail(self):
+        # The spec's own sentence, in the class PR #111 missed (render-only meta).
+        page = CLEAN_PAGE.replace(
+            'content="A single static Go binary you drop on your PATH."',
+            f'content="{self.SPEC_PHRASE}"',
+        )
+        r = run(page)
+        self.assertEqual(r.returncode, 1, f"expected failure:\n{r.stdout}")
+        self.assertIn("meta", r.stdout)
+        self.assertIn("no schema registry", r.stdout.lower())
+
+    def test_multiword_items_in_body_paragraph_fail(self):
+        page = CLEAN_PAGE.replace(
+            "<p>A knowledge base decays at the moment a path changes. okfctl keeps links honest.</p>",
+            f"<p>{self.SPEC_PHRASE}</p>",
+        )
+        r = run(page)
+        self.assertEqual(r.returncode, 1, f"expected failure:\n{r.stdout}")
+        self.assertIn("no schema registry", r.stdout.lower())
+
+    def test_multiword_match_spans_the_whole_last_item(self):
+        # The single-token matcher truncated 'no model runtime' to 'no model';
+        # the multi-word matcher must capture the trailing words of each item.
+        page = CLEAN_PAGE.replace(
+            "<p>A knowledge base decays at the moment a path changes. okfctl keeps links honest.</p>",
+            "<p>Pure Go, no build step, no model runtime.</p>",
+        )
+        r = run(page)
+        self.assertEqual(r.returncode, 1, f"expected failure:\n{r.stdout}")
+        self.assertIn("no build step", r.stdout)
+
+
+class SingleNegativeIsClean(unittest.TestCase):
+    """The chain needs at least TWO negative members; a lone 'no <phrase>' — even
+    a multi-word one — is an ordinary factual clause, not the slop cadence, and
+    must NOT trip. This is the negative control that keeps the widened matcher
+    from firing on legitimate technical prose.
+    """
+
+    def test_single_multiword_negative_passes(self):
+        page = CLEAN_PAGE.replace(
+            "<p>A knowledge base decays at the moment a path changes. okfctl keeps links honest.</p>",
+            "<p>It needs no external model server to run offline.</p>",
+        )
+        r = run(page)
+        self.assertEqual(r.returncode, 0, f"single negative must pass:\n{r.stdout}")
+
+    def test_two_distant_unrelated_negatives_pass(self):
+        # Two 'no' clauses in different sentences are not a comma/and-joined
+        # chain and must not be stitched into a false finding.
+        page = CLEAN_PAGE.replace(
+            "<p>A knowledge base decays at the moment a path changes. okfctl keeps links honest.</p>",
+            "<p>There is no ambiguity here. The format leaves no room for drift.</p>",
+        )
+        r = run(page)
+        self.assertEqual(r.returncode, 0, f"unrelated negatives must pass:\n{r.stdout}")
+
+
 class SpecChipExemption(unittest.TestCase):
     """PR #111's established exemption: discrete <span> chips are a spec table,
     not a sentence. The SAME 'no X, no Y' facts as chips must PASS while the
