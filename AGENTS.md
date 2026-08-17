@@ -154,9 +154,44 @@ decision nobody reviewed.
 - **Commits are SSH-signed** as `Casey West <casey@geeknest.com>`, Conventional
   format, no AI attribution and no agent/teammate names in any commit message, PR
   title/body, issue, review comment, or code comment.
-- **No CGO, no Python, no ONNX.** Pure Go; `CGO_ENABLED=0` must build.
+- **No CGO, no Python, no ONNX.** Pure Go; `CGO_ENABLED=0` must build. (This
+  is a rule about the *shipped binary*. CI *tooling* may use other runtimes —
+  the site build uses Node, and the plugin-manifest gate uses Python's
+  `check-jsonschema` to validate against the pinned schema URL.)
 - **Two products stay separate** — the shipped generic skills and the migration
-  skills. The leak-grep gate exists to keep them that way; run it.
+  skills. The leak gate keeps them that way: `internal/agentplugin`'s
+  `AuditSkillPayload` flags any skill under `skills/` that is not provably
+  `sharing: shareable`, and `TestPackagedArtifact_IsLeakFree` asserts the
+  `plugin.json` skill list is exactly the shareable set on disk. Run it
+  (`go test ./internal/agentplugin/ -race`) against what the package ships.
+
+## Agent Plugins packaging (the root `plugin.json`)
+
+This repo is packaged as an [Agent Plugins 1.0.0](https://agent-plugins.org)
+plugin so agent clients can install okfctl's skills as one unit. The rules:
+
+- **`plugin.json` is spec-only + AGENTS.md** (strategy 1). No MCP server and no
+  client shim directories (`.claude-plugin/`, `.cursor-plugin/`, …) — a
+  compatible client reads the root `plugin.json` directly.
+- **`$schema` is pinned** to
+  `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json` (a `const` in the
+  schema — any other value fails). The schema's root is
+  `additionalProperties: false`, so **okfctl-specific config lives ONLY under
+  `extensions."dev.okfctl"`** (reverse-domain key), never as a bespoke top-level
+  key.
+- **No hand-maintained version.** `version` is optional in the schema and is
+  omitted from the committed manifest; the release tag is the single source of
+  truth (surfaced by `okfctl version`), mirroring how the site derives its
+  version. Do not add a second version string here.
+- **Install prerequisite documented.** The skills shell out to `okfctl`, which a
+  plugin client does not bundle; the manifest's `extensions."dev.okfctl".requires`
+  and the README both point at `brew install cwest/tap/okfctl`.
+- **Two gates, both controls, in CI (`plugin-manifest` job).** The committed
+  manifest MUST validate against the pinned schema URL (positive control), a
+  deliberately malformed fixture MUST be rejected (negative control — the gate
+  must bite), and the leak gate runs on the packaged skill payload. The offline
+  Go validator in `internal/agentplugin` mirrors the same rules for
+  `go test ./...`.
 
 ## Definition of done
 

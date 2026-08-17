@@ -1,0 +1,37 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "okfctl",
+  "description": "Author and maintain Open Knowledge Format (OKF) bundles from your agent — scaffold and validate nodes, run curation health checks, plan v0.1→v0.2 migrations, and query the opt-in semantic layer.",
+  "author": {
+    "name": "Casey West",
+    "email": "casey@geeknest.com",
+    "url": "https://okfctl.dev"
+  },
+  "homepage": "https://okfctl.dev",
+  "repository": "https://github.com/cwest/okfctl",
+  "license": "Apache-2.0",
+  "keywords": [
+    "agent-skills",
+    "okf",
+    "open-knowledge-format",
+    "knowledge-graph",
+    "knowledge-base",
+    "cli"
+  ],
+  "extensions": {
+    "dev.okfctl": {
+      "skills": [
+        "okf-authoring",
+        "okf-curation-health",
+        "okf-migrate-plan",
+        "okf-semantic-search"
+      ],
+      "requires": {
+        "cli": "okfctl",
+        "reason": "These skills shell out to the okfctl binary, which is NOT bundled by a plugin client. Install it onto PATH first.",
+        "install": "brew install cwest/tap/okfctl",
+        "install_docs": "https://okfctl.dev"
+      }
+    }
+  }
+}
