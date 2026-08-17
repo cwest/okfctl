@@ -109,6 +109,10 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: site/package-lock.json
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        if: needs.changes.outputs.site == 'true'
+        with:
+          python-version: '3.12'
       - name: install
         if: needs.changes.outputs.site == 'true'
         run: npm ci --prefix site
@@ -120,3 +124,62 @@ jobs:
         # guards in the repo but not in CI.
         if: needs.changes.outputs.site == 'true'
         run: npm test --prefix site
+      - name: prose gate — the scanner's own tests
+        # Prove the gate itself works before trusting its verdict on the site:
+        # the tests assert the negative-listing cadence fails in meta/body/footer
+        # prose (the class that shipped to okfctl.dev twice) AND that the same
+        # facts in the <span> spec-chip row pass. Stdlib only — no pip install.
+        if: needs.changes.outputs.site == 'true'
+        run: python3 -m unittest discover -s site/scripts -p '*_test.py' -v
+      - name: prose gate — scan the BUILT pages
+        # Runs against site/dist/**/*.html, not the source, because the tell has
+        # twice hidden in <meta>/<og>/footer copy that only exists after render —
+        # the exact class a source-level or body-only scan cannot see. A finding
+        # fails the build; the fix is to rewrite the flagged prose to plain
+        # positive statements with every technical fact preserved.
+        if: needs.changes.outputs.site == 'true'
+        run: python3 site/scripts/scan_page_prose.py $(find site/dist -name '*.html')
+
+  # Validates the root plugin.json against the PINNED Agent Plugins 1.0.0 schema
+  # URL — the authoritative, network-backed check that complements the offline
+  # Go validator in internal/agentplugin (run by build-test). Two controls, both
+  # load-bearing:
+  #   positive — the committed manifest MUST validate against the pinned schema;
+  #   negative — a deliberately malformed fixture MUST be rejected, proving the
+  #              gate actually bites (a validator that passes everything is
+  #              decoration).
+  plugin-manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with: { python-version: '3.12' }
+      - name: install check-jsonschema
+        run: pip install "check-jsonschema==0.35.0"
+      - name: positive control — committed plugin.json validates against the pinned 1.0.0 schema
+        run: |
+          check-jsonschema \
+            --schemafile https://agent-plugins.org/schemas/1.0.0/plugin.schema.json \
+            plugin.json
+      - name: negative control — a malformed manifest MUST be rejected
+        run: |
+          set +e
+          check-jsonschema \
+            --schemafile https://agent-plugins.org/schemas/1.0.0/plugin.schema.json \
+            internal/agentplugin/testdata/invalid-plugin.json
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "::error::the malformed manifest passed schema validation — the plugin-manifest gate is broken"
+            exit 1
+          fi
+          echo "negative control rejected as required — the schema gate catches malformed manifests"
+      - name: set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with: { go-version: '1.26.6' }
+      - name: leak gate + offline validator on the packaged artifact
+        # The Go suite validates the manifest offline AND runs the leak gate over
+        # the packaged skill payload (declared skills resolve to shareable, no
+        # undeclared shippable skill hides a migration leak). Keeping it in this
+        # job puts the packaging gates in one required check.
+        run: go test ./internal/agentplugin/ -race -v

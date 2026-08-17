@@ -149,6 +149,31 @@ Semantic search over a bundle ships as the bundled `okfctl-search` plugin,
 invoked as `okfctl search --semantic …`. See the
 [search guide](docs/guides/search.md).
 
+## Use as an agent plugin
+
+This repo is an [Agent Plugins 1.0.0](https://agent-plugins.org) package: the
+root [`plugin.json`](plugin.json) bundles the four generic okfctl skills
+(`okf-authoring`, `okf-curation-health`, `okf-migrate-plan`,
+`okf-semantic-search`) as an installable unit for compatible agent clients
+(Copilot, Cursor, Codex, …). Harnesses that read repo instructions directly
+pick the same guidance up from [`AGENTS.md`](AGENTS.md).
+
+> **Not to be confused with `okfctl plugin`** above — that command discovers
+> and installs `okfctl-<name>` *executable* plugins (like `okfctl-search`) on
+> your `PATH`. This section is about packaging okfctl's *skills* for an agent
+> client, which is a different spec.
+
+**Prerequisite — install `okfctl` first.** The skills shell out to the `okfctl`
+binary, and a plugin client does **not** bundle it. Install it onto your `PATH`
+before enabling the plugin (see [Install](#install)):
+
+```sh
+brew install cwest/tap/okfctl
+```
+
+The manifest carries no hand-maintained version string: the authoritative
+version is the release tag, reported by `okfctl version`.
+
 ## Learn more
 
 - **User docs** — concepts, task-oriented guides, and the full command

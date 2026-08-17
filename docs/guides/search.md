@@ -6,7 +6,8 @@ built into `okfctl` itself, and an optional semantic layer shipped as the
 
 ## Core lexical and graph search
 
-`okfctl search` is stdlib-only — no model, no index, always available.
+`okfctl search` is stdlib-only: it runs without an embedding model or a prebuilt
+index, so it is always available.
 
 - `okfctl search "query" [dir]` matches concept nodes case-insensitively by
   title, tag, type, or body substring; restrict the surface with `--field
@@ -23,8 +24,11 @@ Run `okfctl search --help` for the full flag set.
 
 `okfctl-search` is a bundled plugin (a separate static binary; invoke as `okfctl
 search …` via plugin dispatch, or directly). It adds **semantic** search over a
-bundle's concept nodes, fully offline, with zero runtime dependencies — no
-Python, no ONNX, no `sqlite-vec`, no model server. It shares the exact embedding
+bundle's concept nodes, fully offline: a single static Go binary with zero
+runtime dependencies. Everything the embedding needs is compiled in, so there is
+nothing external to install — the Python interpreter, ONNX runtime, `sqlite-vec`,
+and model server that a typical embedding stack would require are all unnecessary.
+It shares the exact embedding
 protocol with `cwest/knowledge-base` so vectors are cross-verifiable.
 
 - `okfctl-search index build [bundle-dir]` — embed every concept node into
@@ -58,8 +62,9 @@ protocol with `cwest/knowledge-base` so vectors are cross-verifiable.
 `--embedder model2vec` runs a genuine static embedding model (for example
 [`minishlab/potion-base-8M`](https://huggingface.co/minishlab/potion-base-8M)) in
 **pure Go** — the BERT WordPiece tokenizer and the Model2Vec inference math are
-both ported into `internal/search`, so there is still no CGO, no Python, and no
-ONNX runtime. Vectors match the upstream `model2vec` library's own output to
+both ported into `internal/search`, so it compiles `CGO_ENABLED=0` and inherits
+the same self-contained, dependency-free profile as the `hash` embedder. Vectors
+match the upstream `model2vec` library's own output to
 within `1e-5`, which is verified against the real model in the test suite.
 
 `okfctl` never downloads a model at runtime. Point it at a directory you already
