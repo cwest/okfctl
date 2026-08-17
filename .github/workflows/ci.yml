@@ -109,6 +109,10 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: site/package-lock.json
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        if: needs.changes.outputs.site == 'true'
+        with:
+          python-version: '3.12'
       - name: install
         if: needs.changes.outputs.site == 'true'
         run: npm ci --prefix site
@@ -120,6 +124,21 @@ jobs:
         # guards in the repo but not in CI.
         if: needs.changes.outputs.site == 'true'
         run: npm test --prefix site
+      - name: prose gate — the scanner's own tests
+        # Prove the gate itself works before trusting its verdict on the site:
+        # the tests assert the negative-listing cadence fails in meta/body/footer
+        # prose (the class that shipped to okfctl.dev twice) AND that the same
+        # facts in the <span> spec-chip row pass. Stdlib only — no pip install.
+        if: needs.changes.outputs.site == 'true'
+        run: python3 -m unittest discover -s site/scripts -p '*_test.py' -v
+      - name: prose gate — scan the BUILT pages
+        # Runs against site/dist/**/*.html, not the source, because the tell has
+        # twice hidden in <meta>/<og>/footer copy that only exists after render —
+        # the exact class a source-level or body-only scan cannot see. A finding
+        # fails the build; the fix is to rewrite the flagged prose to plain
+        # positive statements with every technical fact preserved.
+        if: needs.changes.outputs.site == 'true'
+        run: python3 site/scripts/scan_page_prose.py $(find site/dist -name '*.html')
 
   # Validates the root plugin.json against the PINNED Agent Plugins 1.0.0 schema
   # URL — the authoritative, network-backed check that complements the offline
