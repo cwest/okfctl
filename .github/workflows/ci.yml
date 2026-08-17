@@ -16,6 +16,7 @@ jobs:
       pull-requests: read
     outputs:
       site: ${{ steps.filter.outputs.site }}
+      skills: ${{ steps.filter.outputs.skills }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -25,6 +26,11 @@ jobs:
             site:
               - 'site/**'
               - 'docs/**'
+            skills:
+              - 'skills/**'
+              - 'cmd/**'
+              - '.github/workflows/ci.yml'
+              - 'scripts/skill-command-contract.sh'
 
   build-test:
     runs-on: ubuntu-latest
@@ -183,3 +189,39 @@ jobs:
         # undeclared shippable skill hides a migration leak). Keeping it in this
         # job puts the packaging gates in one required check.
         run: go test ./internal/agentplugin/ -race -v
+
+  # Proves the SHIPPED SKILLS work, not just the manifest. Installs the RELEASED
+  # binary from the public install path and runs every command the four skills
+  # document, end to end. The manifest gate proves plugin.json is well-formed;
+  # this catches the failure it cannot see — a skill drifting out of sync with
+  # the CLI (a renamed/removed subcommand, a changed invocation form) while the
+  # manifest stays byte-identical and green.
+  #
+  # This ALWAYS runs so it can be a required status check; on a PR touching
+  # neither skills/ nor cmd/ (nor this job's own inputs) it is a fast no-op. On
+  # main it always does the real work. It installs the RELEASED artifact (never a
+  # local `go build`, which would hide a packaging break) and resolves the LATEST
+  # release at job time (never a hardcoded version, so it keeps testing what users
+  # actually install). The runner's own negative control (--self-test) proves the
+  # job can fail before it is trusted to pass.
+  skill-contract:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: no skills/cmd changes — skipping
+        if: needs.changes.outputs.skills != 'true' && github.ref != 'refs/heads/main'
+        run: echo "No skills/**, cmd/**, or contract inputs changed in this PR; nothing to run."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.changes.outputs.skills == 'true' || github.ref == 'refs/heads/main'
+      - name: install the released binary from the public path
+        if: needs.changes.outputs.skills == 'true' || github.ref == 'refs/heads/main'
+        # The public install path resolves the latest release, verifies the
+        # archive against its checksums, and installs okfctl + okfctl-search.
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          curl -sSL https://okfctl.dev/install.sh | OKFCTL_BIN_DIR="$HOME/.local/bin" sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: run the skill-command contract (self-test + existence sweep + workflows)
+        if: needs.changes.outputs.skills == 'true' || github.ref == 'refs/heads/main'
+        run: bash scripts/skill-command-contract.sh
