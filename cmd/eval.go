@@ -34,16 +34,16 @@ func newEvalCmd() *cobra.Command {
 	eval := &cobra.Command{
 		Use:   "eval",
 		Short: "Measure KB-node trustworthiness (TACA): a Transparency gate + a spot-check sampler",
-		Long: "eval decomposes node trust the way the TACA lens prescribes — Transparency, " +
+		Long: "eval decomposes node trust along the four TACA dimensions — Transparency, " +
 			"Accuracy, Calibration, Alignment — as far as a pure-Go, offline, no-model tool " +
-			"honestly can.\n\n" +
+			"can.\n\n" +
 			"'eval transparency' is the deterministic gate: it checks that provenance is present " +
-			"(a grade + citations) and that internal citations resolve. It is the first machine " +
+			"(a grade + citations) and that internal citations resolve. It's the first machine " +
 			"gate that touches trust rather than format.\n\n" +
-			"'eval sample' scaffolds the three dimensions okfctl CANNOT automate (Accuracy, " +
+			"'eval sample' scaffolds the three dimensions okfctl can't automate (Accuracy, " +
 			"Alignment, Calibration) into an eval-set for a human or an out-of-band LLM judge to " +
 			"complete. okfctl never computes a truth verdict itself — checking a claim against a " +
-			"source needs a model or the network, which core deliberately does not do.",
+			"source needs a model or the network, which core deliberately doesn't do.",
 	}
 	eval.AddCommand(newEvalTransparencyCmd())
 	eval.AddCommand(newEvalSampleCmd())
@@ -59,7 +59,7 @@ func newEvalTransparencyCmd() *cobra.Command {
 		Use:   "transparency [bundle-dir]",
 		Short: "Gate TACA-Transparency: grade present, cited, internal citations resolve",
 		Long: "transparency runs the deterministic, offline TACA-Transparency checks over a " +
-			"bundle. Like lint it is advisory (exit 0) by default and never mutates the bundle; " +
+			"bundle. Like lint it's advisory (exit 0) by default and never mutates the bundle; " +
 			"pass --strict to exit non-zero on any finding (the CI gate). The four checks:\n\n" +
 			"  grade-missing        a node carries no epistemic OR authority grade\n" +
 			"  grade-vocabulary     a grade value is off-vocabulary for the corpus (a likely typo)\n" +
@@ -126,7 +126,7 @@ func newEvalSampleCmd() *cobra.Command {
 		Use:   "sample [bundle-dir]",
 		Short: "Emit a spot-check eval-set scaffold for Accuracy/Alignment/Calibration",
 		Long: "sample selects a spot-check sample of nodes and emits a structured eval-set for " +
-			"the three TACA dimensions okfctl cannot automate — Accuracy (are the claims supported " +
+			"the three TACA dimensions okfctl can't automate — Accuracy (are the claims supported " +
 			"by the cited source?), Alignment (does the node answer the question it set out to?), " +
 			"and Calibration (does the grade hold up on re-check?). Every field okfctl can extract " +
 			"is pre-populated; the judgment slots are left empty for a human or an out-of-band LLM " +

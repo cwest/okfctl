@@ -42,7 +42,7 @@ func newAnalyzeCmd() *cobra.Command {
 			"mutates the bundle.\n\n" +
 			"Report semantics: analyze exits 0 whenever the analysis runs successfully, regardless " +
 			"of how many findings it produces. The exit code reflects whether the analysis " +
-			"succeeded, not whether the corpus is perfect. There is deliberately no --strict flag; " +
+			"succeeded, not whether the corpus is perfect. There's deliberately no --strict flag; " +
 			"use lint --strict for a gate.\n\n" +
 			"Pass --json for the machine path (the curation sweep files research cards from it).",
 		Example: "  # Human-readable weakness report for the current bundle\n" +
@@ -82,7 +82,7 @@ func newAnalyzeCmd() *cobra.Command {
 	}
 	c.Flags().BoolVar(&jsonOut, "json", false, "emit machine-readable JSON instead of the human report")
 	c.Flags().IntVar(&staleDays, "stale-days", 0, "age (days) past which a node's freshness basis (verified/generated/modified/created) is flagged stale (default 180)")
-	c.Flags().Float64Var(&timeSensitiveFraction, "time-sensitive-fraction", 0, "surface a time-sensitive node once its age >= fraction*stale-days (default 0.5); undated marked nodes always surface")
+	c.Flags().Float64Var(&timeSensitiveFraction, "time-sensitive-fraction", 0, "flag a time-sensitive node once its age >= fraction*stale-days (default 0.5); undated marked nodes are always flagged")
 	c.Flags().IntVar(&thinLines, "thin-lines", 0, "body line count below which a node is thin (default 15)")
 	c.Flags().IntVar(&clusterMin, "cluster-min", 0, "min nodes sharing a tag to flag a synthesis cluster (default 3)")
 	c.Flags().IntVar(&coverageThreshold, "coverage-threshold", 0, "min distinct nodes mentioning a term to report a coverage gap (default 3)")

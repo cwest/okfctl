@@ -30,15 +30,15 @@ import (
 // the binary's --help is the always-current source.
 const referencePreamble = `# Command reference
 
-**This page is generated from the command tree. Do not edit it by hand.**
+**This page is generated from the command tree. Don't edit it by hand.**
 Regenerate it with ` + "`go generate ./cmd`" + ` (or ` + "`go run ./cmd/gendocs`" + `); a
 CI check (` + "`TestCommandReference_NoDrift`" + `) fails when the committed file drifts
-from the binary, so the reference cannot go stale.
+from the binary, so the reference can't go stale.
 
 ` + "`okfctl <cmd> --help`" + ` is the authoritative, always-current form for any
 command — it prints the same description, flags, and runnable example straight
-from the binary. This page mirrors that surface in one place, one section per
-command, so it is browsable and linkable (README links to the ` + "`#okfctl-<cmd>`" + `
+from the binary. This page mirrors it in one place, one section per
+command, so it's browsable and linkable (README links to the ` + "`#okfctl-<cmd>`" + `
 anchors below).
 
 Run ` + "`okfctl help`" + ` for the top-level list, or ` + "`okfctl <cmd> --help`" + ` for any

@@ -28,7 +28,7 @@ func newBundleCmd() *cobra.Command {
 		Short: "Scaffold a minimal conformant OKF bundle",
 		Long: "init scaffolds a minimal bundle that conforms to the OKF spec floor: the two " +
 			"reserved files (index.md and log.md, OKF §3.1) plus a bundle-root .okf sidecar " +
-			"whose okf_version marks the target version (§12). It does NOT create any concept " +
+			"whose okf_version marks the target version (§12). It doesn't create any concept " +
 			"nodes — a fresh bundle has zero nodes; use `okfctl node new` to add them. It refuses " +
 			"to overwrite an existing bundle.",
 		Example: "  # Scaffold a new bundle in the current directory\n" +
@@ -53,8 +53,8 @@ func newBundleCmd() *cobra.Command {
 		Short: "Summarize a bundle (node count, spec version)",
 		Long: "info prints a one-glance summary of a bundle: how many concept nodes it holds, " +
 			"how many reserved files (index.md/log.md, OKF §3.1) it carries, and the okf_version " +
-			"it declares (§12, read from the bundle-root .okf sidecar). It is read-only and never " +
-			"mutates the bundle. It does not validate conformance — use `okfctl validate` for that.",
+			"it declares (§12, read from the bundle-root .okf sidecar). It's read-only and never " +
+			"mutates the bundle. It doesn't validate conformance — use `okfctl validate` for that.",
 		Example: "  # Summarize the bundle in the current directory\n" +
 			"  okfctl bundle info\n\n" +
 			"  # Summarize a bundle elsewhere\n" +

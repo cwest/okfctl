@@ -56,8 +56,8 @@ func newLogCmd() *cobra.Command {
 	logCmd.AddCommand(&cobra.Command{
 		Use:   "show [dir]",
 		Short: "Print the change history",
-		Long: "log show prints the reserved log.md change history (OKF §9) verbatim to stdout. It " +
-			"is read-only and does not mutate the bundle. Use it to review what changed and when, " +
+		Long: "log show prints the reserved log.md change history (OKF §9) verbatim to stdout. It's " +
+			"read-only and doesn't mutate the bundle. Use it to review what changed and when, " +
 			"or to pipe the history into another tool.",
 		Example: "  # Print the change history for the current bundle\n" +
 			"  okfctl log show\n\n" +
