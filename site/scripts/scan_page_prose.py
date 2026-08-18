@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Gate the BUILT site's rendered prose against negative-listing AI-slop cadence.
+"""Gate prose against negative-listing AI-slop cadence, in HTML AND Markdown.
 
 WHY THIS EXISTS. AI-slop copy shipped to okfctl.dev twice and both times was
 caught by hand, not by CI. The specific tell each time was a negative-listing
@@ -23,9 +23,24 @@ needed two rounds because round one scanned only body copy and never saw the
 same cadence sitting in the <meta description>, the <og:description>, and the
 footer <p>: text that exists only after render and only in the built HTML.
 
-WHY IT RUNS ON THE BUILT OUTPUT, NOT THE SOURCE. The round-one miss is the whole
-argument. Meta/OG/footer prose is assembled at build time; a source-level scan
-structurally cannot see it. So this runs against site/dist/**/*.html.
+WHY IT ALSO SCANS MARKDOWN NOW. The rendered-HTML gate guarded one door while the
+same defect walked through another. The README's line 30 once read "no CGO, no
+Python, and no model runtime" -- the precise cadence this gate exists to block --
+and CI stayed green, because the README is not HTML in site/dist. The tell in
+running prose is the same whether it renders through Astro or ships as a raw .md
+a reader browses on GitHub, so the SAME pattern core runs against both. There is
+ONE detector (NEG_LISTING + find_hits) and two front ends that extract prose:
+extract_prose (HTML) and extract_prose_markdown (Markdown). The pattern set is
+never forked.
+
+WHICH SURFACES. HTML: the BUILT site (site/dist/**/*.html), because meta/OG/footer
+copy is assembled at build time and a source-level scan structurally cannot see
+it. Markdown: the prose surfaces this repo SHIPS to readers -- README.md,
+CONTRIBUTING.md, docs/*.md, docs/guides/*.md, docs/commands/README.md. Internal,
+unpublished Markdown (docs/PRD.md, docs/adr/, docs/plans/, docs/specs/, testdata/)
+is deliberately excluded: it is working material full of fixture prose, not
+reader-facing copy, and gating it would train everyone to ignore the check. The
+CI job owns that surface list; the scanner scans whatever paths it is handed.
 
 WHY IT DETECTS EXACTLY ONE CLASS. This is a gate, and a gate that cries wolf gets
 ignored. The broader prose-voice heuristics (vocabulary tells, "surface"/"layer"/
@@ -36,22 +51,38 @@ corpus and would train everyone to ignore the check. Those remain a DRAFTING lin
 (the writing-voice skill), not a CI gate. This gate detects the one class that
 actually shipped: negative-listing cadence in running prose.
 
-THE SPEC-CHIP EXEMPTION (deliberate, not a widening to force green). The homepage
-renders the tool's constraints as a row of discrete <span> badges:
+THE SPEC-CHIP / DISCRETE-LIST EXEMPTION (deliberate, not a widening to force
+green). The homepage renders the tool's constraints as a row of discrete <span>
+badges:
 
     <span>pure Go</span><span>no CGO</span><span>no Python</span>...
 
 Each chip is a verifiable constraint from AGENTS.md, and no reader parses the row
-as a sentence -- it is a specification table. So <span> is excluded from prose
-extraction. The exemption is SCOPED: the identical facts written as a running-
-prose sentence ("It is pure Go, no CGO, no Python, no model runtime.") are still
-caught. Chips pass; the sentence fails. That asymmetry is proven by the tests and
-is what keeps the exemption from hiding the real finding.
+as a sentence -- it is a specification table. So <span> is excluded from HTML
+prose extraction. The Markdown front end has the SAME asymmetry by the SAME
+mechanism: prose is extracted one block at a time (blocks are separated by blank
+lines), and each list item is its own block. So the identical facts written as
+three separate bullets --
+
+    - no CGO
+    - no Python
+    - no model runtime
+
+-- are three distinct one-item strings, and a chain needs TWO "no <item>" members
+in ONE string to trip, so the list passes. The same facts in a running-prose
+sentence ("It's pure Go, no CGO, no Python, no model runtime.") land in one block
+and are caught. List passes; sentence fails -- the exact asymmetry the HTML side
+has for chips, proven by the tests.
 
 Usage:
-    scan_page_prose.py <built.html> [more.html ...]
-    # or, typically from CI:
+    scan_page_prose.py <path.html|path.md> [more ...]
+    # HTML, typically from CI:
     scan_page_prose.py $(find site/dist -name '*.html')
+    # Markdown prose surfaces:
+    scan_page_prose.py README.md CONTRIBUTING.md docs/*.md docs/guides/*.md
+
+The front end is chosen per file by extension: .md/.markdown -> Markdown, every
+other extension -> HTML.
 
 Exit 0 when clean, 1 when a finding is present, 2 on a usage error. Stdlib only.
 """
@@ -144,6 +175,119 @@ def extract_prose(page: str) -> list[tuple[str, str]]:
     return out
 
 
+def extract_prose_markdown(doc: str) -> list[tuple[str, str]]:
+    """Return (source_label, text) for every human-visible prose block in Markdown.
+
+    Same contract as extract_prose, different front end: it feeds the SAME
+    NEG_LISTING detector via find_hits, so there is one pattern set, not two.
+
+    Extraction is BLOCK-AT-A-TIME, blocks separated by blank lines -- the direct
+    analog of the HTML side's per-element extraction, and the mechanism behind
+    the discrete-list exemption (see the module docstring): three facts as three
+    separate bullets are three one-item strings and cannot form a two-member
+    chain, while the same facts in one running-prose sentence land in one block
+    and are caught.
+
+    Excluded, because none of it is a sentence a reader reads as running prose:
+      - fenced code blocks (``` / ~~~), including the info string;
+      - indented code blocks (4-space / tab lead on a non-list line);
+      - inline code spans (`...`), stripped in place so backticked tokens do not
+        contribute text (mirrors the HTML <code> exemption);
+      - YAML frontmatter (--- ... --- at the top of the file);
+      - HTML comments (<!-- ... -->), which carry no reader-facing prose.
+    Link/image markup is reduced to its visible text so a URL never trips the
+    detector. Markdown emphasis/heading punctuation is stripped so "**no X**"
+    reads as "no X".
+    """
+    out: list[tuple[str, str]] = []
+
+    # 0. Strip HTML comments spanning any number of lines.
+    doc = re.sub(r"<!--.*?-->", " ", doc, flags=re.S)
+
+    lines = doc.split("\n")
+
+    # 1. Skip YAML frontmatter: a leading '---' fence closed by the next '---'.
+    start = 0
+    if lines and lines[0].strip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                start = i + 1
+                break
+
+    # 2. Walk lines, dropping fenced/indented code, accumulating prose blocks.
+    #    A block ends at a blank line so each paragraph and each list item is a
+    #    separate string (the discrete-list exemption).
+    fence: str | None = None            # the active code fence marker, or None
+    block: list[str] = []
+    block_line = 0                       # 1-based line where the current block began
+
+    def flush() -> None:
+        if not block:
+            return
+        raw = " ".join(block)
+        txt = _markdown_to_text(raw)
+        if len(txt) > 15:                # skip nav fragments / lone words
+            out.append((f"md:L{block_line}", txt))
+        block.clear()
+
+    for idx in range(start, len(lines)):
+        line = lines[idx]
+        stripped = line.strip()
+
+        # Fenced code block: toggle on a ``` / ~~~ run; skip everything inside.
+        m = re.match(r"^\s*(`{3,}|~{3,})", line)
+        if m:
+            marker = m.group(1)[0] * 3
+            if fence is None:
+                flush()
+                fence = marker
+            elif marker == fence:
+                fence = None
+            continue
+        if fence is not None:
+            continue
+
+        # Blank line ends the current block.
+        if not stripped:
+            flush()
+            continue
+
+        # Indented code block: 4-space / tab lead on a line that is NOT a list
+        # continuation. Only treat as code when no block is open (a fresh block),
+        # so wrapped list/paragraph lines are not misread.
+        if not block and re.match(r"^(\t| {4,})", line) and not re.match(
+            r"^(\t| {4,})*\s*([-*+]|\d+\.)\s", line
+        ):
+            continue
+
+        if not block:
+            block_line = idx + 1
+        block.append(stripped)
+
+    flush()
+    return out
+
+
+# Markdown emphasis/list/heading punctuation and link/code markup that must be
+# reduced to visible text before the detector reads a block.
+_MD_INLINE_CODE = re.compile(r"`[^`]*`")
+_MD_IMAGE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
+_MD_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+_MD_LEAD = re.compile(r"^\s*(#{1,6}\s+|>\s?|[-*+]\s+|\d+\.\s+)")
+_MD_EMPH = re.compile(r"(\*{1,3}|_{1,3}|~~)")
+
+
+def _markdown_to_text(raw: str) -> str:
+    """Reduce a Markdown block to the plain prose a reader reads."""
+    raw = _MD_INLINE_CODE.sub(" ", raw)      # drop backticked tokens (HTML <code>)
+    raw = _MD_IMAGE.sub(r"\1", raw)          # image -> its alt text
+    raw = _MD_LINK.sub(r"\1", raw)           # link -> its visible label, not the URL
+    raw = _MD_LEAD.sub("", raw)              # strip heading/quote/list lead marker
+    raw = _MD_EMPH.sub("", raw)              # strip * _ ~ emphasis runs
+    raw = re.sub(r"\s+", " ", raw).strip()
+    return raw
+
+
 def find_hits(items: list[tuple[str, str]]) -> list[tuple[str, str, str]]:
     """Return (source_label, matched_text, full_text) for each finding."""
     hits: list[tuple[str, str, str]] = []
@@ -153,15 +297,28 @@ def find_hits(items: list[tuple[str, str]]) -> list[tuple[str, str, str]]:
     return hits
 
 
+MARKDOWN_SUFFIXES = (".md", ".markdown")
+
+
+def extract_for_path(path: str, text: str) -> list[tuple[str, str]]:
+    """Pick the front end by file extension: .md/.markdown -> Markdown, else HTML."""
+    if path.lower().endswith(MARKDOWN_SUFFIXES):
+        return extract_prose_markdown(text)
+    return extract_prose(text)
+
+
 def main() -> int:
     if len(sys.argv) < 2:
-        print("usage: scan_page_prose.py <built.html> [more.html ...]", file=sys.stderr)
+        print(
+            "usage: scan_page_prose.py <path.html|path.md> [more ...]",
+            file=sys.stderr,
+        )
         return 2
 
     total_hits = 0
     for path in sys.argv[1:]:
         page = Path(path).read_text()
-        items = extract_prose(page)
+        items = extract_for_path(path, page)
         hits = find_hits(items)
         print(f"=== {path} — {len(items)} prose strings scanned ===")
         if hits:
