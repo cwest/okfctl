@@ -20,7 +20,7 @@ so moving a node is a graph operation — `okfctl node mv` rewrites every inboun
 link rather than leaving them dangling.
 
 `type` values are **open** (§7.4): `Reference`, `Concept`, or any other string
-all pass `validate`. The tool does not invent a taxonomy.
+all pass `validate`. The tool doesn't invent a taxonomy.
 
 ## Reserved files: `index.md` and `log.md`
 
@@ -33,7 +33,7 @@ Two filenames are reserved (§3.1):
 - **`log.md`** — the bundle's change history. Append with `okfctl log append`;
   read with `okfctl log show`.
 
-These are maintained by the tool; you do not hand-edit them.
+These are maintained by the tool; you don't hand-edit them.
 
 ## The link graph
 
@@ -65,7 +65,7 @@ OKF is at **v0.2**. v0.2 is a minor bump with two deliberate breaking renames:
 readable** — v0.2 is the new default, not a floor that ejects existing bundles.
 
 A bundle declares its own target via `okf_version` in its `.okf` sidecar; the
-tool reads it rather than assuming. Per §12, a consumer that does not understand a
+tool reads it rather than assuming. Per §12, a consumer that doesn't understand a
 declared version attempts best-effort consumption rather than refusing the bundle,
 so an unrecognized `okf_version` is never a hard failure. To convert a v0.1
 bundle to v0.2 in place, see [Migrating a v0.1 bundle](guides/migrating.md).

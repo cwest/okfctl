@@ -3,7 +3,7 @@
 okfctl treats remote bundles the way git treats remotes: a named source is a
 plain git URL. This is `git remote` for OKF bundles — **not** a hosted service,
 account system, or schema registry. Named sources live in the one okfctl config
-store (keyed `registry.<name>`); there is no second config file.
+store (keyed `registry.<name>`); there's no second config file.
 
 ## Register a source
 
@@ -27,7 +27,7 @@ okfctl connect knowledge ./kb        # explicit destination directory
 - A fresh destination is `git clone`d.
 - An existing checkout of the same source is fast-forwarded (`git pull
   --ff-only`, never a history-rewriting merge).
-- A non-empty directory that is not that checkout is left untouched.
+- A non-empty directory that isn't that checkout is left untouched.
 
 okfctl shells out to `git` (no new dependency) and does no authentication of its
 own — reaching a private URL is git's concern (ssh agent, credential helper). The
