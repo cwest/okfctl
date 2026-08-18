@@ -49,6 +49,25 @@ def run(*html_pages: str):
         )
 
 
+def run_md(*docs: str):
+    """Write each doc to a temp .md file, run the scanner, return CompletedProcess.
+
+    Same as run() but the .md extension routes the scanner through the Markdown
+    front end (extract_prose_markdown) instead of the HTML one.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        paths = []
+        for i, doc in enumerate(docs):
+            p = Path(d) / f"doc{i}.md"
+            p.write_text(doc)
+            paths.append(str(p))
+        return subprocess.run(
+            [sys.executable, str(SCANNER), *paths],
+            capture_output=True,
+            text=True,
+        )
+
+
 CLEAN_PAGE = """<!doctype html><html><head>
 <meta name="description" content="A single static Go binary you drop on your PATH.">
 <meta property="og:description" content="Knowledge you can move without breaking.">
@@ -217,6 +236,191 @@ class NonProseRegionsExcluded(unittest.TestCase):
         )
         r = run(page)
         self.assertEqual(r.returncode, 0, f"code must be exempt:\n{r.stdout}")
+
+
+# ---------------------------------------------------------------------------
+# Markdown front end (extract_prose_markdown). Same NEG_LISTING detector, a
+# different extractor. These tests are the card's load-bearing requirement: the
+# README hole (a .md the HTML gate never saw) is closed, proven with BOTH
+# controls — the negative-listing sentence FAILS, and a legitimate look-alike
+# (discrete bullets / a code fence) PASSES.
+# ---------------------------------------------------------------------------
+
+# A README-shaped clean fixture: the same three constraint facts the site chip
+# row carries, written as running prose the plain-positive way (no chain) plus a
+# discrete bulleted restatement. This must stay clean — it is the corpus shape
+# after the prose cards landed.
+CLEAN_MD = """# okfctl
+
+A knowledge base decays the moment a path changes. okfctl keeps links honest.
+
+It's a single static Go binary that runs anywhere without a toolchain, an
+interpreter, or a model download.
+
+Build guarantees:
+
+- pure Go
+- no CGO
+- no Python
+- no model runtime
+"""
+
+
+class MarkdownExitCodeContract(unittest.TestCase):
+    def test_clean_markdown_exits_zero(self):
+        r = run_md(CLEAN_MD)
+        self.assertEqual(r.returncode, 0, f"expected clean, got:\n{r.stdout}\n{r.stderr}")
+        self.assertIn("CLEAN", r.stdout)
+
+
+class MarkdownNegativeListingFails(unittest.TestCase):
+    """POSITIVE CONTROL. The exact README hole the card names: a negative-listing
+    sentence in a Markdown prose block must FAIL, because the README is a .md the
+    HTML gate structurally never saw."""
+
+    def test_readme_hole_sentence_fails(self):
+        # The literal cadence from the card: README line 30 once read this.
+        doc = CLEAN_MD.replace(
+            "It's a single static Go binary that runs anywhere without a toolchain, an\n"
+            "interpreter, or a model download.",
+            "It's pure Go: no CGO, no Python, and no model runtime.",
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 1, f"expected failure:\n{r.stdout}")
+        self.assertIn("no CGO, no Python", r.stdout)
+
+    def test_negative_listing_in_heading_fails(self):
+        doc = CLEAN_MD.replace("# okfctl", "# okfctl: no CGO, no Python, no ONNX")
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 1, f"heading prose must be scanned:\n{r.stdout}")
+        self.assertIn("no CGO, no Python", r.stdout)
+
+    def test_negative_listing_in_blockquote_fails(self):
+        # A blockquote is running prose a reader reads as a sentence (unlike the
+        # contraction lint, which leaves quotes alone — different class).
+        doc = CLEAN_MD + "\n> It ships with no CGO, no Python, and no model runtime.\n"
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 1, f"blockquote prose must be scanned:\n{r.stdout}")
+        self.assertIn("no CGO, no Python", r.stdout)
+
+    def test_multiword_items_in_markdown_fail(self):
+        # The spec's own wording, the multi-word-item class: 'schema registry' /
+        # 'central authority' / 'required tooling' each span two words.
+        doc = CLEAN_MD.replace(
+            "A knowledge base decays the moment a path changes. okfctl keeps links honest.",
+            "The format has no schema registry, no central authority, and no required tooling.",
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 1, f"multiword items must fire:\n{r.stdout}")
+        self.assertIn("no schema registry", r.stdout.lower())
+
+    def test_emphasis_markup_does_not_hide_the_chain(self):
+        # Bold/italic around items must not smuggle the cadence past the detector.
+        doc = CLEAN_MD.replace(
+            "A knowledge base decays the moment a path changes. okfctl keeps links honest.",
+            "It's pure Go: **no CGO**, *no Python*, and no model runtime.",
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 1, f"emphasis must not hide the chain:\n{r.stdout}")
+        self.assertIn("no CGO", r.stdout)
+
+
+class MarkdownLegitimateLookAlikesPass(unittest.TestCase):
+    """NEGATIVE CONTROL — the load-bearing half. A legitimate look-alike must stay
+    silent, or the gate is a nuisance that gets disabled. The card names two: the
+    same three facts as a bulleted list, and the phrase inside a fenced code
+    block. Both must PASS while the running-prose sentence FAILS."""
+
+    def test_discrete_bullets_pass(self):
+        # CLEAN_MD already carries the three facts as separate bullets; assert it
+        # does not trip. Each bullet is its own block (one 'no <item>' each), so
+        # no two-member chain forms — the Markdown analog of the <span> chip row.
+        r = run_md(CLEAN_MD)
+        self.assertEqual(r.returncode, 0, f"discrete bullets must pass:\n{r.stdout}")
+
+    def test_bullets_pass_but_same_facts_in_prose_fail(self):
+        # The scoped-exemption proof, mirroring test_chips_pass_but... on the HTML
+        # side: identical facts, list passes, sentence fails.
+        prose = CLEAN_MD.replace(
+            "It's a single static Go binary that runs anywhere without a toolchain, an\n"
+            "interpreter, or a model download.",
+            "It's pure Go, no CGO, no Python, no model runtime.",
+        )
+        self.assertEqual(run_md(CLEAN_MD).returncode, 0)
+        self.assertEqual(run_md(prose).returncode, 1)
+
+    def test_fenced_code_block_passes(self):
+        # The phrase inside a fenced code block is a command/config sample, not a
+        # sentence — it must not trip.
+        doc = CLEAN_MD + "\n```sh\nokfctl build   # no CGO, no Python, no model runtime\n```\n"
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"fenced code must be exempt:\n{r.stdout}")
+
+    def test_tilde_fenced_code_block_passes(self):
+        doc = CLEAN_MD + "\n~~~\nno CGO, no Python, no model runtime\n~~~\n"
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"tilde fence must be exempt:\n{r.stdout}")
+
+    def test_indented_code_block_passes(self):
+        doc = CLEAN_MD + "\nExample invocation:\n\n    no CGO, no Python, no model runtime\n"
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"indented code must be exempt:\n{r.stdout}")
+
+    def test_inline_code_span_negatives_pass(self):
+        # Backticked flag tokens are not prose; a chain of them must not trip.
+        doc = CLEAN_MD.replace(
+            "A knowledge base decays the moment a path changes. okfctl keeps links honest.",
+            "Pass `--no-cache`, `--no-index`, and `--no-model` to skip those steps.",
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"inline code must be exempt:\n{r.stdout}")
+
+    def test_single_negative_sentence_passes(self):
+        doc = CLEAN_MD.replace(
+            "A knowledge base decays the moment a path changes. okfctl keeps links honest.",
+            "It needs no external model server to run offline.",
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"single negative must pass:\n{r.stdout}")
+
+    def test_two_negatives_in_separate_sentences_pass(self):
+        doc = CLEAN_MD.replace(
+            "A knowledge base decays the moment a path changes. okfctl keeps links honest.",
+            "There is no ambiguity here. The format leaves no room for drift.",
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"distant negatives must pass:\n{r.stdout}")
+
+    def test_yaml_frontmatter_is_skipped(self):
+        # Frontmatter is metadata, not reader prose; a chain there must not trip.
+        doc = "---\nsummary: no CGO, no Python, no model runtime\n---\n\n" + CLEAN_MD
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"frontmatter must be skipped:\n{r.stdout}")
+
+    def test_url_in_link_does_not_trip(self):
+        # A URL path like /no-cache/no-index is not prose; only the link label is.
+        doc = CLEAN_MD.replace(
+            "A knowledge base decays the moment a path changes. okfctl keeps links honest.",
+            "See the [flags reference](https://okfctl.dev/no-cache/no-index/no-model).",
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"link URL must not trip:\n{r.stdout}")
+
+
+class MarkdownAndHtmlShareOneDetector(unittest.TestCase):
+    """The same facts in the same cadence must fail through BOTH front ends —
+    proof that there is one pattern set, not two diverging copies."""
+
+    SENTENCE = "It's pure Go, no CGO, no Python, no model runtime."
+
+    def test_same_sentence_fails_in_both_html_and_markdown(self):
+        html = CLEAN_PAGE.replace(
+            "<p>A knowledge base decays at the moment a path changes. okfctl keeps links honest.</p>",
+            f"<p>{self.SENTENCE}</p>",
+        )
+        md = f"# okfctl\n\n{self.SENTENCE}\n"
+        self.assertEqual(run(html).returncode, 1, "HTML front end must fire")
+        self.assertEqual(run_md(md).returncode, 1, "Markdown front end must fire")
 
 
 if __name__ == "__main__":

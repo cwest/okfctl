@@ -79,8 +79,10 @@ on v0.2 alone isn't proof.
 
 ## Style
 
-- Follow the conventions visible in the existing codebase. Pure Go — no CGO, no
-  Python, no model runtime; `CGO_ENABLED=0 go build ./...` must pass.
+- Follow the conventions visible in the existing codebase. The shipped binary is
+  pure Go and self-contained — it carries its own runtime, so it needs no C
+  toolchain, interpreter, or model download, and `CGO_ENABLED=0 go build ./...`
+  must pass.
 - `gofmt -l .` must be empty and `go vet ./...` must be clean before you push.
 - Keep commits focused and use [Conventional Commits](https://www.conventionalcommits.org/).
 - Sign your commits.

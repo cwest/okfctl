@@ -17,6 +17,7 @@ jobs:
     outputs:
       site: ${{ steps.filter.outputs.site }}
       skills: ${{ steps.filter.outputs.skills }}
+      prose: ${{ steps.filter.outputs.prose }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -31,6 +32,13 @@ jobs:
               - 'cmd/**'
               - '.github/workflows/ci.yml'
               - 'scripts/skill-command-contract.sh'
+            prose:
+              - 'README.md'
+              - 'CONTRIBUTING.md'
+              - 'docs/**/*.md'
+              - 'site/scripts/scan_page_prose.py'
+              - 'site/scripts/scan_page_prose_test.py'
+              - '.github/workflows/ci.yml'
 
   build-test:
     runs-on: ubuntu-latest
@@ -145,6 +153,63 @@ jobs:
         # positive statements with every technical fact preserved.
         if: needs.changes.outputs.site == 'true'
         run: python3 site/scripts/scan_page_prose.py $(find site/dist -name '*.html')
+
+  # Gates the SHIPPED Markdown prose against the SAME negative-listing cadence the
+  # site gate catches in rendered HTML. WHY THIS EXISTS, and why it is separate
+  # from the site job: the site gate scans site/dist/**/*.html, so it never saw
+  # the README — a .md that ships straight to readers on GitHub. The README's
+  # line 30 once read "no CGO, no Python, and no model runtime", the precise
+  # cadence the gate exists to block, and CI stayed green because that surface was
+  # not HTML in site/dist. The gate guarded one door while the same defect walked
+  # through another. This closes it: the ONE detector in scan_page_prose.py now
+  # runs against the Markdown prose surfaces this repo ships, via a Markdown front
+  # end (extract_prose_markdown) that shares the pattern set — it is not a forked
+  # copy. Internal, unpublished Markdown (docs/PRD.md, docs/adr/, docs/plans/,
+  # docs/specs/, testdata/) is deliberately excluded: fixture prose, not reader
+  # copy, and gating it would train everyone to ignore the check.
+  #
+  # ALWAYS runs so it can be a required status check; on a PR that touches none of
+  # the prose surfaces (nor the scanner) it is a fast no-op. Stdlib-only Python,
+  # no pip install and no network — the same hermetic bar the site prose gate holds.
+  prose:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: no prose changes — skipping
+        if: needs.changes.outputs.prose != 'true' && github.ref != 'refs/heads/main'
+        run: echo "No prose surfaces or scanner changed in this PR; nothing to scan."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.changes.outputs.prose == 'true' || github.ref == 'refs/heads/main'
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        if: needs.changes.outputs.prose == 'true' || github.ref == 'refs/heads/main'
+        with:
+          python-version: '3.12'
+      - name: prose gate — the scanner's own tests (asserts BOTH controls)
+        # Prove the gate works before trusting its verdict on the corpus: the
+        # tests assert the negative-listing cadence FAILS in a Markdown prose
+        # block (the README hole) AND that a legitimate look-alike PASSES — the
+        # same facts as discrete bullets, or inside a fenced code block. The
+        # negative control is the load-bearing half; a gate that fires on a
+        # bulleted spec list is a nuisance that gets disabled. Stdlib only.
+        if: needs.changes.outputs.prose == 'true' || github.ref == 'refs/heads/main'
+        run: python3 -m unittest discover -s site/scripts -p '*_test.py' -v
+      - name: prose gate — scan the shipped Markdown surfaces
+        # Scans exactly the reader-facing Markdown: README.md, CONTRIBUTING.md,
+        # docs/*.md, docs/guides/*.md, docs/commands/README.md — excluding the
+        # internal PRD/adr/plans/specs. A finding fails the build; the fix is to
+        # rewrite the flagged prose to a plain positive statement with every
+        # technical fact preserved (never to weaken the pattern).
+        if: needs.changes.outputs.prose == 'true' || github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          files=$(find README.md CONTRIBUTING.md docs \
+                    -type f -name '*.md' \
+                    -not -path 'docs/PRD.md' \
+                    -not -path 'docs/adr/*' \
+                    -not -path 'docs/plans/*' \
+                    -not -path 'docs/specs/*')
+          echo "Scanning:"; echo "$files"
+          python3 site/scripts/scan_page_prose.py $files
 
   # Validates the root plugin.json against the PINNED Agent Plugins 1.0.0 schema
   # URL — the authoritative, network-backed check that complements the offline
