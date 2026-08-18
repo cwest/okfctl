@@ -30,8 +30,8 @@ func newValidateCmd() *cobra.Command {
 		Long: "validate enforces the OKF spec floor (type present + non-empty, §7). " +
 			"It also reports git drift: a node whose frontmatter `modified` contradicts " +
 			"its git last-commit date (read-only — it never rewrites the file, and " +
-			"degrades to nothing outside a git repo). With --templates it additionally " +
-			"runs the opt-in team overlay (§9.4), reporting template drift. All drift is " +
+			"degrades to nothing outside a git repo). With --templates it runs the opt-in " +
+			"team overlay (§9.4) as well, reporting template drift. All drift is " +
 			"advisory by default (exit 0); pass --strict to exit non-zero on any drift. " +
 			"Floor violations always fail regardless of --strict.",
 		Example: "  # Check the spec floor for the bundle in the current directory\n" +

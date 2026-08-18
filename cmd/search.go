@@ -46,7 +46,7 @@ func newSearchCmd() *cobra.Command {
 		Short: "Search the bundle lexically or by graph neighborhood (core, stdlib-only)",
 		Long: "search queries the bundle from the CLI without a model or index.\n\n" +
 			"Lexical mode (default): okfctl search \"query\" [dir] matches concept nodes by\n" +
-			"title, tag, type, or body substring (case-insensitive). Restrict the surface\n" +
+			"title, tag, type, or body substring (case-insensitive). Restrict the fields\n" +
 			"with --field title|tag|type|body.\n\n" +
 			"Graph-structural mode: okfctl search --neighbors <node-path> [dir] returns the\n" +
 			"nodes within --depth hops of a node in the link graph (edges are undirected).\n\n" +
@@ -54,7 +54,7 @@ func newSearchCmd() *cobra.Command {
 			"`okfctl-search --semantic \"query\"` (PRD §8).",
 		Example: "  # Lexical search across all fields in the current bundle\n" +
 			"  okfctl search \"income statement\"\n\n" +
-			"  # Restrict the match surface to titles, in a bundle elsewhere\n" +
+			"  # Restrict the match to titles, in a bundle elsewhere\n" +
 			"  okfctl search --field title revenue ./bundles/knowledge\n\n" +
 			"  # Graph mode: nodes within 2 hops of a node in the link graph\n" +
 			"  okfctl search --neighbors concepts/income-statement.md --depth 2 ./bundles/knowledge",
@@ -86,7 +86,7 @@ func newSearchCmd() *cobra.Command {
 			return runLexical(cmd, dir, query, field, asJSON, noIgnore)
 		},
 	}
-	c.Flags().StringVar(&field, "field", "any", "lexical match surface: any|title|tag|type|body")
+	c.Flags().StringVar(&field, "field", "any", "lexical match fields: any|title|tag|type|body")
 	c.Flags().StringVar(&neighbors, "neighbors", "", "graph mode: node path to traverse from")
 	c.Flags().IntVar(&depth, "depth", 1, "neighborhood traversal depth (hops)")
 	c.Flags().BoolVar(&asJSON, "json", false, "emit results as JSON")
