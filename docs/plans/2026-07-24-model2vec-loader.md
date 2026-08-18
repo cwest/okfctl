@@ -44,7 +44,7 @@ RED: append to model2vec_test.go
   - TestEncodeIDs_Empty: EncodeIDs(nil) == make([]float64, Dim) (all zeros).
   - TestEncodeIDs_OutOfRangeSkipped: EncodeIDs([0, 999]) == EncodeIDs([0]) (999 skipped, no panic).
   - TestEncodeIDs_NoNormalize: with Normalize=false, EncodeIDs([0,1]) == raw mean (unnormalized).
-GREEN: (m *StaticModel) EncodeIDs(ids []int) []float64 — accumulate gathered rows, divide by
+GREEN: (m *StaticModel) EncodeIDs(ids []int) []float64—accumulate gathered rows, divide by
   count, L2-normalize iff m.Normalize; empty/all-skipped -> zero vector length Dim.
   Full gate: gofmt -l, go vet, go build ./..., go mod tidy -diff (no new deps),
   internal/search no cobra/net-http/CGO import, CGO_ENABLED=0 build, full -race suite.

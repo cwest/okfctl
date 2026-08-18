@@ -2,7 +2,7 @@
 
 Status: Approved  Owner: Casey West  License: Apache-2.0
 Increment: 5c-2 (second half of 5c; completes the pure-Go Model2Vec embedder, native per 13.2)
-Depends on: 5c-1 (ReadSafetensorsMatrix, StaticModel, EncodeIDs — all merged on main)
+Depends on: 5c-1 (ReadSafetensorsMatrix, StaticModel, EncodeIDs—all merged on main)
 Protocol source of truth: minishlab/potion-base-8M tokenizer.json (BERT WordPiece) +
 model2vec StaticModel.encode (which tokenizes with add_special_tokens=FALSE)
 
@@ -23,7 +23,7 @@ Standard BERT WordPiece stack, three stages, all pure-Go stdlib:
    - clean_text: strip control chars, normalize whitespace runs to single space.
    - handle_chinese_chars: surround each CJK codepoint with spaces (so each is its own token).
    - lowercase: Unicode lowercase. (strip_accents:null => with lowercase on, BERT default
-     does NOT strip accents — "café" stays "café" pre-tokenized; matched against vocab as-is.)
+     does NOT strip accents—"café" stays "café" pre-tokenized; matched against vocab as-is.)
 2. BertPreTokenizer: split on whitespace AND split every punctuation char into its own token
    (a run "notes." -> "notes","."). Punctuation = Unicode P* plus the ASCII punct BERT treats
    as punct.
@@ -33,7 +33,7 @@ Standard BERT WordPiece stack, three stages, all pure-Go stdlib:
    (line N = id N; 29528 entries, matching the 5c-1 embedding matrix rows).
 
 CRITICAL: model2vec calls the tokenizer with add_special_tokens=FALSE. The Go tokenizer
-MUST return content ids only — NO [CLS]/[SEP] wrapping. (Raw HF encode wraps 101...102;
+MUST return content ids only—NO [CLS]/[SEP] wrapping. (Raw HF encode wraps 101...102;
 model2vec strips them; we never add them.)
 
 ## Fidelity anchors (captured from the live model)
@@ -73,7 +73,7 @@ Full pipeline (Tokenize -> StaticModel.EncodeIDs), model2vec.encode("tannin stru
   A Model2Vec dir has config.json + model.safetensors + tokenizer.json/vocab.txt. NO network
   fetch at runtime (okfctl thesis: no separate install / no runtime download). hash stays the
   default embedder. RATIONALE: model_path is a stable per-machine setting, not a per-invocation
-  flag — config-first avoids the "retype it every run" friction. JSON (not TOML) keeps okfctl
+  flag—config-first avoids the "retype it every run" friction. JSON (not TOML) keeps okfctl
   stdlib-only / zero-dependency; a TOML migration, if ever wanted, is its own separate increment.
 
 ## Boundaries / decisions
@@ -93,7 +93,7 @@ Full pipeline (Tokenize -> StaticModel.EncodeIDs), model2vec.encode("tannin stru
    lowercase applied ("Wine"->[3517]); WordPiece subword split ("oaky"->oak+##y); an
    all-unknown word -> [unk id]; a >100-char word -> [unk id].
 2. Model2VecEmbedder implements Embedder; Encode("tannin structure") == model2vec.encode
-   output within 1e-5 (dim 256, unit norm, first4 anchor) — a REAL end-to-end fidelity test
+   output within 1e-5 (dim 256, unit norm, first4 anchor)—a REAL end-to-end fidelity test
    gated on the potion-base-8M model being present (skip w/ clear message if absent, run in CI
    only where the model is cached).
 3. `okfctl-search --embedder model2vec --model-path <dir> --semantic "q"` ranks a bundle;

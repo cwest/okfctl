@@ -1,4 +1,4 @@
-# Spec: `--lexical-gate` — gate semantic results lexically, preserving lexical recall
+# Spec: `--lexical-gate`—gate semantic results lexically, preserving lexical recall
 
 Closes cwest/okfctl#66.
 Branch: `wt/t_1e16ab69`  Base: `main` @ ac8a7a5
@@ -45,7 +45,7 @@ pipeline is:
 4. **Append the lexical hits the semantic band missed**, in lexical (path) order.
 5. Cut to `--k`.
 
-### Degrade to pure semantic — the correctness rule
+### Degrade to pure semantic—the correctness rule
 
 The gate is a **no-op** (byte-identical to gate-off) when either:
 
@@ -56,8 +56,7 @@ The gate is a **no-op** (byte-identical to gate-off) when either:
   degrade; a term that matches most of the corpus carries no discriminating
   signal, so gating on it only reorders noise.
 
-This degrade rule is what keeps question-shaped queries — the common case —
-exactly as good as they are today, and it is why the gate can be added without
+This degrade rule is what keeps question-shaped queries—the common case—exactly as good as they are today, and it is why the gate can be added without
 regressing the default embedder.
 
 ### Where the lexical match resolves
@@ -74,8 +73,8 @@ set).
 - **Tokenize:** lowercase; split on any non-alphanumeric rune; drop empty tokens.
 - **Stopwords:** a small closed set of English function words plus the
   question-shaped leaders proven necessary by the 0-hit finding (`how`, `should`,
-  `an`, `agent` is NOT a stopword — content words stay). See `lexgate.go`.
-- **Stem:** a deliberately light suffix stripper — strip a trailing `es`/`s`
+  `an`, `agent` is NOT a stopword—content words stay). See `lexgate.go`.
+- **Stem:** a deliberately light suffix stripper—strip a trailing `es`/`s`
   (plurals) and `ing`/`ed` (verb inflections) with a minimum stem length so
   short tokens are left intact. This is enough to make `hash`/`hashes` and
   `agent`/`agents` collapse to the same stem without the over-stemming risk of a
@@ -101,8 +100,7 @@ both bands (documented), decay reorders the semantic band only (documented).
 
 ## Acceptance criteria
 
-- **Positive:** an exact-token query where the semantic top-1 is a near-miss —
-  with `--lexical-gate` the exact match ranks 1, without it it does not.
+- **Positive:** an exact-token query where the semantic top-1 is a near-miss—with `--lexical-gate` the exact match ranks 1, without it it does not.
 - **Negative control (load-bearing):** the full question-shaped gold set scores
   **no worse** with the gate on than off, on BOTH embedders (`hash` and
   `model2vec`). Four numbers pinned in the PR body.
@@ -112,12 +110,12 @@ both bands (documented), decay reorders the semantic band only (documented).
 - **Over-broad degrade:** a term matching > `overBroadFraction` of the bundle
   (`agent` at 73%) makes the gate a no-op.
 - **Stemming symmetry:** `hash` and `hashes` gate to overlapping result sets.
-- **Interaction:** `--lexical-gate` with `--path` and with `--half-life` — no
+- **Interaction:** `--lexical-gate` with `--path` and with `--half-life`—no
   panic, sane output.
 
 ## Spec citations
 
-- §4.1 (frontmatter: title/type/tags) — the fields the lexical surface and the
+- §4.1 (frontmatter: title/type/tags)—the fields the lexical surface and the
   filters key on, v0.2.
 - The gate adds no spec-defined behavior; it is a ranking overlay behind an
   explicit opt-in flag, consistent with the PRD's "floor for everyone, extras

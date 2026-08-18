@@ -8,16 +8,16 @@ Thanks for your interest in contributing.
 `okfctl` is a **consumer of a specification it doesn't own**. The
 [Open Knowledge Format spec](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
 is the authority; this tool conforms to it. Where the spec defines behavior, the
-spec wins — over convenience, over a maintainer's preference, over what the code
+spec wins—over convenience, over a maintainer's preference, over what the code
 happens to do today.
 
 Two failure directions matter equally:
 
-- **Under-conformance** — emitting or accepting something the spec forbids.
-- **Over-conformance** — rejecting something the spec *permits*. The spec leaves
+- **Under-conformance**—emitting or accepting something the spec forbids.
+- **Over-conformance**—rejecting something the spec *permits*. The spec leaves
   `type` values open (§7.4) and tolerates unknown keys (§11), so an unknown
   `type` or a future frontmatter key MUST pass `validate`. Inventing a closed
-  vocabulary is a spec violation in the strict direction — and the easier one to
+  vocabulary is a spec violation in the strict direction—and the easier one to
   ship by accident, because it looks like rigor. `okfctl` enforces the spec
   *floor* for everyone and keeps anything stricter behind an explicit opt-in
   overlay (`--templates`, §9.4).
@@ -38,7 +38,7 @@ ambiguous, open an issue rather than resolving it silently in code.
 ## Running the conformance gate
 
 Every change that touches OKF-defined behavior must be validated against the spec
-*before* review — and the validation goes in the PR body as run output, not as a
+*before* review—and the validation goes in the PR body as run output, not as a
 claim. Run all three layers, cheapest first:
 
 ```sh
@@ -64,15 +64,15 @@ negative control is the one that gets skipped, and it's the one that proves your
 change didn't just silence the detector.
 
 If your change touches frontmatter, provenance, or freshness, also run it against
-a v0.1 bundle — the documented legacy fallbacks must keep working, so "it passes"
+a v0.1 bundle—the documented legacy fallbacks must keep working, so "it passes"
 on v0.2 alone isn't proof.
 
 ## What a good PR body contains
 
-- **Why** the change exists — the problem, not just the diff.
+- **Why** the change exists—the problem, not just the diff.
 - **Gate output.** Pin before/after counts, not "it passes." `validate 3→0,
   broken-link 0→0` is a result; a green checkmark is not. A count that didn't
-  move matters as much as one that did — it's the control proving the change
+  move matters as much as one that did—it's the control proving the change
   didn't silently start hiding findings.
 - **Spec citations** for any spec-mandated behavior.
 - **Both controls** for any detector change.
@@ -80,7 +80,7 @@ on v0.2 alone isn't proof.
 ## Style
 
 - Follow the conventions visible in the existing codebase. The shipped binary is
-  pure Go and self-contained — it carries its own runtime, so it needs no C
+  pure Go and self-contained—it carries its own runtime, so it needs no C
   toolchain, interpreter, or model download, and `CGO_ENABLED=0 go build ./...`
   must pass.
 - `gofmt -l .` must be empty and `go vet ./...` must be clean before you push.

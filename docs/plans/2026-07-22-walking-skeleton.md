@@ -17,7 +17,7 @@
 - Create: `.github/workflows/ci.yml`
 - Test: `cmd/root_test.go`
 
-- [ ] **Step 1: Write the failing test** — `cmd/root_test.go`
+- [ ] **Step 1: Write the failing test**—`cmd/root_test.go`
 
 ```go
 package cmd
@@ -51,7 +51,7 @@ func TestRootCommand_HelpRunsCleanly(t *testing.T) {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `go test ./cmd/ -run TestRootCommand -v`
-Expected: FAIL — package/`NewRootCmd` undefined (module not initialized yet).
+Expected: FAIL—package/`NewRootCmd` undefined (module not initialized yet).
 
 - [ ] **Step 3: Initialize the module and write minimal code**
 
@@ -110,7 +110,7 @@ func main() {
 Run: `go test ./cmd/ -run TestRootCommand -v`
 Expected: PASS (both tests).
 
-- [ ] **Step 5: Add CI** — `.github/workflows/ci.yml`
+- [ ] **Step 5: Add CI**—`.github/workflows/ci.yml`
 
 ```yaml
 name: ci
@@ -150,7 +150,7 @@ git commit -S -m "feat(cmd): scaffold cobra root command and CI"
 - Create: `internal/okf/node.go`, `internal/okf/frontmatter.go`
 - Test: `internal/okf/frontmatter_test.go`
 
-- [ ] **Step 1: Write the failing test** — `internal/okf/frontmatter_test.go`
+- [ ] **Step 1: Write the failing test**—`internal/okf/frontmatter_test.go`
 
 ```go
 package okf
@@ -207,7 +207,7 @@ func indexOf(s, sub string) int {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `go test ./internal/okf/ -run TestParseFrontmatter -v`
-Expected: FAIL — `ParseFrontmatter` undefined.
+Expected: FAIL—`ParseFrontmatter` undefined.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -336,7 +336,7 @@ printf -- '---\ntype: Reference\ntitle: Tannin\n---\n\n# Tannin\n\nSee [acidity]
 printf -- '---\ntype: Reference\ntitle: Acidity\n---\n\n# Acidity\n' > testdata/good-bundle/wine/acidity.md
 ```
 
-- [ ] **Step 2: Write the failing test** — `internal/okf/bundle_test.go`
+- [ ] **Step 2: Write the failing test**—`internal/okf/bundle_test.go`
 
 ```go
 package okf
@@ -389,9 +389,9 @@ func keys(m map[string]*Node) []string {
 - [ ] **Step 3: Run test to verify it fails**
 
 Run: `go test ./internal/okf/ -run TestLoad -v`
-Expected: FAIL — `Load` / `Bundle` undefined.
+Expected: FAIL—`Load` / `Bundle` undefined.
 
-- [ ] **Step 4: Write minimal implementation** — `internal/okf/bundle.go`
+- [ ] **Step 4: Write minimal implementation**—`internal/okf/bundle.go`
 
 ```go
 package okf
@@ -535,7 +535,7 @@ printf -- '# Log\n' > testdata/unknown-type/log.md
 printf -- '---\ntype: GreebleFrobnicator9000\n---\n# Weird but valid\n' > testdata/unknown-type/weird.md
 ```
 
-- [ ] **Step 2: Write the failing test** — `internal/okf/validate_test.go`
+- [ ] **Step 2: Write the failing test**—`internal/okf/validate_test.go`
 
 ```go
 package okf
@@ -594,9 +594,9 @@ func hasFindingFor(fs []Finding, path string) bool {
 - [ ] **Step 3: Run test to verify it fails**
 
 Run: `go test ./internal/okf/ -run TestValidate -v`
-Expected: FAIL — `Validate` / `Finding` undefined.
+Expected: FAIL—`Validate` / `Finding` undefined.
 
-- [ ] **Step 4: Write minimal implementation** — `internal/okf/validate.go`
+- [ ] **Step 4: Write minimal implementation**—`internal/okf/validate.go`
 
 ```go
 package okf
@@ -651,7 +651,7 @@ git commit -S -m "feat(okf): spec-floor validation with managed type presence"
 - Modify: `cmd/root.go` (register subcommand)
 - Test: `cmd/validate_test.go`
 
-- [ ] **Step 1: Write the failing test** — `cmd/validate_test.go`
+- [ ] **Step 1: Write the failing test**—`cmd/validate_test.go`
 
 ```go
 package cmd
@@ -695,9 +695,9 @@ func TestValidateCmd_MissingTypeExitsNonZero(t *testing.T) {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `go test ./cmd/ -run TestValidateCmd -v`
-Expected: FAIL — no `validate` subcommand registered.
+Expected: FAIL—no `validate` subcommand registered.
 
-- [ ] **Step 3: Write minimal implementation** — `cmd/validate.go`
+- [ ] **Step 3: Write minimal implementation**—`cmd/validate.go`
 
 ```go
 package cmd
@@ -737,7 +737,7 @@ func newValidateCmd() *cobra.Command {
 }
 ```
 
-Modify `cmd/root.go` — register inside `NewRootCmd()` before `return root`:
+Modify `cmd/root.go`—register inside `NewRootCmd()` before `return root`:
 
 ```go
 	root.AddCommand(newValidateCmd())
@@ -765,7 +765,7 @@ git commit -S -m "feat(cmd): validate command with spec-floor exit codes"
 - Modify: `cmd/root.go`
 - Test: `internal/okf/reserved_test.go`, `cmd/bundle_test.go`
 
-- [ ] **Step 1: Write the failing test** — `internal/okf/reserved_test.go`
+- [ ] **Step 1: Write the failing test**—`internal/okf/reserved_test.go`
 
 ```go
 package okf
@@ -799,9 +799,9 @@ func TestScaffold_ProducesValidatableBundle(t *testing.T) {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `go test ./internal/okf/ -run TestScaffold -v`
-Expected: FAIL — `Scaffold` undefined.
+Expected: FAIL—`Scaffold` undefined.
 
-- [ ] **Step 3: Write minimal implementation** — `internal/okf/reserved.go`
+- [ ] **Step 3: Write minimal implementation**—`internal/okf/reserved.go`
 
 ```go
 package okf
@@ -869,13 +869,13 @@ func newBundleCmd() *cobra.Command {
 }
 ```
 
-Modify `cmd/root.go` — add inside `NewRootCmd()`:
+Modify `cmd/root.go`—add inside `NewRootCmd()`:
 
 ```go
 	root.AddCommand(newBundleCmd())
 ```
 
-- [ ] **Step 4: Write the command test** — `cmd/bundle_test.go`
+- [ ] **Step 4: Write the command test**—`cmd/bundle_test.go`
 
 ```go
 package cmd
@@ -922,7 +922,7 @@ git commit -S -m "feat(cmd): bundle init scaffolds a conformant bundle"
 - Modify: `cmd/root.go`
 - Test: `internal/okf/authoring_test.go`, `cmd/node_test.go`
 
-- [ ] **Step 1: Write the failing test** — `internal/okf/authoring_test.go`
+- [ ] **Step 1: Write the failing test**—`internal/okf/authoring_test.go`
 
 ```go
 package okf
@@ -989,9 +989,9 @@ var _ = filepath.Join
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `go test ./internal/okf/ -run TestNewNode -v`
-Expected: FAIL — `NewNode` undefined.
+Expected: FAIL—`NewNode` undefined.
 
-- [ ] **Step 3: Write minimal implementation** — `internal/okf/authoring.go`
+- [ ] **Step 3: Write minimal implementation**—`internal/okf/authoring.go`
 
 ```go
 package okf
@@ -1079,13 +1079,13 @@ func newNodeCmd() *cobra.Command {
 }
 ```
 
-Modify `cmd/root.go` — add inside `NewRootCmd()`:
+Modify `cmd/root.go`—add inside `NewRootCmd()`:
 
 ```go
 	root.AddCommand(newNodeCmd())
 ```
 
-- [ ] **Step 4: Write the command test** — `cmd/node_test.go`
+- [ ] **Step 4: Write the command test**—`cmd/node_test.go`
 
 ```go
 package cmd
@@ -1128,7 +1128,7 @@ git commit -S -m "feat(cmd): node new creates a node with required type"
 - Modify: `cmd/node.go`
 - Test: `cmd/node_test.go` (append)
 
-- [ ] **Step 1: Write the failing test** — append to `cmd/node_test.go`
+- [ ] **Step 1: Write the failing test**—append to `cmd/node_test.go`
 
 ```go
 import (
@@ -1173,9 +1173,9 @@ func TestNodeShow_SurfacesType(t *testing.T) {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `go test ./cmd/ -run 'NodeList|NodeShow' -v`
-Expected: FAIL — no `list`/`show` subcommands.
+Expected: FAIL—no `list`/`show` subcommands.
 
-- [ ] **Step 3: Write minimal implementation** — add to `newNodeCmd()` in `cmd/node.go`, before `return node`
+- [ ] **Step 3: Write minimal implementation**—add to `newNodeCmd()` in `cmd/node.go`, before `return node`
 
 ```go
 	var showBundle string
@@ -1251,7 +1251,7 @@ git commit -S -m "feat(cmd): node show and list surface type"
 - Modify: `cmd/bundle.go` (add `info`), `cmd/root.go`, `README.md`
 - Test: `cmd/config_test.go`, `cmd/bundle_test.go` (append)
 
-- [ ] **Step 1: Write the failing test** — `cmd/config_test.go`
+- [ ] **Step 1: Write the failing test**—`cmd/config_test.go`
 
 ```go
 package cmd
@@ -1299,7 +1299,7 @@ func TestBundleInfo_ReportsCounts(t *testing.T) {
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `go test ./cmd/ -run 'Config|BundleInfo' -v`
-Expected: FAIL — no `config`/`info`.
+Expected: FAIL—no `config`/`info`.
 
 - [ ] **Step 3: Write minimal implementations**
 
@@ -1466,9 +1466,9 @@ Register both in `cmd/root.go` inside `NewRootCmd()` (completion needs `root`):
 Run: `go test ./cmd/ -run 'Config|BundleInfo' -v`
 Expected: PASS.
 
-- [ ] **Step 5: Write README.md** — a real quickstart (init → node new → validate → list), the command tree, and a "built from docs/PRD.md; this is increment 1 of the roadmap" pointer. (No AI attribution.)
+- [ ] **Step 5: Write README.md**—a real quickstart (init → node new → validate → list), the command tree, and a "built from docs/PRD.md; this is increment 1 of the roadmap" pointer. (No AI attribution.)
 
-- [ ] **Step 6: Full verification (HARD GATE — do not claim done until green)**
+- [ ] **Step 6: Full verification (HARD GATE—do not claim done until green)**
 
 ```bash
 gofmt -l .            # must print nothing
@@ -1503,6 +1503,5 @@ git commit -S -m "feat(cmd): completion, config, and bundle info; add README"
 
 ## Execution handoff
 
-Two options: **(1) Subagent-driven** (fresh subagent per task, review between) —
-recommended for a plan this size; **(2) Inline** (executing-plans, batched with
+Two options: **(1) Subagent-driven** (fresh subagent per task, review between)—recommended for a plan this size; **(2) Inline** (executing-plans, batched with
 checkpoints). Await Casey's choice.

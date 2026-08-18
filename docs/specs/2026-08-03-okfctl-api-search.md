@@ -1,4 +1,4 @@
-# okfctl-api — serve `GET /api/v1/search` off a resident index
+# okfctl-api—serve `GET /api/v1/search` off a resident index
 
 **Status:** Approved (design) · **Owner:** Casey West · **License:** Apache-2.0
 **Source of truth:** OKF `SPEC.md` **v0.2** §4.1 (scoping filters), §5.2
@@ -21,7 +21,7 @@ lifetime.
 
 All changes live in `internal/apiserver/` (new `search.go` + tests) and the
 `cmd/okfctl-api` serve wiring; the shared `okf.BuildGraph` serializer and the
-`search` package are NOT touched — the API composes `search.QueryWith`, so its
+`search` package are NOT touched—the API composes `search.QueryWith`, so its
 ranking can never disagree with the CLI's.
 
 ### Endpoint
@@ -49,7 +49,7 @@ Returns the same score / path / snippet triple the CLI prints, as JSON:
 flags one-for-one. `model` is the index's own recorded embedder model; `indexed_at`
 is the index file's modtime, so a consumer can tell how fresh the answers are.
 
-### Query-param grammar — a deliberate divergence from the earlier plan
+### Query-param grammar—a deliberate divergence from the earlier plan
 
 The earlier design (`docs/plans/2026-08-02-okfctl-api.md` §2.7) sketched a
 two-mode endpoint where `?q=` meant **lexical** and `?semantic=` meant semantic.
@@ -59,7 +59,7 @@ snippet triple*, and `q` is the natural name for "the query." The lexical mode i
 not part of this increment. This is called out for the reviewer rather than
 resolved silently.
 
-### Filter grammar — mirrors #68's repeatable + negating grammar
+### Filter grammar—mirrors #68's repeatable + negating grammar
 
 This endpoint touches the same query surface as #63 (repeatable + negating
 filters) and #65 (decay bounds). The card's ordering dependency says: land the
@@ -69,11 +69,11 @@ one. **#68 merged that grammar (repeatable `--path/--type/--tag`, negating
 this endpoint landed**, so this endpoint mirrors it:
 
 - `?path=`, `?type=`, `?tag=` are **repeatable**; repeats within a dimension OR
-  together, dimensions AND together — Go's `url.Query()[k]` returns every
+  together, dimensions AND together—Go's `url.Query()[k]` returns every
   occurrence, so this is a natural extension, not new syntax.
 - `?not-path=`, `?not-type=`, `?not-tag=` mirror the CLI's exclusion flags.
 - Empty values (`?type=`) are dropped by `nonEmptyQuery`, the HTTP mirror of the
-  CLI's `nonEmpty` — an empty value reads as unset, identical to omitting the
+  CLI's `nonEmpty`—an empty value reads as unset, identical to omitting the
   param, preserving the CLI's contract.
 
 Decay behavior is unchanged (`?half_life=` scalar, #65 not yet landed).
@@ -86,26 +86,25 @@ Flagged to the reviewer.
   the index from disk exactly once (the resident-server invariant). `indexed_at`
   exposes the index modtime.
 - **Filter metadata.** §4.1 filters and §5.2/§13.1 recency decay resolve against
-  the LIVE bundle (re-walked on the same reload signal), not the index —
-  `contentHash` keys only title+body, so a frontmatter-only edit does not re-embed
+  the LIVE bundle (re-walked on the same reload signal), not the index—`contentHash` keys only title+body, so a frontmatter-only edit does not re-embed
   and a value denormalized onto the index would go stale.
 
 ### Constructor signature
 
 `NewHandler(b *okf.Bundle)` becomes `NewHandler(b *okf.Bundle, embedder
 search.Embedder)`. A nil embedder disables `/search` (it 404s) and leaves
-`/stats` and `/graph` byte-identical — the search route is purely additive.
+`/stats` and `/graph` byte-identical—the search route is purely additive.
 
 ## Security posture (unchanged, re-asserted in tests)
 
 Loopback-only bind (non-loopback `--addr` still refused with the new route
 registered), read-only bundle, GET-only (`POST /api/v1/search` → 405).
 
-## Acceptance criteria — both directions
+## Acceptance criteria—both directions
 
 - **Positive:** `?q=<query>&k=5` returns 200 with results whose score/path/snippet
   exactly match `search.QueryWith` for the same query and bundle (the CLI oracle).
-- **Negative — no perturbation:** `/stats` and `/graph` bodies are byte-identical
+- **Negative—no perturbation:** `/stats` and `/graph` bodies are byte-identical
   with search enabled vs disabled.
 - **Second negative:** a bundle with no index → clean 503 with the CLI's
   `no index at <path> (run 'okfctl-search index build' first)` message, not a panic
@@ -113,5 +112,5 @@ registered), read-only bundle, GET-only (`POST /api/v1/search` → 405).
 - Missing/empty `q` → 400. `POST` → 405. Loopback refusal still holds.
 - **Staleness:** a rebuild while resident is reflected on the next request
   (positive control); an unchanged index loads exactly once over N requests
-  (negative control — proves the feature).
+  (negative control—proves the feature).
 - **Measured benefit** on the real corpus, pinned in the PR body.

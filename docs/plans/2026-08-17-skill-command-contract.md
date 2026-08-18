@@ -1,9 +1,9 @@
-# Plan — test(agentplugin): skill-command contract in CI
+# Plan—test(agentplugin): skill-command contract in CI
 
 Base `main` @ `764bf94` · Branch `topic/skill-command-contract` · TDD throughout.
 Spec: `docs/specs/2026-08-17-skill-command-contract.md`.
 
-## Task 1 — RED: negative-control self-test fails on a bogus command
+## Task 1—RED: negative-control self-test fails on a bogus command
 
 Write `scripts/skill-command-contract.sh` with only the extractor + existence
 sweep + `--self-test` mode implemented. The self-test plants `okfctl node lst`
@@ -14,7 +14,7 @@ self-test must FAIL ("sweep did not go red on a bogus command"). This is the
 genuine RED: it proves the harness detects a broken sweep before the sweep
 itself works.
 
-## Task 2 — GREEN: implement the existence sweep
+## Task 2—GREEN: implement the existence sweep
 
 Extractor: scan fenced code blocks in `skills/*/SKILL.md`; for each line whose
 first token (after an optional `$ `) is `okfctl` or `okfctl-search`, capture the
@@ -25,7 +25,7 @@ GREEN: `--self-test` now passes (bogus command → sweep red → self-test green
 revert → sweep green → self-test green). Existence sweep against the real
 released binary passes.
 
-## Task 3 — GREEN: workflow runs
+## Task 3—GREEN: workflow runs
 
 Add the four workflow functions, each asserting output + exit code:
 - authoring: full lifecycle, `bundle info` shows a node count.
@@ -36,12 +36,12 @@ Add the four workflow functions, each asserting output + exit code:
 - semantic-search: `config list` exit 0; `lint --semantic` (no index) exit 1 and
   stderr contains `okfctl-search index build`.
 
-## Task 4 — CI job
+## Task 4—CI job
 
 Add `skill-contract` job to `.github/workflows/ci.yml`: resolve latest release,
 install via `install.sh`, run the script. Trigger on `skills/**`, `cmd/**`, main.
 
-## Task 5 — Witness RED + GREEN for the PR body
+## Task 5—Witness RED + GREEN for the PR body
 
 Plant a bogus command in one skill, run the script, capture the RED output.
 Revert, run again, capture GREEN. Paste both in the PR body.

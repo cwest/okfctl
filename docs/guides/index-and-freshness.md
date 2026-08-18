@@ -11,28 +11,28 @@ carries none.
 - `okfctl index build [dir]` regenerates the reserved `index.md` files from the
   current bundle. Orphaned indexes left in a now-empty directory are pruned.
 - `okfctl index check [dir]` verifies every directory's `index.md` is current;
-  it exits nonzero if any nested index is stale, missing, or orphaned — wire it
+  it exits nonzero if any nested index is stale, missing, or orphaned—wire it
   into CI to keep the index honest.
 
 ## Git drift
 
-`okfctl validate` also reports **git drift** — any node whose frontmatter
-`modified` disagrees with its git last-commit date — as advisory warnings
+`okfctl validate` also reports **git drift**—any node whose frontmatter
+`modified` disagrees with its git last-commit date—as advisory warnings
 (read-only; run `okfctl node refresh` to fix them; degrades to nothing outside a
 git repo). `node refresh` bulk-rewrites every drifting node's `modified` to its
 git last-commit day; `created` is immutable and never touched.
 
-## `.okf-drift-ignore-revs` — opt a bulk mechanical commit out of git drift
+## `.okf-drift-ignore-revs`—opt a bulk mechanical commit out of git drift
 
 Git drift infers a node's freshness from its last-touching commit's date. That is
-right for an incremental edit, but a **bulk mechanical commit** — a one-time
-migration that rewrites frontmatter across the whole corpus on day one — has no
+right for an incremental edit, but a **bulk mechanical commit**—a one-time
+migration that rewrites frontmatter across the whole corpus on day one—has no
 authoring intent, and treating its date as the node's `modified` collapses the
 real authoring history into the migration date. Git records *when* a commit
 landed, not *why*, so the tool can't tell the two apart on its own.
 
 Declare the intent with a checked-in `.okf-drift-ignore-revs` at the bundle root,
-mirroring `git blame --ignore-revs-file` — a convention users already understand:
+mirroring `git blame --ignore-revs-file`—a convention users already understand:
 
 ```
 # Mechanical migration commits — opt these out of git drift.
@@ -42,7 +42,7 @@ mirroring `git blame --ignore-revs-file` — a convention users already understa
 
 When a node's last-touching commit is on the list, the drift comparison **walks
 back to the prior real commit** for that file. Incremental edits (commits *not*
-on the list) still drift normally — the check isn't narrowed into uselessness.
+on the list) still drift normally—the check isn't narrowed into uselessness.
 Full or abbreviated (≥7-char) SHAs both match. This is the recommended cure when
 `node refresh` refuses a bulk-dominated plan (the guardrail against collapsing
 real authoring dates into one migration date).

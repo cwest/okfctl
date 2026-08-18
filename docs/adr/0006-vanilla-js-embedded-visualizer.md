@@ -9,7 +9,7 @@
 ## Context
 
 The `serve` command starts a local web server that renders a bundle as an
-interactive, navigable knowledge graph — click a node to read it, follow edges,
+interactive, navigable knowledge graph—click a node to read it, follow edges,
 highlight orphans, filter by type/neighborhood (PRD §6.3, pillar 3). PRD §5.1
 requires the visualizer's assets to ship *inside* the binary so there is no
 separate install; the server itself is already stdlib-only (`net/http` +
@@ -23,12 +23,12 @@ separate install; the server itself is already stdlib-only (`net/http` +
    force-directed renderer in one `index.html` with no build step.
 
 Either way the compiled/authored assets are baked in via `go:embed`, so the
-choice is orthogonal to the settled Go backend — it is purely a question of the
+choice is orthogonal to the settled Go backend—it is purely a question of the
 front-end's own toolchain and weight.
 
 ## Decision
 
-Ship a **vanilla-JS, single `go:embed`-ed `index.html`** — a small, self-contained
+Ship a **vanilla-JS, single `go:embed`-ed `index.html`**—a small, self-contained
 force-directed renderer with **no npm/Node build step**. The server exposes
 `GET /` (the embedded page) and `GET /graph.json` (the same deterministic
 serializer as `graph export --format json`), binds loopback by default, and loads
@@ -37,7 +37,7 @@ the bundle once at startup, read-only. `cmd/serve.go` embeds the single asset wi
 
 ## Consequences
 
-**What it buys.** The entire build is `go build` — no Node, no npm, no bundler in
+**What it buys.** The entire build is `go build`—no Node, no npm, no bundler in
 the toolchain or CI, and nothing for a contributor to install to work on the
 viewer. There is no JS dependency tree to audit or keep patched, which keeps the
 project's supply-chain surface as small as the backend's. A single embedded file
@@ -45,7 +45,7 @@ is trivial to reason about and ships as part of the one static binary, satisfyin
 the no-separate-install requirement directly.
 
 **What it costs.** A hand-written vanilla renderer forgoes the ergonomics a
-framework provides — component structure, reactive state, and a mature ecosystem
+framework provides—component structure, reactive state, and a mature ecosystem
 of graph-visualization libraries. As the viewer's interactivity grows (richer
 filtering, large-graph performance, complex layout), hand-rolled JS in one file
 becomes harder to maintain than componentized framework code would be, and the

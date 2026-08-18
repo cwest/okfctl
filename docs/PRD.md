@@ -712,7 +712,7 @@ called out as such.
 | Vector store (§8.3) | Decided: flat Go-native JSON | [ADR 0004](adr/0004-flat-json-vector-store.md) |
 | Semantic-search build path (§13.2) | Decided: pure-Go embedder | [ADR 0005](adr/0005-pure-go-embedder.md) |
 | Web visualizer front-end (§13.4) | Decided: vanilla JS + `go:embed` | [ADR 0006](adr/0006-vanilla-js-embedded-visualizer.md) |
-| Curation backend interface (§13.3) | **Open** | — |
+| Curation backend interface (§13.3) | **Open** |—|
 
 ### 13.1 Implementation language and library stack—*decided: Go*
 
@@ -754,16 +754,16 @@ Extension model: PATH-dispatch (`okfctl-<name>`, the `kubectl`/`git` pattern),
 plus an explicit `plugin list` discovery command (see
 [ADR 0002](adr/0002-path-dispatch-extension-model.md)). Markdown+frontmatter
 parsing: `goldmark` with `goldmark-meta` (MIT). YAML: `gopkg.in/yaml.v3`. Graph
-structure and DOT/JSON export: **the standard library** — the link graph is a
+structure and DOT/JSON export: **the standard library**—the link graph is a
 small in-memory value type built and serialized in `internal/okf` with stdlib
 `sort` and `encoding/json`, no third-party graph library. Embedded server:
 `net/http` + `go:embed` (stdlib). Vector store for the `okfctl-search` plugin: a
 **flat Go-native JSON store** keyed on content hash, brute-force cosine over the
-corpus — no SQLite and no CGO/C-extension (see
+corpus—no SQLite and no CGO/C-extension (see
 [ADR 0004](adr/0004-flat-json-vector-store.md)). Distribution: `CGO_ENABLED=0`
 static builds across `GOOS`/`GOARCH` for the core, with GoReleaser for the
-release matrix. The full rationale for the language choice — cross-compilation,
-dependency surface, YAML maturity, prior art, and Rust's one win — lives in
+release matrix. The full rationale for the language choice—cross-compilation,
+dependency surface, YAML maturity, prior art, and Rust's one win—lives in
 [ADR 0001](adr/0001-build-in-go.md).
 
 > **Historical note.** An earlier draft of this stack named `sqlite-vec`
@@ -787,7 +787,7 @@ binary with no Python, ONNX, or model server at runtime. The port is verified
 faithful (vectors match the upstream `model2vec` library to within `1e-5`, and
 the offline `HashEmbedder` is byte-identical to the shared `cwest/knowledge-base`
 implementation), so the protocol, the models, and the `model`-field
-reproducibility discipline stay shared with the KB — only the client language
+reproducibility discipline stay shared with the KB—only the client language
 differs. The cost of owning that port, and the rejected shell-out alternative,
 are recorded in [ADR 0005](adr/0005-pure-go-embedder.md).
 
@@ -797,7 +797,7 @@ The interface for the optional LLM-backed semantic checks (contradiction
 detection beyond vector similarity) remains open as a design task, now scoped to
 the Go ecosystem. It sits behind the same opt-in boundary as the vector index and,
 like it, should cache results by content hash. This is the **only remaining open
-decision** in this section — every other item above is decided and shipped, with
+decision** in this section—every other item above is decided and shipped, with
 an ADR. No decision has been made here yet, so there is no ADR to record.
 
 ### 13.4 Web visualizer front-end approach

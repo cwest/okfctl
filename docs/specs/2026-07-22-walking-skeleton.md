@@ -1,7 +1,7 @@
-# okfctl Walking Skeleton — Design Spec
+# okfctl Walking Skeleton—Design Spec
 
 **Status:** Approved · **Owner:** Casey West · **License:** Apache-2.0
-**Source of truth:** [`docs/PRD.md`](../PRD.md) — this spec implements the first
+**Source of truth:** [`docs/PRD.md`](../PRD.md)—this spec implements the first
 increment of that PRD's v1.
 
 ## Purpose
@@ -17,19 +17,19 @@ conformance including the managed-`type` floor.
 
 ## Scope of THIS increment (PR #1)
 
-1. **Project foundation** — Go module, `cobra` root command, layered config
+1. **Project foundation**—Go module, `cobra` root command, layered config
    (`config get/set/list`), generated shell `completion`, CI (build + test +
    `go vet` + `gofmt` gate).
-2. **Core bundle model** — the loader: walk a bundle directory, parse each file's
+2. **Core bundle model**—the loader: walk a bundle directory, parse each file's
    YAML frontmatter + Markdown body, build an in-memory typed graph (nodes +
    edges from links). *Everything downstream operates on this model.*
-3. **`bundle init`** — scaffold a minimal conformant bundle: root `index.md`,
+3. **`bundle init`**—scaffold a minimal conformant bundle: root `index.md`,
    `log.md`, spec-version pin, directory shape.
-4. **`validate`** — enforce the spec floor: parseable frontmatter, a non-empty
+4. **`validate`**—enforce the spec floor: parseable frontmatter, a non-empty
    `type` on every node (§7.1 managed-`type`), well-formed reserved files.
    Pass/fail with a non-zero exit on failure. NO `--templates` overlay yet
    (that ships with the type-template increment).
-5. **`node new` / `node show` / `node list`** — create a node with a required,
+5. **`node new` / `node show` / `node list`**—create a node with a required,
    non-empty `type` (§7.2); print a node surfacing `type` (§7.3); list the bundle
    tree with a `type` column (§7.3).
 
@@ -37,9 +37,9 @@ conformance including the managed-`type` floor.
 
 Deferred to later branches, each its own worktree → plan → TDD → PR:
 
-- `lint` (the curation differentiator) — needs the model this slice builds.
+- `lint` (the curation differentiator)—needs the model this slice builds.
 - `graph` export + `serve` web visualizer.
-- `okfctl-search` PATH-dispatch plugin + `sqlite-vec` vector index (§8) — and the
+- `okfctl-search` PATH-dispatch plugin + `sqlite-vec` vector index (§8)—and the
   §13.2 shell-out-vs-native-Go fork, deferred until that slice.
 - Type templates + the `validate --templates` overlay (§9).
 - `node edit` / `node mv` / `node rm`, `index build/check`, `log append/show`,
@@ -53,12 +53,11 @@ never a silent no-op.
 
 Layered, per PRD §11. Decided stack (PRD §13.1):
 
-- **CLI layer** — `spf13/cobra` (Apache-2.0) noun-verb tree; `spf13/viper` (MIT)
+- **CLI layer**—`spf13/cobra` (Apache-2.0) noun-verb tree; `spf13/viper` (MIT)
   only if config-file layering needs it beyond flags+env (defer until proven).
-- **Core bundle model (stdlib-only where possible)** — `goldmark` +
+- **Core bundle model (stdlib-only where possible)**—`goldmark` +
   `goldmark-meta` (MIT) for Markdown + frontmatter, `gopkg.in/yaml.v3` for
-  frontmatter typing. In-memory graph via `dominikbraun/graph` (Apache-2.0) —
-  confirm health bar at adoption; if it fails the gate, fall back to a tiny
+  frontmatter typing. In-memory graph via `dominikbraun/graph` (Apache-2.0)—confirm health bar at adoption; if it fails the gate, fall back to a tiny
   internal adjacency structure (this slice only needs nodes + edges, not heavy
   analytics).
 - **No plugins, no backends** in this slice. Core stays `CGO_ENABLED=0` static.
@@ -108,7 +107,7 @@ testable in isolation and reusable by every later capability.
 1. `okfctl bundle init` produces a directory that `okfctl validate` passes.
 2. `okfctl validate` FAILS (non-zero exit) a bundle with a node missing/empty
    `type`, and PASSES a bundle whose nodes carry unfamiliar `type` values
-   (presence, not taxonomy — PRD §7.4).
+   (presence, not taxonomy—PRD §7.4).
 3. `okfctl node new --type X` creates a conformant node; `node show`/`node list`
    surface `type`.
 4. Clean `go build`, `go vet`, `gofmt`, and full `go test ./...` green in CI from

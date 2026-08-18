@@ -2,7 +2,7 @@
 
 Three paths get you running fast, and they're in the
 [README](../README.md#install): Homebrew, the `install.sh` one-liner, and
-`go install`. This page covers everything else — prebuilt archives, system
+`go install`. This page covers everything else—prebuilt archives, system
 packages, signature verification, and building from source.
 
 ## Prebuilt binaries
@@ -10,7 +10,7 @@ packages, signature verification, and building from source.
 Download the archive for your platform from the
 [releases page](https://github.com/cwest/okfctl/releases): macOS, Linux, and
 Windows, on amd64 and arm64. Each archive bundles both `okfctl` and the
-`okfctl-search` plugin — extract them onto your `PATH`:
+`okfctl-search` plugin—extract them onto your `PATH`:
 
 ```sh
 tar -xzf okfctl_<version>_<os>_<arch>.tar.gz     # or unzip the .zip on Windows

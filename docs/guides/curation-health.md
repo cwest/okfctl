@@ -1,6 +1,6 @@
 # Curation health: `lint`, `analyze`, and `--strict` in CI
 
-## `lint` — curation-health findings
+## `lint`—curation-health findings
 
 `okfctl lint <dir>` reports curation-health findings (orphans, missing
 cross-references, broken internal links, coverage gaps, type-value hygiene). It
@@ -19,13 +19,13 @@ index built by `okfctl-search index build`; **no embedding model is needed to
 lint**, because core only ever *reads* an index.
 
 Structural lint asks *"is anything linked to this?"*. Semantic lint asks *"is
-anything even about the same thing?"* — the curation question the graph alone
+anything even about the same thing?"*—the curation question the graph alone
 can't answer:
 
 | check | finding | reads as |
 |---|---|---|
-| `similar-unlinked` | two nodes scoring ≥ `--similarity-threshold` (default `0.80`) with **no link in either direction** | *"these cover the same ground and don't reference each other — missing cross-reference?"* |
-| `no-semantic-neighbors` | a node whose **best** neighbor falls below `--isolation-floor` (default `0.20`) | *"nothing in the corpus is close to this — dead concept, or missing context?"* |
+| `similar-unlinked` | two nodes scoring ≥ `--similarity-threshold` (default `0.80`) with **no link in either direction** | *"these cover the same ground and don't reference each other—missing cross-reference?"* |
+| `no-semantic-neighbors` | a node whose **best** neighbor falls below `--isolation-floor` (default `0.20`) | *"nothing in the corpus is close to this—dead concept, or missing context?"* |
 
 ```sh
 okfctl-search index build ./my-bundle     # the plugin builds (needs a model)
@@ -36,7 +36,7 @@ Three deliberate behaviors:
 
 - **Opt-in.** Without `--semantic`, output is unchanged and the index is never
   read.
-- **A missing index is an error, not a silent skip** — it names `okfctl-search
+- **A missing index is an error, not a silent skip**—it names `okfctl-search
   index build`. A quiet structural-only fallback would let CI believe semantic
   checks ran when they didn't.
 - **Index drift is surfaced.** Nodes added since the last `index build` produce
@@ -49,16 +49,15 @@ vocabulary"; with `--embedder model2vec` it means genuinely related subject
 matter. Build the index with `model2vec` if you intend to act on these findings.
 See the [search guide](search.md) for embedder setup.
 
-## `eval` — TACA-style trustworthiness
+## `eval`—TACA-style trustworthiness
 
 `validate` and `lint` check **format**; `eval` is the first machine gate that
-touches **trust**. TACA decomposes node trust into four dimensions —
-**T**ransparency, **A**ccuracy, **C**alibration, **A**lignment — and `eval`
+touches **trust**. TACA decomposes node trust into four dimensions—**T**ransparency, **A**ccuracy, **C**alibration, **A**lignment—and `eval`
 scores them as far as a pure-Go, offline, no-model tool can. Only Transparency is
 machine-decidable without a model or the network; the other three are *scaffolded*
 for a human or an out-of-band LLM judge, never auto-graded.
 
-### `eval transparency` — the gate
+### `eval transparency`—the gate
 
 Deterministic and offline, mirroring `lint`: advisory (exit 0) by default,
 `--strict` to fail CI, `--json` for tooling. Four checks:
@@ -74,7 +73,7 @@ The grade vocabulary is **derived from the corpus**, not hardcoded: a value
 carried by at least `--grade-vocabulary-floor` nodes (default 2) counts as the
 vocabulary; rarer values are flagged as drift. This catches the one-off typo
 (`authority: high`) without inventing an enum the OKF spec deliberately leaves
-open. External `http(s)` citations are out of scope — verifying them needs the
+open. External `http(s)` citations are out of scope—verifying them needs the
 network (that's the sampler / human pass, see the `verifying-citation-link-fit`
 discipline).
 
@@ -86,10 +85,10 @@ okfctl eval transparency --json ./bundles/knowledge     # tooling
 Wire it alongside `validate --strict` and `lint --strict` as a third
 conformance gate.
 
-### `eval sample` — the spot-check scaffold
+### `eval sample`—the spot-check scaffold
 
 Selects a sample of nodes and emits a structured eval-set for the three
-dimensions okfctl can't automate. It computes **no truth verdict** — it
+dimensions okfctl can't automate. It computes **no truth verdict**—it
 pre-populates every field it can extract (title, description, grades, sources,
 candidate claims) and leaves the judgment slots empty for a reviewer to fill in.
 
@@ -111,7 +110,7 @@ drop a spot-check worksheet on the touched nodes. A periodic
 
 Every command that walks a bundle (`validate`, `lint`, `analyze`, `search`,
 `graph export`, `index build`/`check`) prunes vendored and derived directories
-by default — a Python virtualenv (`.venv`), `node_modules`, a `vendor/` tree, or
+by default—a Python virtualenv (`.venv`), `node_modules`, a `vendor/` tree, or
 a build-output dir (`dist`, `build`, `target`, …) sitting under the bundle root
 holds `.md` files nobody authored as knowledge, and walking them pollutes every
 report. The prune is by directory **base name** at any depth (see
@@ -127,6 +126,6 @@ Two guardrails keep this from silently eating your work:
   prints a note to **stderr** naming the skipped directories and pointing at
   `--no-ignore`.
 
-This is a built-in default, not a policy read from config — `okfctl` deliberately
+This is a built-in default, not a policy read from config—`okfctl` deliberately
 doesn't consult `.gitignore` (curation scope and version-control scope are
 different questions) and needs no `.okfctlignore` to be usable on a real tree.

@@ -9,7 +9,7 @@ okfctl bundle init mykb
 ```
 
 This creates the two reserved files (`index.md`, `log.md`) and the bundle-root
-`.okf` sidecar. It does **not** create any concept nodes — a fresh bundle has
+`.okf` sidecar. It does **not** create any concept nodes—a fresh bundle has
 zero nodes.
 
 ## 2. Add a node

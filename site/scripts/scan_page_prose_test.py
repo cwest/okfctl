@@ -423,5 +423,204 @@ class MarkdownAndHtmlShareOneDetector(unittest.TestCase):
         self.assertEqual(run_md(md).returncode, 1, "Markdown front end must fire")
 
 
+# ---------------------------------------------------------------------------
+# The SECOND class: em-dash spacing. Casey's house style is the closed-up
+# Chicago em dash (word—word); a SPACED em dash (word — word) in prose is a
+# finding. It rides the SAME extractors as the negative-listing check, so both
+# controls the card names must hold: the POSITIVE (a spaced dash in a prose
+# block fails) and the load-bearing NEGATIVE (a spaced dash inside a fenced
+# code block or inline code span stays silent, because code follows its own
+# medium's typography, not prose typography).
+# ---------------------------------------------------------------------------
+
+# The three prose-style spaced-dash forms, spelled with the real U+2014 so the
+# fixture is exactly what a drifted doc contains.
+_SPACED = "It keeps links honest \u2014 a path change never breaks a reference."
+_CLOSED = "It keeps links honest\u2014a path change never breaks a reference."
+
+
+class EmDashSpacingInProse(unittest.TestCase):
+    """POSITIVE CONTROL. A spaced em dash in a prose block must FAIL, in both
+    front ends, so the standard cannot regress once the corpus is converted."""
+
+    def test_spaced_em_dash_in_markdown_paragraph_fails(self):
+        doc = CLEAN_MD.replace(
+            "A knowledge base decays the moment a path changes. okfctl keeps links honest.",
+            _SPACED,
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 1, f"spaced em dash must fail:\n{r.stdout}")
+        self.assertIn("SPACED-EM-DASH", r.stdout)
+
+    def test_spaced_em_dash_in_markdown_heading_fails(self):
+        doc = CLEAN_MD.replace("# okfctl", "# okfctl \u2014 a knowledge CLI")
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 1, f"heading prose must be scanned:\n{r.stdout}")
+        self.assertIn("SPACED-EM-DASH", r.stdout)
+
+    def test_spaced_em_dash_in_html_paragraph_fails(self):
+        page = CLEAN_PAGE.replace(
+            "<p>A knowledge base decays at the moment a path changes. okfctl keeps links honest.</p>",
+            f"<p>{_SPACED}</p>",
+        )
+        r = run(page)
+        self.assertEqual(r.returncode, 1, f"HTML prose must be scanned:\n{r.stdout}")
+        self.assertIn("SPACED-EM-DASH", r.stdout)
+
+    def test_spaced_em_dash_in_meta_description_fails(self):
+        page = CLEAN_PAGE.replace(
+            'content="A single static Go binary you drop on your PATH."',
+            f'content="{_SPACED}"',
+        )
+        r = run(page)
+        self.assertEqual(r.returncode, 1, f"meta prose must be scanned:\n{r.stdout}")
+        self.assertIn("SPACED-EM-DASH", r.stdout)
+
+
+class EmDashSpacingLegitimateFormsPass(unittest.TestCase):
+    """NEGATIVE CONTROL — the load-bearing half. The correct closed-up form, and
+    a spaced dash sitting in code (fenced, inline, indented, HTML <pre>/<code>),
+    a URL, or YAML frontmatter, must ALL stay silent. A gate that fires on
+    correct prose or on code typography is a nuisance that gets disabled."""
+
+    def test_closed_up_em_dash_passes(self):
+        doc = CLEAN_MD.replace(
+            "A knowledge base decays the moment a path changes. okfctl keeps links honest.",
+            _CLOSED,
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"closed-up dash must pass:\n{r.stdout}")
+
+    def test_en_dash_number_range_passes(self):
+        # An en dash (U+2013) in a number range is a different character and not
+        # the spaced-em-dash class; it must not trip.
+        doc = CLEAN_MD.replace(
+            "A knowledge base decays the moment a path changes. okfctl keeps links honest.",
+            "The floor holds across sections 6\u20138 of the spec without exception.",
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"en dash range must pass:\n{r.stdout}")
+
+    def test_spaced_em_dash_in_fenced_code_block_passes(self):
+        # THE load-bearing negative control the card names: a spaced em dash in a
+        # fenced code block is CLI/config sample text, not prose — stay silent.
+        doc = CLEAN_MD + "\n```sh\nokfctl lint ./b   # advisory \u2014 exits 0 without --strict\n```\n"
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"fenced code must be exempt:\n{r.stdout}")
+
+    def test_spaced_em_dash_in_tilde_fenced_code_block_passes(self):
+        doc = CLEAN_MD + "\n~~~\nvalidate \u2014 always fatal on a violation\n~~~\n"
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"tilde fence must be exempt:\n{r.stdout}")
+
+    def test_spaced_em_dash_in_indented_code_block_passes(self):
+        doc = CLEAN_MD + "\nExample:\n\n    okfctl serve   # graph view \u2014 opens a browser\n"
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"indented code must be exempt:\n{r.stdout}")
+
+    def test_spaced_em_dash_in_inline_code_span_passes(self):
+        # A spaced em dash inside a backticked span (e.g. a flag help string) is
+        # code, not prose, and is stripped before the detector reads the block.
+        doc = CLEAN_MD.replace(
+            "A knowledge base decays the moment a path changes. okfctl keeps links honest.",
+            "Run `okfctl lint --strict   # exit 1 \u2014 any finding` to gate on it.",
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"inline code must be exempt:\n{r.stdout}")
+
+    def test_spaced_em_dash_in_html_code_block_passes(self):
+        page = CLEAN_PAGE.replace(
+            "</body>",
+            "<pre><code>okfctl serve   # graph view \u2014 opens a browser</code></pre></body>",
+        )
+        r = run(page)
+        self.assertEqual(r.returncode, 0, f"HTML code must be exempt:\n{r.stdout}")
+
+    def test_spaced_em_dash_in_html_span_chip_passes(self):
+        # <span> is excluded from prose extraction (the spec-chip row); a spaced
+        # dash there is not prose typography and must not trip.
+        page = CLEAN_PAGE.replace(
+            "<span>no model runtime</span>",
+            "<span>no model \u2014 runtime</span>",
+        )
+        r = run(page)
+        self.assertEqual(r.returncode, 0, f"span chip must be exempt:\n{r.stdout}")
+
+    def test_spaced_em_dash_in_yaml_frontmatter_passes(self):
+        # Frontmatter is metadata the Markdown extractor skips; the reader-facing
+        # grep sweep converts frontmatter taglines, but the gate scans prose
+        # BLOCKS, and a spaced dash there is out of the gate's scope by design.
+        doc = "---\ntagline: honest links \u2014 always\n---\n\n" + CLEAN_MD
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"frontmatter must be skipped:\n{r.stdout}")
+
+    def test_spaced_em_dash_in_url_passes(self):
+        # A spaced-dash-shaped path segment in a link URL is not prose; only the
+        # visible label is read, and a bare URL is reduced to its label.
+        doc = CLEAN_MD.replace(
+            "A knowledge base decays the moment a path changes. okfctl keeps links honest.",
+            "See the [reference](https://okfctl.dev/a%20\u2014%20b/) for the flags.",
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"link URL must not trip:\n{r.stdout}")
+
+
+class EmDashAndNegativeListingCoexist(unittest.TestCase):
+    """Both detectors run on the same extraction pass: a doc with BOTH defects
+    reports BOTH classes and the count reflects each."""
+
+    def test_both_classes_reported(self):
+        doc = CLEAN_MD.replace(
+            "A knowledge base decays the moment a path changes. okfctl keeps links honest.",
+            "It's pure Go, no CGO, no Python, no model runtime \u2014 nothing to install.",
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 1, f"both defects must fail:\n{r.stdout}")
+        self.assertIn("NEGATIVE-LISTING", r.stdout)
+        self.assertIn("SPACED-EM-DASH", r.stdout)
+
+
+class GeneratedReferenceSuppressesEmDashOnly(unittest.TestCase):
+    """A doc that declares itself generated from the command tree mirrors CLI
+    help text; its em-dash spacing follows help-output typography, not prose,
+    so the spaced-em-dash class is suppressed on it. The negative-listing class
+    is NOT suppressed — a real slop cadence is a finding wherever it appears."""
+
+    GEN_HEADER = (
+        "# Command reference\n\n"
+        "**This page is generated from the command tree. Don't edit it by hand.**\n\n"
+    )
+
+    def test_generated_doc_em_dash_is_suppressed(self):
+        # A spaced em dash carried in from CLI help must NOT fail on a generated
+        # reference doc — the card's rule: leave CLI help typography alone.
+        doc = self.GEN_HEADER + (
+            "validate enforces the OKF spec floor \u2014 it always fails on a violation.\n"
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 0, f"generated em dash must be exempt:\n{r.stdout}")
+
+    def test_non_generated_doc_same_em_dash_fails(self):
+        # The exact same sentence in a NON-generated doc IS a finding — proving
+        # the suppression is scoped to the generated marker, not a blanket pass.
+        doc = (
+            "# Notes\n\n"
+            "validate enforces the OKF spec floor \u2014 it always fails on a violation.\n"
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 1, f"non-generated em dash must fail:\n{r.stdout}")
+        self.assertIn("SPACED-EM-DASH", r.stdout)
+
+    def test_generated_doc_negative_listing_still_fails(self):
+        # Suppression is em-dash-only. A negative-listing cadence is a finding
+        # even in a generated doc — it is slop wherever it lands.
+        doc = self.GEN_HEADER + (
+            "The binary is pure Go, no CGO, no Python, no model runtime.\n"
+        )
+        r = run_md(doc)
+        self.assertEqual(r.returncode, 1, f"neg-listing must still fire:\n{r.stdout}")
+        self.assertIn("NEGATIVE-LISTING", r.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

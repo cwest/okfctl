@@ -6,7 +6,7 @@
 
 ## Context
 
-okfctl must be extensible — the community should be able to ship exporters,
+okfctl must be extensible—the community should be able to ship exporters,
 importers, domain-specific linters, and the heavy semantic-search capability
 without forking the tool or waiting on a core release (PRD pillar: extension
 model). Two extension architectures were on the table:
@@ -18,7 +18,7 @@ model). Two extension architectures were on the table:
 2. **PATH-dispatch of external executables.** An unknown subcommand
    `okfctl foo bar` resolves to an `okfctl-foo` executable on `PATH`, execs it
    with the remaining args, passes through stdin/stdout/stderr and the
-   environment, and propagates its exit code — exactly as `git` finds
+   environment, and propagates its exit code—exactly as `git` finds
    `git-<name>` and `kubectl` finds `kubectl-<name>`.
 
 The tension is that the flagship optional capability, semantic search, carries a
@@ -45,7 +45,7 @@ rather than compiled into core.
 **What it buys.** The core binary keeps its zero-runtime-dependency guarantee:
 heavy or optional capabilities live in separate executables that ride the plugin
 boundary, so a user who never runs semantic search never carries its weight. The
-model is language-agnostic — a plugin can be written in any language — and
+model is language-agnostic—a plugin can be written in any language—and
 familiar to anyone who has extended `git` or `kubectl`. Extensions ship on their
 own cadence without a core release. Exit-code fidelity (a plugin that exits 7
 makes `okfctl` exit 7) makes plugins first-class in scripts and CI.

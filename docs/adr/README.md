@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-This directory records the architectural decisions okfctl has made — one file per
+This directory records the architectural decisions okfctl has made—one file per
 decision, in [Michael Nygard's lightweight ADR format][nygard]: a short
 **Status / Context / Decision / Consequences** narrative that captures *why* a
 fork was taken, including the alternative that was rejected and what the choice
@@ -27,7 +27,7 @@ than duplicating the argument.
 ## When to write a new one
 
 Write an ADR when you make a decision that is architecturally significant and
-costly to reverse — a language or dependency choice, a store format, a plugin
+costly to reverse—a language or dependency choice, a store format, a plugin
 boundary, a protocol you adopt or reject. Copy an existing record's structure,
 give it the next number (`NNNN-kebab-title.md`), and fill in
 **Status / Context / Decision / Consequences**. A record that lists only the

@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Gate prose against negative-listing AI-slop cadence, in HTML AND Markdown.
+"""Gate prose: negative-listing AI-slop cadence AND em-dash spacing, HTML + MD.
 
 WHY THIS EXISTS. AI-slop copy shipped to okfctl.dev twice and both times was
 caught by hand, not by CI. The specific tell each time was a negative-listing
@@ -74,6 +74,18 @@ sentence ("It's pure Go, no CGO, no Python, no model runtime.") land in one bloc
 and are caught. List passes; sentence fails -- the exact asymmetry the HTML side
 has for chips, proven by the tests.
 
+THE SECOND CLASS: EM-DASH SPACING. Casey's house style for prose is the CLOSED-UP
+Chicago em dash (word—word), not the spaced form (word — word). The repo drifted
+the other way, so this gate also fails on a SPACED em dash ( — ) in prose to keep
+the standard from regressing once the corpus is converted. It rides the SAME two
+extractors as the negative-listing check -- so it inherits every exemption for
+free: a spaced em dash inside a fenced code block, an inline `code` span, HTML
+<pre>/<code>, YAML frontmatter, or a URL is NOT prose and stays silent. That is
+the load-bearing negative control: code and CLI-help output follow their own
+medium's typography, not prose typography, so the gate must never fire there. The
+en dash (–, number ranges) and the closed-up em dash (word—word) are both left
+alone; only the spaced em dash between two prose words is a finding.
+
 Usage:
     scan_page_prose.py <path.html|path.md> [more ...]
     # HTML, typically from CI:
@@ -114,6 +126,24 @@ NEG_LISTING = re.compile(
     rf"|"
     rf"\b{_ITEM}\s+and\s+{_ITEM}",             # no X and no Y
     re.IGNORECASE,
+)
+
+# A SPACED em dash between two prose words: the drift away from Casey's house
+# style (closed-up Chicago, word—word). We match an em dash (U+2014) that has
+# whitespace on BOTH sides -- the spaced form. The closed-up form (word—word) has
+# no surrounding space and is CORRECT, so it must never match; the en dash
+# (U+2013), used for number ranges, is a different character and left alone. The
+# match is deliberately narrow (one space each side of a single em dash) so it
+# reports the exact spot to close up, and so a stray double space or a line-wrap
+# does not smuggle a spaced dash past it or invent a false one.
+EM_DASH_SPACING = re.compile(r"\s\u2014\s")
+
+# The gate's detectors, each a (class-name, compiled-pattern) pair. find_hits
+# runs EVERY detector against EVERY extracted prose string, so both classes ride
+# the same code-block / inline-code / frontmatter exemptions the extractors give.
+DETECTORS: tuple[tuple[str, "re.Pattern[str]"], ...] = (
+    ("negative-listing", NEG_LISTING),
+    ("spaced-em-dash", EM_DASH_SPACING),
 )
 
 # Non-prose regions: their text is not a sentence a reader reads, so a match
@@ -288,16 +318,46 @@ def _markdown_to_text(raw: str) -> str:
     return raw
 
 
-def find_hits(items: list[tuple[str, str]]) -> list[tuple[str, str, str]]:
-    """Return (source_label, matched_text, full_text) for each finding."""
-    hits: list[tuple[str, str, str]] = []
+def find_hits(
+    items: list[tuple[str, str]], suppress: frozenset[str] = frozenset()
+) -> list[tuple[str, str, str, str]]:
+    """Return (detector_class, source_label, matched_text, full_text) per finding.
+
+    Runs EVERY detector in DETECTORS against every extracted prose string, so
+    the negative-listing and spaced-em-dash classes share one extraction pass
+    and therefore one set of exemptions (code fences, inline code, frontmatter).
+
+    `suppress` names detector classes to skip for this file. It exists for ONE
+    case: a GENERATED reference doc (docs/commands/README.md) mirrors the CLI
+    help text verbatim, and CLI help output follows its own medium's typography,
+    not prose typography (AGENTS.md: "let the generated file match" its source).
+    So the spaced-em-dash class is suppressed on generated files, while the
+    negative-listing class — a real slop cadence wherever it appears — still runs.
+    """
+    hits: list[tuple[str, str, str, str]] = []
     for label, txt in items:
-        for m in NEG_LISTING.finditer(txt):
-            hits.append((label, m.group(0), txt))
+        for cls, pattern in DETECTORS:
+            if cls in suppress:
+                continue
+            for m in pattern.finditer(txt):
+                hits.append((cls, label, m.group(0), txt))
     return hits
 
 
 MARKDOWN_SUFFIXES = (".md", ".markdown")
+
+# A file that declares itself generated from the command tree mirrors CLI help
+# text; its em-dash spacing follows the help output's typography, not prose
+# style, so the spaced-em-dash detector is suppressed on it (see find_hits).
+GENERATED_MARKER = re.compile(r"generated from the command tree", re.I)
+
+
+def suppressed_classes(text: str) -> frozenset[str]:
+    """Detector classes to skip for this file. Only the em-dash class, and only
+    on a self-declared generated reference doc."""
+    if GENERATED_MARKER.search(text):
+        return frozenset({"spaced-em-dash"})
+    return frozenset()
 
 
 def extract_for_path(path: str, text: str) -> list[tuple[str, str]]:
@@ -316,23 +376,28 @@ def main() -> int:
         return 2
 
     total_hits = 0
+    class_counts: dict[str, int] = {}
     for path in sys.argv[1:]:
         page = Path(path).read_text()
         items = extract_for_path(path, page)
-        hits = find_hits(items)
+        hits = find_hits(items, suppress=suppressed_classes(page))
         print(f"=== {path} — {len(items)} prose strings scanned ===")
         if hits:
-            for label, matched, txt in hits:
+            for cls, label, matched, txt in hits:
                 excerpt = txt if len(txt) <= 120 else txt[:117] + "..."
-                print(f"    NEGATIVE-LISTING in {label}: [{matched}]  ({excerpt})")
+                shown = matched.replace("\u2014", "—")
+                print(f"    {cls.upper()} in {label}: [{shown}]  ({excerpt})")
                 total_hits += 1
+                class_counts[cls] = class_counts.get(cls, 0) + 1
         else:
             print("    (clean)")
 
     print()
     if total_hits:
-        print(f"RESULT: {total_hits} negative-listing finding(s) — rewrite the "
-              f"flagged prose to plain positive statements (every fact preserved).")
+        parts = ", ".join(f"{n} {cls}" for cls, n in sorted(class_counts.items()))
+        print(f"RESULT: {total_hits} prose finding(s) [{parts}] — rewrite "
+              f"negative-listing prose to plain positive statements (every fact "
+              f"preserved) and close up spaced em dashes to Chicago (word—word).")
         return 1
     print("RESULT: CLEAN")
     return 0
