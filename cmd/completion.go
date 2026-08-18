@@ -24,7 +24,7 @@ func newCompletionCmd(root *cobra.Command) *cobra.Command {
 		Short: "Generate a shell completion script",
 		Long: "completion writes a shell completion script for okfctl to stdout. Source it (or " +
 			"install it where your shell loads completions) to get tab-completion of commands and " +
-			"flags. Supported shells: bash, zsh, fish. It prints the script only — it does not " +
+			"flags. Supported shells: bash, zsh, fish. It prints the script only — it doesn't " +
 			"install anything itself.",
 		Example: "  # Load bash completions for the current shell\n" +
 			"  source <(okfctl completion bash)\n\n" +

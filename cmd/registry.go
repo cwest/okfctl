@@ -52,7 +52,7 @@ func newRegistryCmd() *cobra.Command {
 		Short: "Register (or re-point) a named remote bundle source",
 		Long: "add registers a named remote bundle source (a plain git URL) in okfctl's config " +
 			"store, or re-points an existing name at a new URL. The name must be a safe identifier " +
-			"(letters, digits, and -_. ). This only records the mapping — it does not clone " +
+			"(letters, digits, and -_. ). This only records the mapping — it doesn't clone " +
 			"anything; use `okfctl connect <name>` to materialize it.",
 		Example: "  # Register a remote bundle source\n" +
 			"  okfctl registry add knowledge https://github.com/acme/knowledge-base.git",
@@ -113,7 +113,7 @@ func newRegistryCmd() *cobra.Command {
 		Use:   "show <name>",
 		Short: "Print a remote source's git URL",
 		Long: "show prints the git URL registered for a single remote name, or exits non-zero if " +
-			"the name is not registered. Read-only.",
+			"the name isn't registered. Read-only.",
 		Example: "  # Print one remote's git URL\n" +
 			"  okfctl registry show knowledge",
 		Args: cobra.ExactArgs(1),
@@ -136,7 +136,7 @@ func newRegistryCmd() *cobra.Command {
 		Aliases: []string{"rm"},
 		Short:   "Unregister a remote bundle source",
 		Long: "remove deletes a registered remote source from okfctl's config, or exits non-zero " +
-			"if the name is not registered. It only forgets the mapping — it never touches any " +
+			"if the name isn't registered. It only forgets the mapping — it never touches any " +
 			"local checkout you already cloned with `okfctl connect`.",
 		Example: "  # Unregister a remote source\n" +
 			"  okfctl registry remove knowledge",

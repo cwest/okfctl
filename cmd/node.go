@@ -40,7 +40,7 @@ func newNodeCmd() *cobra.Command {
 			"template governs the " +
 			"given type, the node is scaffolded from it (PRD §9.3); otherwise a plain conformant " +
 			"node is written. Creation is recorded in log.md and index.md is regenerated, so a new " +
-			"node is never an audit gap. It does not open an editor — use `okfctl node edit` for that.",
+			"node is never an audit gap. It doesn't open an editor — use `okfctl node edit` for that.",
 		Example: "  # Create a node of an open type\n" +
 			"  okfctl node new concepts/revenue --type Concept --title Revenue\n\n" +
 			"  # Create in a bundle elsewhere\n" +
@@ -91,7 +91,7 @@ func newNodeCmd() *cobra.Command {
 		Use:   "show <path>",
 		Short: "Print a node, surfacing its type (§7.3)",
 		Long: "show prints a single node's path, its type, and its Markdown body (PRD §7.3: reads " +
-			"surface the managed type). The .md suffix is optional in <path>. Read-only — it never " +
+			"reveal the managed type). The .md suffix is optional in <path>. Read-only — it never " +
 			"mutates the bundle. It errors if no node matches.",
 		Example: "  # Show a node (the .md suffix is optional)\n" +
 			"  okfctl node show concepts/revenue\n\n" +
@@ -123,8 +123,8 @@ func newNodeCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List nodes with their type (§7.3)",
 		Long: "list prints every concept node in the bundle with its managed type, sorted by path " +
-			"(PRD §7.3: reads surface the type). Reserved files (index.md, log.md) are not nodes " +
-			"and are not listed. Read-only.",
+			"(PRD §7.3: reads reveal the type). Reserved files (index.md, log.md) aren't nodes " +
+			"and aren't listed. Read-only.",
 		Example: "  # List every node in the current bundle\n" +
 			"  okfctl node list\n\n" +
 			"  # List nodes in a bundle elsewhere\n" +
@@ -200,7 +200,7 @@ func newNodeCmd() *cobra.Command {
 		Short: "Remove a node and report resulting orphans",
 		Long: "rm deletes a node and reports which nodes are orphaned as a result (left with no " +
 			"inbound links, OKF §6), then maintains log.md and index.md. The .md suffix is " +
-			"optional. It does NOT rewrite links that pointed at the removed node — those become " +
+			"optional. It doesn't rewrite links that pointed at the removed node — those become " +
 			"broken links that `okfctl lint` will report, by design. --dry-run reports the plan " +
 			"and writes nothing.",
 		Example: "  # Remove a node and see resulting orphans\n" +
@@ -248,7 +248,7 @@ func newNodeCmd() *cobra.Command {
 			"validation fails, the findings are printed and the command exits non-zero. On success " +
 			"it refreshes the node's `modified` timestamp (`created` is never touched), appends to " +
 			"log.md, and regenerates index.md — this is how `modified` stays honest for the " +
-			"okfctl-mediated edit path. Reserved files (index.md, log.md) cannot be edited this way.",
+			"okfctl-mediated edit path. Reserved files (index.md, log.md) can't be edited this way.",
 		Example: "  # Edit a node, then re-validate on save\n" +
 			"  okfctl node edit concepts/revenue\n\n" +
 			"  # Use a specific editor for this edit\n" +
@@ -428,7 +428,7 @@ func newNodePromoteCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "promote <bundle>",
 		Short: "Promote directory-as-concept index.md files to sibling concept files (bulk remediation)",
-		Long: "promote remediates the directory-as-concept shape validate reports: every " +
+		Long: "promote remediates the directory-as-concept pattern validate reports: every " +
 			"non-root index.md that carries frontmatter is moved to a sibling concept file " +
 			"(dir/<basename>.md; basename defaults to the directory name, --name overrides it). " +
 			"The body is preserved verbatim and `created` is immutable, matching node refresh. " +

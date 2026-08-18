@@ -46,7 +46,7 @@ func newConfigCmd() *cobra.Command {
 	c.AddCommand(&cobra.Command{
 		Use: "get <key>", Short: "Get a config value", Args: cobra.ExactArgs(1),
 		Long: "get prints the value stored for a single config key, or exits non-zero if the " +
-			"key is unset. It is read-only. Use `okfctl config list` to see every key at once.",
+			"key is unset. It's read-only. Use `okfctl config list` to see every key at once.",
 		Example: "  # Print one config value\n" +
 			"  okfctl config get default.remote",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -64,7 +64,7 @@ func newConfigCmd() *cobra.Command {
 	})
 	c.AddCommand(&cobra.Command{
 		Use: "list", Short: "List all config values", Args: cobra.NoArgs,
-		Long: "list prints every stored config key and its value, sorted by key. It is read-only. " +
+		Long: "list prints every stored config key and its value, sorted by key. It's read-only. " +
 			"Registered remote sources appear here too, under the registry. key prefix (see " +
 			"`okfctl registry list` for a focused view of those).",
 		Example: "  # Show every stored config key and value\n" +
