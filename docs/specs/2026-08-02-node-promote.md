@@ -1,4 +1,4 @@
-# okfctl — `node promote`: promote directory-as-concept index.md in bulk
+# okfctl—`node promote`: promote directory-as-concept index.md in bulk
 
 **Status:** Approved (design) · **Owner:** Casey West · **License:** Apache-2.0
 **Source of truth:** OKF `SPEC.md` §8 (Index Files), §12 (Versioning marker).
@@ -7,8 +7,8 @@
 ## Problem
 
 Running `okfctl validate` against a real corpus authored on the intuition that a
-**directory is a concept** — where `index.md` carries the concept's frontmatter
-and body — produces one mechanical failure per non-root index:
+**directory is a concept**—where `index.md` carries the concept's frontmatter
+and body—produces one mechanical failure per non-root index:
 
     FAIL: index files contain no frontmatter (§8); frontmatter is permitted only
     on the bundle-root index and only for okf_version (§12)
@@ -18,13 +18,13 @@ correctly rejecting a shape it does not model: for OKF, `index.md` is a
 GENERATED navigation surface and a concept is an ordinary named file. The
 directory-as-concept shape is how Obsidian folder notes, Hugo `_index.md`,
 Jekyll collections, and most wikis behave, so a large share of imported corpora
-land on it and hit this wall on first contact — 191 identical failures against a
+land on it and hit this wall on first contact—191 identical failures against a
 1,246-node corpus, ~98% of all findings.
 
 There is no remediation verb today. `okfctl node` offers
 `edit / list / mv / new / refresh / rm / show`. Fixing by hand per directory
 means: choose a new filename, move the file, preserve `created`/`modified`,
-rewrite every inbound link, and regenerate the index — and a wrong link is
+rewrite every inbound link, and regenerate the index—and a wrong link is
 silent, which is exactly the defect the `broken-link` gate (#34, shipped in
 `59c22ac`) exists to catch.
 
@@ -39,12 +39,11 @@ Add a remediation verb in the spirit of the existing `node refresh` precedent
 For every NON-ROOT `index.md` that carries frontmatter, move it to a sibling
 concept file, preserve its body verbatim and its `created` immutable, rewrite
 inbound links (both `foo/` and `foo/index.md` spellings), regenerate the real
-`index.md`, and append to `log.md`. The bundle-root index is left alone —
-root frontmatter (`okf_version`) is legal per §12.
+`index.md`, and append to `log.md`. The bundle-root index is left alone—root frontmatter (`okf_version`) is legal per §12.
 
 ## Design
 
-### Detection — what is promotable
+### Detection—what is promotable
 
 A reserved file is a promotable directory-concept index when ALL hold:
 
@@ -56,7 +55,7 @@ This is exactly the predicate `validateReserved` flags: a non-root index with
 `len(Frontmatter) > 0`. A non-root index with no frontmatter is already
 conformant and is left untouched. A node with unparseable frontmatter
 (`Frontmatter == nil`) is a different failure class (`unparseable frontmatter`)
-and out of scope — promote skips it rather than guessing.
+and out of scope—promote skips it rather than guessing.
 
 ### Destination filename
 
@@ -79,21 +78,21 @@ The existing move machinery cannot be reused directly:
 So promote gets a dedicated planner/applier in `internal/okf/promote.go` that
 understands the two directory-style spellings.
 
-### Link rewriting — both spellings
+### Link rewriting—both spellings
 
 For each promoted `foo/index.md` → `foo/foo.md`, scan every concept node AND
 reserved file body for markdown links whose target, resolved against the
 linking file's directory, points at the promoted directory in either spelling:
 
 - `foo/index.md` (explicit index file), and
-- `foo/` (directory-style, trailing slash) — the CommonMark spelling the OKF
+- `foo/` (directory-style, trailing slash)—the CommonMark spelling the OKF
   §8 index itself uses for subdirectory links (`* [Foo](foo/)`).
 
 Both resolve to the same promoted directory. Each such link is rewritten to
 target the new concept path, **preserving the author's relative form**
 (root-relative stays root-relative, `/`-absolute stays absolute, dir-relative is
 recomputed relative to the linking file's directory) and preserving any
-CommonMark title tail verbatim — matching `PlanMove`'s form-preservation
+CommonMark title tail verbatim—matching `PlanMove`'s form-preservation
 contract.
 
 The moved index's OWN body travels verbatim to the new concept file; its
@@ -118,7 +117,7 @@ After all moves and rewrites are applied:
   NO frontmatter (§8) that lists the promoted concept.
 - `AppendLog` records one `promoted foo/index.md -> foo/foo.md` line per node.
 
-Both reuse the existing derived-artifact writers — promote adds no new index or
+Both reuse the existing derived-artifact writers—promote adds no new index or
 log machinery.
 
 ### `--dry-run`
@@ -140,7 +139,7 @@ after a dry run.
   surfaces.
 - `log.md` appended per promoted node.
 - Bundle-root index untouched.
-- `lint --strict` reports ZERO `broken-link` findings after a promote run — the
+- `lint --strict` reports ZERO `broken-link` findings after a promote run—the
   criterion that matters most (a bulk link rewriter that cannot prove it broke
   no links is the exact silent failure #34 exists to catch).
 - Full suite green: `gofmt`, `go vet`, `CGO_ENABLED=0 go build ./...`,
@@ -152,5 +151,5 @@ after a dry run.
 ## Out of scope
 
 - Changing the spec's index model (the spec is right).
-- The sibling fixes (#33 link-URL-as-prose, #34 broken-link gate — already
+- The sibling fixes (#33 link-URL-as-prose, #34 broken-link gate—already
   shipped).

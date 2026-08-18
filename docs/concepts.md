@@ -9,14 +9,14 @@ Knowledge Format. `okfctl bundle init` scaffolds one: the two reserved files plu
 a bundle-root `.okf` sidecar whose `okf_version` marks the target spec version
 (§12). A fresh bundle has zero concept nodes.
 
-`okfctl bundle info <dir>` summarizes a bundle — node count, reserved-file count,
+`okfctl bundle info <dir>` summarizes a bundle—node count, reserved-file count,
 and the declared `okf_version`.
 
 ## Node
 
 A **node** is a single concept file: Markdown with a YAML frontmatter block. The
 one floor requirement is a non-empty `type` (OKF §7). Its path is its identity,
-so moving a node is a graph operation — `okfctl node mv` rewrites every inbound
+so moving a node is a graph operation—`okfctl node mv` rewrites every inbound
 link rather than leaving them dangling.
 
 `type` values are **open** (§7.4): `Reference`, `Concept`, or any other string
@@ -26,11 +26,11 @@ all pass `validate`. The tool doesn't invent a taxonomy.
 
 Two filenames are reserved (§3.1):
 
-- **`index.md`** — a generated directory listing. Per §8 one is emitted in each
+- **`index.md`**—a generated directory listing. Per §8 one is emitted in each
   directory that holds concepts or subdirectories. Regenerate with `okfctl index
   build`; verify with `okfctl index check`. Only the bundle-root index carries
   frontmatter (the §12 `okf_version` marker).
-- **`log.md`** — the bundle's change history. Append with `okfctl log append`;
+- **`log.md`**—the bundle's change history. Append with `okfctl log append`;
   read with `okfctl log show`.
 
 These are maintained by the tool; you don't hand-edit them.
@@ -38,7 +38,7 @@ These are maintained by the tool; you don't hand-edit them.
 ## The link graph
 
 Nodes reference each other with ordinary Markdown links. Those links form a
-directed graph, but for traversal okfctl treats edges as **undirected** — a node
+directed graph, but for traversal okfctl treats edges as **undirected**—a node
 is a neighbor whether it links to you or you link to it. `okfctl graph export`
 dumps the graph (JSON or Graphviz DOT); `okfctl serve` renders it interactively;
 `okfctl search --neighbors` queries it.
@@ -46,8 +46,8 @@ dumps the graph (JSON or Graphviz DOT); `okfctl serve` renders it interactively;
 ## Spec floor vs. overlay
 
 okfctl enforces the **spec floor** for everyone: the minimum every conformant
-bundle must satisfy. Anything stricter — a team's required frontmatter fields or
-body sections — lives behind an explicit opt-in **overlay**: type-templates,
+bundle must satisfy. Anything stricter—a team's required frontmatter fields or
+body sections—lives behind an explicit opt-in **overlay**: type-templates,
 enabled with `validate --templates` (§9.4). The overlay never leaks into the
 floor. An unknown `type` value and an unrecognized future frontmatter key both
 still pass the floor; rejecting them would be over-conformance, itself a spec
@@ -62,7 +62,7 @@ show`.
 OKF is at **v0.2**. v0.2 is a minor bump with two deliberate breaking renames:
 `timestamp` → `generated.at`, and the body `# Citations` list → frontmatter
 `sources`. Consumers MAY fall back to the legacy forms, so **v0.1 bundles stay
-readable** — v0.2 is the new default, not a floor that ejects existing bundles.
+readable**—v0.2 is the new default, not a floor that ejects existing bundles.
 
 A bundle declares its own target via `okf_version` in its `.okf` sidecar; the
 tool reads it rather than assuming. Per §12, a consumer that doesn't understand a

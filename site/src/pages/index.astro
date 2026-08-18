@@ -58,10 +58,10 @@ const goInstallCmd = version.tag
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark light" />
-    <title>okfctl — a CLI for authoring and maintaining Open Knowledge Format bundles</title>
+    <title>okfctl—a CLI for authoring and maintaining Open Knowledge Format bundles</title>
     <meta
       name="description"
-      content="okfctl scaffolds, moves, indexes, validates and inspects Open Knowledge Format bundles. A single static Go binary — nothing else to install."
+      content="okfctl scaffolds, moves, indexes, validates and inspects Open Knowledge Format bundles. A single static Go binary—nothing else to install."
     />
     <link rel="canonical" href="https://okfctl.dev/" />
     {/* Icons and the social share card. The docs pages get these from the
@@ -76,18 +76,18 @@ const goInstallCmd = version.tag
     <meta property="og:url" content="https://okfctl.dev/" />
     <meta
       property="og:title"
-      content="okfctl — a CLI for authoring and maintaining Open Knowledge Format bundles"
+      content="okfctl—a CLI for authoring and maintaining Open Knowledge Format bundles"
     />
     <meta
       property="og:description"
-      content="okfctl scaffolds, moves, indexes, validates and inspects Open Knowledge Format bundles. A single static Go binary — nothing else to install."
+      content="okfctl scaffolds, moves, indexes, validates and inspects Open Knowledge Format bundles. A single static Go binary—nothing else to install."
     />
     <meta property="og:image" content="https://okfctl.dev/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="okfctl — author and maintain Open Knowledge Format bundles."
+      content="okfctl—author and maintain Open Knowledge Format bundles."
     />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="https://okfctl.dev/og.png" />
@@ -183,7 +183,7 @@ const goInstallCmd = version.tag
             <h1 class="h-display">Knowledge you can <em>move</em> without breaking.</h1>
             <p class="lede">
               <code class="mono" style="color:var(--fg)">okfctl</code> authors and maintains Open Knowledge Format
-              bundles — a curated tree of Markdown nodes with a link graph, reserved{" "}
+              bundles—a curated tree of Markdown nodes with a link graph, reserved{" "}
               <code class="mono" style="color:var(--fg-muted)">index.md</code> / <code class="mono" style="color:var(--fg-muted)">log.md</code> files,
               and frontmatter provenance.
             </p>
@@ -242,7 +242,7 @@ const goInstallCmd = version.tag
         <div class="wrap band-in">
           <p class="eyebrow" style="flex:none">The spec</p>
           <p>
-            <strong>OKF is a specification okfctl consumes and conforms to — it does not author it.</strong>{" "}
+            <strong>OKF is a specification okfctl consumes and conforms to—it does not author it.</strong>{" "}
             The format is maintained by Google in{" "}
             <a href="https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md" rel="noopener">GoogleCloudPlatform/knowledge-catalog</a>.
             Where the spec defines behaviour, the spec wins. okfctl enforces the floor for everyone and keeps anything
@@ -328,7 +328,7 @@ const goInstallCmd = version.tag
                 <div class="row add" id="log-after" hidden><span class="s">+</span><span>- 2026-08-04 — moved concepts/tannin.md -&gt; reference/tannin.md</span></div>
               </div>
               <div class="graph-ctl" style="justify-content:space-between">
-                <p class="small" style="margin:0">Two of four rewritten files shown. Depth is recomputed per file — <code class="mono">tannin.md</code> and <code class="mono">../concepts/tannin.md</code> both resolve to <code class="mono">../reference/tannin.md</code>.</p>
+                <p class="small" style="margin:0">Two of four rewritten files shown. Depth is recomputed per file—<code class="mono">tannin.md</code> and <code class="mono">../concepts/tannin.md</code> both resolve to <code class="mono">../reference/tannin.md</code>.</p>
               </div>
             </div>
           </div>
@@ -468,15 +468,15 @@ const goInstallCmd = version.tag
 
           <div class="why">
             <article class="why-item">
-              <div><span class="n">01 — install</span><h3>One binary, no runtime underneath it.</h3></div>
+              <div><span class="n">01—install</span><h3>One binary, no runtime underneath it.</h3></div>
               <div>
                 <p>A knowledge-base tool that needs a Python environment or a model server is a tool your CI will fight. okfctl is a single static Go binary that runs with nothing installed alongside it: <code class="mono" style="color:var(--fg)">go install</code> it, or drop the binary on <code class="mono" style="color:var(--fg)">PATH</code>, and it runs.</p>
-                <p class="ev"><b>CGO_ENABLED=0 go build -o okfctl .</b> — static, no cgo. Prebuilt for darwin and linux, amd64 and arm64.</p>
+                <p class="ev"><b>CGO_ENABLED=0 go build -o okfctl .</b>—static, no cgo. Prebuilt for darwin and linux, amd64 and arm64.</p>
               </div>
             </article>
 
             <article class="why-item">
-              <div><span class="n">02 — integrity</span><h3>Path is identity, so moving is safe.</h3></div>
+              <div><span class="n">02—integrity</span><h3>Path is identity, so moving is safe.</h3></div>
               <div>
                 <p>Reorganising a corpus is the operation everyone avoids because it silently breaks links. <code class="mono" style="color:var(--fg)">node mv</code> rewrites every inbound reference and recomputes relative depth per file; <code class="mono" style="color:var(--fg)">node rm</code> reports the orphans it creates rather than leaving you to find them.</p>
                 <p class="ev"><b>Moved concepts/tannin.md -&gt; reference/tannin.md (4 inbound link(s) rewritten)</b></p>
@@ -484,18 +484,18 @@ const goInstallCmd = version.tag
             </article>
 
             <article class="why-item">
-              <div><span class="n">03 — conformance</span><h3>A floor that holds, and drift that stays advisory.</h3></div>
+              <div><span class="n">03—conformance</span><h3>A floor that holds, and drift that stays advisory.</h3></div>
               <div>
-                <p><code class="mono" style="color:var(--fg)">validate</code> enforces the OKF spec floor and always fails on a violation. Everything softer — git drift between frontmatter <code class="mono" style="color:var(--fg)">modified</code> and the last commit, team type-template drift, curation findings from <code class="mono" style="color:var(--fg)">lint</code> — is a warning until you opt in with <code class="mono" style="color:var(--fg)">--strict</code>. You choose where the gate is.</p>
-                <p class="ev"><b>okfctl lint --strict ./bundles/knowledge</b> — exits non-zero on any finding. Add <code class="mono">--json</code> for a machine path; a clean bundle emits <code class="mono">[]</code>, never <code class="mono">null</code>.</p>
+                <p><code class="mono" style="color:var(--fg)">validate</code> enforces the OKF spec floor and always fails on a violation. Everything softer—git drift between frontmatter <code class="mono" style="color:var(--fg)">modified</code> and the last commit, team type-template drift, curation findings from <code class="mono" style="color:var(--fg)">lint</code>—is a warning until you opt in with <code class="mono" style="color:var(--fg)">--strict</code>. You choose where the gate is.</p>
+                <p class="ev"><b>okfctl lint --strict ./bundles/knowledge</b>—exits non-zero on any finding. Add <code class="mono">--json</code> for a machine path; a clean bundle emits <code class="mono">[]</code>, never <code class="mono">null</code>.</p>
               </div>
             </article>
 
             <article class="why-item" style="border-bottom:0">
-              <div><span class="n">04 — scale</span><h3>Proven against a corpus, not a fixture.</h3></div>
+              <div><span class="n">04—scale</span><h3>Proven against a corpus, not a fixture.</h3></div>
               <div>
                 <p>The checks were built against a live knowledge base of <b style="color:var(--fg);font-weight:500">hundreds of nodes and thousands of internal links</b>, which is where connectivity, staleness and cluster analysis start telling you something a grep cannot. <code class="mono" style="color:var(--fg)">analyze</code> reports where a bundle is <em>weak</em>; <code class="mono" style="color:var(--fg)">lint</code> reports where it is <em>broken</em>. Deliberately two commands.</p>
-                <p class="ev"><b>okfctl graph export --format dot | dot -Tsvg &gt; graph.svg</b> — or <code class="mono">okfctl serve</code> for the interactive view.</p>
+                <p class="ev"><b>okfctl graph export --format dot | dot -Tsvg &gt; graph.svg</b>—or <code class="mono">okfctl serve</code> for the interactive view.</p>
               </div>
             </article>
           </div>
@@ -565,12 +565,12 @@ const goInstallCmd = version.tag
                 <tr><td><b>okfctl</b> validate</td><td>Check a bundle against the OKF spec floor; optionally overlay type-templates.</td></tr>
                 <tr><td><b>okfctl</b> lint</td><td>Report curation-health findings (orphans, broken links, coverage gaps); <code class="mono">--strict</code> for CI.</td></tr>
                 <tr><td><b>okfctl</b> analyze</td><td>Report where a bundle is weak: freshness, clusters, gaps, connectivity, structure.</td></tr>
-                <tr><td><b>okfctl</b> search</td><td>Core lexical and graph-neighborhood search — stdlib-only, no model or index.</td></tr>
+                <tr><td><b>okfctl</b> search</td><td>Core lexical and graph-neighborhood search—stdlib-only, no model or index.</td></tr>
                 <tr><td><b>okfctl</b> graph</td><td>Export the concept-node link graph (<code class="mono">--format json|dot</code>).</td></tr>
                 <tr><td><b>okfctl</b> serve</td><td>Serve an interactive web visualization of the bundle graph.</td></tr>
                 <tr><td><b>okfctl</b> template</td><td>List and show the type-templates a bundle declares.</td></tr>
-                <tr><td><b>okfctl</b> migrate</td><td>Upgrade a bundle from OKF v0.1 to v0.2 — two-phase, consumer-agnostic.</td></tr>
-                <tr><td><b>okfctl</b> registry</td><td>Manage named remote bundle sources — <code class="mono">git remote</code> for OKF bundles.</td></tr>
+                <tr><td><b>okfctl</b> migrate</td><td>Upgrade a bundle from OKF v0.1 to v0.2—two-phase, consumer-agnostic.</td></tr>
+                <tr><td><b>okfctl</b> registry</td><td>Manage named remote bundle sources—<code class="mono">git remote</code> for OKF bundles.</td></tr>
                 <tr><td><b>okfctl</b> connect</td><td>Clone or fast-forward a remote bundle source into a local directory.</td></tr>
                 <tr><td><b>okfctl</b> plugin</td><td>Discover and install <code class="mono">okfctl-&lt;name&gt;</code> plugins on <code class="mono">PATH</code>.</td></tr>
               </tbody>

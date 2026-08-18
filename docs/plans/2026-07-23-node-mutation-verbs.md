@@ -1,4 +1,4 @@
-# TDD Plan — Increment 2b: Node Mutation Verbs
+# TDD Plan—Increment 2b: Node Mutation Verbs
 
 **Spec:** [`docs/specs/2026-07-23-node-mutation-verbs.md`](../specs/2026-07-23-node-mutation-verbs.md)
 **Branch:** `topic/node-mutation-verbs` · **Worktree:** `.worktrees/node-mutation-verbs`
@@ -13,11 +13,11 @@
 
 ---
 
-## Task 1 — `PlanMove` (pure link-rewrite planning, the graph core)
+## Task 1—`PlanMove` (pure link-rewrite planning, the graph core)
 
 **File:** `internal/okf/mutate.go` (new), `internal/okf/mutate_test.go` (new).
 
-**RED — `mutate_test.go`:**
+**RED—`mutate_test.go`:**
 - `TestPlanMove_RootRelativeInboundPreserved`: node `a.md` body links `[x](wine/foo.md)`; move `wine/foo.md`→`wine/bar.md`. Expect one `LinkRewrite{NodePath:"a.md", Old:"wine/foo.md", New:"wine/bar.md"}` (root-rel form kept).
 - `TestPlanMove_DirRelativeInboundPreserved`: node `wine/a.md` body links `[x](foo.md)` (dir-rel, resolves to `wine/foo.md`); move→`wine/bar.md`. Expect `Old:"foo.md", New:"bar.md"` (dir-rel form kept, recomputed against `wine/`).
 - `TestPlanMove_DirRelativeAcrossDirs`: `red/a.md` links `[x](../wine/foo.md)`; move `wine/foo.md`→`cellar/foo.md`. Expect `Old:"../wine/foo.md", New:"../cellar/foo.md"`.
@@ -27,7 +27,7 @@
 - `TestPlanMove_NoInboundReturnsEmpty`: move a node nothing links to → zero rewrites, no error.
 - `TestPlanMove_ErrOldMissing` / `TestPlanMove_ErrNewExists` / `TestPlanMove_ErrReserved` (old or new == `index.md`/`log.md`).
 
-**GREEN — `mutate.go`:**
+**GREEN—`mutate.go`:**
 ```go
 type LinkRewrite struct{ NodePath, Old, New string }
 
@@ -45,7 +45,7 @@ Reappend the stripped title suffix verbatim. Return sorted by `NodePath` then `O
 
 ---
 
-## Task 2 — `ApplyMove` + `PlanRemoveOrphans` (pure model, the writers/reporters)
+## Task 2—`ApplyMove` + `PlanRemoveOrphans` (pure model, the writers/reporters)
 
 **File:** extend `internal/okf/mutate.go` + `_test.go`.
 
@@ -69,7 +69,7 @@ func PlanRemoveOrphans(b *Bundle, path string) (orphaned []string, err error)
 
 ---
 
-## Task 3 — `node mv` + `node rm` cmd verbs
+## Task 3—`node mv` + `node rm` cmd verbs
 
 **File:** `cmd/node_mv.go`, `cmd/node_rm.go` (or extend `cmd/node.go`), `cmd/node_mutate_test.go`.
 
@@ -87,7 +87,7 @@ func PlanRemoveOrphans(b *Bundle, path string) (orphaned []string, err error)
 
 ---
 
-## Task 4 — `node edit` + README + full gate
+## Task 4—`node edit` + README + full gate
 
 **File:** `cmd/node_edit.go`, test in `cmd/node_mutate_test.go`; update `README.md`.
 
@@ -101,7 +101,7 @@ func PlanRemoveOrphans(b *Bundle, path string) (orphaned []string, err error)
 
 **Then the full gate:**
 - `gofmt -l .` empty · `go vet ./...` · `go build ./...` · `go test ./... -race -count=1` all green.
-- `go mod tidy -diff` clean (no new deps — stdlib only).
+- `go mod tidy -diff` clean (no new deps—stdlib only).
 - Grep-confirm `internal/okf` imports no cobra: `! grep -rq spf13/cobra internal/okf`.
 - README: document `node edit/mv/rm` (mv's link-form preservation + `--dry-run`).
 
@@ -110,7 +110,7 @@ func PlanRemoveOrphans(b *Bundle, path string) (orphaned []string, err error)
 ---
 
 ## Commit sequence (signed, no AI attribution)
-1. `docs(2b): spec + TDD plan for node mutation verbs` (docs only — addlicense skips, no source staged)
+1. `docs(2b): spec + TDD plan for node mutation verbs` (docs only—addlicense skips, no source staged)
 2. `feat(okf): PlanMove inbound-link rewrite planning (link-form preserving)`
 3. `feat(okf): ApplyMove + PlanRemoveOrphans model writers`
 4. `feat(cmd): node mv and node rm verbs`

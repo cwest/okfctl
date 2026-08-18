@@ -11,9 +11,9 @@ costly-to-redo decision that gates every increment. Rust and Go were the two
 serious candidates: both produce a single static binary, both have mature CLI
 frameworks, and both can embed static web assets. To decide on evidence rather
 than preference, a prove-or-kill spike built the same minimal proof-of-concept in
-both languages on-box — a noun-verb subcommand tree with flags, a
+both languages on-box—a noun-verb subcommand tree with flags, a
 `git`/`kubectl` PATH-dispatch extension with environment context and exit-code
-passthrough, and a single-binary embedded static web server — and exercised all
+passthrough, and a single-binary embedded static web server—and exercised all
 three capabilities in each.
 
 Both languages cleared every required capability. The decision therefore turned
@@ -23,11 +23,11 @@ on four measured deltas:
    `linux/arm64`, `windows/amd64`, and `darwin/amd64` from one macOS box, one
    command each, with zero toolchain setup (verified: `file` reports a static
    ELF). Rust's cross-build to Linux from macOS failed at link without a
-   cross-linker layer — recurring CI complexity for a multi-platform release
+   cross-linker layer—recurring CI complexity for a multi-platform release
    matrix.
 2. **Dependency surface for `serve`.** Go's embedded visualizer is stdlib-only
    (`net/http` + `go:embed`, zero third-party dependencies) versus Rust's
-   ~90-crate `axum` → `tokio` → `hyper` tree — far less supply-chain surface to
+   ~90-crate `axum` → `tokio` → `hyper` tree—far less supply-chain surface to
    audit for the same single-binary result.
 3. **YAML-frontmatter maturity.** Every OKF file is Markdown with YAML
    frontmatter, so YAML parsing is load-bearing. Go's `gopkg.in/yaml.v3` is
@@ -47,10 +47,10 @@ release artifact.
 
 The named stack that follows from this choice is recorded in the PRD's corrected
 §13.1 and, for the vector store specifically, in [ADR 0004](0004-flat-json-vector-store.md).
-Its stdlib-forward shape — `spf13/cobra` for the command tree,
+Its stdlib-forward shape—`spf13/cobra` for the command tree,
 `goldmark`/`goldmark-meta` for Markdown+frontmatter, `gopkg.in/yaml.v3` for YAML,
 `net/http` + `go:embed` for the server, and `CGO_ENABLED=0` static builds under
-GoReleaser — is a direct consequence of the deltas above, not an independent set
+GoReleaser—is a direct consequence of the deltas above, not an independent set
 of decisions.
 
 ## Consequences
@@ -66,8 +66,7 @@ dependency promise (PRD §5.1) real.
 8.6 MB); choosing Go accepts the larger artifact. That is a minor cost for a CLI
 distributed as a release download rather than embedded in a size-constrained
 target. Go's static-embedding ergonomics are also why the vector store cannot use
-a CGO/C-extension like `sqlite-vec` without breaking the static-binary guarantee
-— a constraint this decision imposes downstream and that
+a CGO/C-extension like `sqlite-vec` without breaking the static-binary guarantee—a constraint this decision imposes downstream and that
 [ADR 0004](0004-flat-json-vector-store.md) resolves. Finally, the differentiating
 `lint` loop is I/O- and LLM-latency-bound rather than CPU-bound, so Go's raw
 compute is neither an advantage nor a liability here; the loop is architected

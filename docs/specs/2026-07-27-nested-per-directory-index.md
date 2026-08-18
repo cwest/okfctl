@@ -1,4 +1,4 @@
-# okfctl — Nested per-directory index.md conforming to OKF SPEC §8
+# okfctl—Nested per-directory index.md conforming to OKF SPEC §8
 
 **Status:** Approved (design) · **Owner:** Casey West · **License:** Apache-2.0
 **Source of truth:** OKF `SPEC.md` §8 (Index Files), §12 (Versioning marker).
@@ -17,7 +17,7 @@ OKF SPEC §8 specifies a different model:
 > […] Entries SHOULD include the description from the linked concept's
 > frontmatter.
 
-Its example links a subdirectory as `* [Subdirectory](subdir/)` — a
+Its example links a subdirectory as `* [Subdirectory](subdir/)`—a
 **dir-relative** link from the index's own directory, not a bundle-relative path.
 
 The flat model therefore diverges from the spec three ways:
@@ -43,20 +43,20 @@ own directory's immediate contents, linked relative to itself.
 A directory that directly contains at least one concept node, OR at least one
 subdirectory that is itself (transitively) content-bearing. The bundle root is
 always content-bearing when the bundle has any node. This is exactly the set of
-directories a reader would traverse for progressive disclosure — an empty
+directories a reader would traverse for progressive disclosure—an empty
 directory, or one whose entire subtree has no concepts, gets no index.
 
 ### What each index enumerates
 
 For directory `D` (bundle-relative, `""` = root), in two sorted sections:
 
-- **`## Subdirectories`** — each immediate child directory of `D` that is
+- **`## Subdirectories`**—each immediate child directory of `D` that is
   content-bearing, as `* [Title](child/) - description`. The link is the child
   directory name with a trailing slash (dir-relative). The child's title/
   description are read from the child directory's own `index.md` node when one
   is present on disk; absent that, the title falls back to a Title-cased form of
   the directory name and the description is omitted.
-- **`## Concepts`** — each concept node that lives DIRECTLY in `D` (not in a
+- **`## Concepts`**—each concept node that lives DIRECTLY in `D` (not in a
   subdirectory), as `* [Title](file.md) - description`, where `file.md` is the
   node's base name (dir-relative) and title/description come from its
   frontmatter. The `description` is included per §8 when present; a node with no
@@ -71,14 +71,14 @@ SPEC §8 example grammar verbatim. Section heading TEXT is a producer choice per
 §8 ("one or more sections, each grouping … under a heading"); the retired
 `tools/okf_index.py`'s `# Subdirectories`/`# Concepts` h1 + `<!-- BEGIN
 GENERATED INDEX -->` marker block + em-dash + `type` annotation are that tool's
-LOCAL convention and are explicitly NOT targets — this design uses `##` sections
+LOCAL convention and are explicitly NOT targets—this design uses `##` sections
 and carries no marker block or boilerplate.
 
 ### Frontmatter (§8 / §12)
 
 No `index.md` carries frontmatter, with the single §12 carve-out: the
 **bundle-root** index MAY carry an `okf_version`-only block. That existing rule
-(and its marker-preservation semantics) is retained unchanged — only the
+(and its marker-preservation semantics) is retained unchanged—only the
 bundle-root index may carry `okf_version`; every nested index carries no
 frontmatter at all. `Validate` already enforces this per-file, so the generated
 nested tree validates clean by construction.
@@ -87,26 +87,26 @@ nested tree validates clean by construction.
 
 In `internal/okf`:
 
-- `IndexDirs(b *Bundle) []string` — sorted bundle-relative directories that
+- `IndexDirs(b *Bundle) []string`—sorted bundle-relative directories that
   should carry an index (`""` for the root). The single source of truth for
   "which directories get an index," shared by build, check, and maintenance.
-- `RenderDirIndex(b *Bundle, dir string) string` — the index body for one
+- `RenderDirIndex(b *Bundle, dir string) string`—the index body for one
   directory. The bundle-root case (`dir == ""`) carries the §12 okf_version
   frontmatter block when applicable; all others carry none.
-- `RenderIndex(b *Bundle) string` — retained as `RenderDirIndex(b, "")` (the
+- `RenderIndex(b *Bundle) string`—retained as `RenderDirIndex(b, "")` (the
   bundle-root index) so existing call sites keep compiling.
-- `WriteIndex(b *Bundle) error` — writes an `index.md` into EVERY directory in
+- `WriteIndex(b *Bundle) error`—writes an `index.md` into EVERY directory in
   `IndexDirs(b)`. Still the single writer for both `index build` and the
   automatic create/edit/delete/rename maintenance path, so the two cannot
   diverge.
-- `IndexInSync(b *Bundle) (bool, string)` — in sync only when EVERY directory in
+- `IndexInSync(b *Bundle) (bool, string)`—in sync only when EVERY directory in
   `IndexDirs(b)` has an on-disk `index.md` equal to its `RenderDirIndex`, AND no
   stray generated `index.md` exists in a directory that should not have one. A
   missing, stale, or orphaned nested index is out of sync, with a report naming
   the offending path.
 
 `cmd/index.go` and `cmd/derived.go` keep calling `WriteIndex`/`IndexInSync`
-unchanged — the nesting is entirely inside the model.
+unchanged—the nesting is entirely inside the model.
 
 ## Done when
 

@@ -1,4 +1,4 @@
-# TDD Plan: Increment 7 — semantic lint checks
+# TDD Plan: Increment 7—semantic lint checks
 
 Spec: `docs/specs/2026-07-26-semantic-lint.md`
 Branch: `topic/semantic-lint`  Base: `main` @ 911bb60
@@ -7,10 +7,10 @@ Conventional, Apache header pre-written into new .go files). Verify by real
 `go test` + SHA + signature. Real-model fidelity check at the end, gated on
 `OKFCTL_TEST_MODEL_DIR`.
 
-## Task 0 — docs
+## Task 0—docs
 Commit spec + this plan. `docs(7): spec + TDD plan for semantic lint checks`.
 
-## Task 1 — the semantic checks in internal/okf (pure, index-shaped input)
+## Task 1—the semantic checks in internal/okf (pure, index-shaped input)
 Keep `internal/okf` free of an `internal/search` import by defining the neighbor
 input as a small local type, so the checks are unit-testable with hand-built
 data and the dependency arrow points one way (cmd wires okf + search together).
@@ -27,13 +27,13 @@ RED: `internal/okf/lint_semantic_test.go`
   - `TestLintNoSemanticNeighbors`: node whose best neighbor is 0.12 (floor 0.20)
     → one `no-semantic-neighbors` finding; a node with a 0.55 neighbor → none.
   - `TestLintSemantic_Deterministic`: same input twice → identical slices.
-GREEN: `internal/okf/lint_semantic.go` — `LintSemantic(b *Bundle, idx SemanticIndex,
+GREEN: `internal/okf/lint_semantic.go`—`LintSemantic(b *Bundle, idx SemanticIndex,
   opts SemanticOptions) []LintFinding`, reusing the existing `linkedTargets` helper
   for edge detection (one mechanism, not a second link parser). Pair dedupe via a
   canonical (min,max) key.
 Commit: `feat(okf): similar-unlinked + no-semantic-neighbors lint checks`.
 
-## Task 2 — stale-index detection
+## Task 2—stale-index detection
 RED: add to the same test file
   - `TestLintSemantic_StaleIndex`: bundle has a node absent from the index → ONE
     bundle-level `stale-index` finding (Path "") listing the missing path(s),
@@ -42,7 +42,7 @@ RED: add to the same test file
 GREEN: extend `LintSemantic`.
 Commit: `feat(okf): report stale-index drift in semantic lint`.
 
-## Task 3 — wire `lint --semantic` in cmd
+## Task 3—wire `lint --semantic` in cmd
 RED: `cmd/lint_semantic_test.go`
   - `TestLint_SemanticFlagMissingIndex`: `lint --semantic` with no index → error
     naming `okfctl-search index build`, exit non-zero (NOT a silent skip).
@@ -53,14 +53,14 @@ RED: `cmd/lint_semantic_test.go`
     → a `similar-unlinked` finding appears in output.
   - `TestLint_SemanticThresholdFlags`: `--similarity-threshold` / `--isolation-floor`
     change the finding set.
-GREEN: `cmd/lint.go` — add `--semantic`, `--similarity-threshold`,
+GREEN: `cmd/lint.go`—add `--semantic`, `--similarity-threshold`,
   `--isolation-floor`; load `.okfctl/index.db` via `internal/search`, build the
   `SemanticIndex` by calling `search.Related` per node (k = len(nodes)-1), pass to
   `okf.LintSemantic`, merge findings, keep existing sort + `--strict` semantics.
 Commit: `feat(cmd): wire lint --semantic over the search index`.
 
-## Task 4 — README + full gate
-- README: `lint --semantic` section — what the two checks mean, the
+## Task 4—README + full gate
+- README: `lint --semantic` section—what the two checks mean, the
   `index build` prerequisite, the thresholds, and that core reads (never builds)
   an index so no model is needed to lint.
 - Full gate: `gofmt -l`, `go vet`, `go build ./...`, `go mod tidy -diff` (NO new

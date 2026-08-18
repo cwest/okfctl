@@ -20,28 +20,28 @@ index, so it's always available.
 
 Run `okfctl search --help` for the full flag set.
 
-## okfctl-search — offline semantic search (plugin)
+## okfctl-search—offline semantic search (plugin)
 
 `okfctl-search` is a bundled plugin (a separate static binary; invoke as `okfctl
 search …` via plugin dispatch, or directly). It adds **semantic** search over a
 bundle's concept nodes, fully offline: a single static Go binary with zero
 runtime dependencies. Everything the embedding needs is compiled in, so there is
-nothing external to install — the Python interpreter, ONNX runtime, `sqlite-vec`,
+nothing external to install—the Python interpreter, ONNX runtime, `sqlite-vec`,
 and model server that a typical embedding stack would require are all unnecessary.
 It shares the exact embedding
 protocol with `cwest/knowledge-base` so vectors are cross-verifiable.
 
-- `okfctl-search index build [bundle-dir]` — embed every concept node into
+- `okfctl-search index build [bundle-dir]`—embed every concept node into
   `.okfctl/index.db`, recording the embedder model + dimension. Content-hash
   keyed: an unchanged node isn't re-embedded; deterministic for a fixed embedder.
-- `okfctl-search --semantic "query" [bundle-dir]` — rank nodes by cosine
+- `okfctl-search --semantic "query" [bundle-dir]`—rank nodes by cosine
   similarity to the query (top-`--k`, default 5). Refuses an index built under a
   different model (rebuild with `index build`).
-- `okfctl-search related <node-path> [bundle-dir]` — a node's nearest neighbors
+- `okfctl-search related <node-path> [bundle-dir]`—a node's nearest neighbors
   (self excluded); the neighbor set `lint --semantic` consumes for its
   similarity-driven checks (§8.6).
 - `--embedder hash` (default) is the offline, dependency-free embedder. It is
-  deterministic and needs no model, but it's *lexical* — it matches tokens, not
+  deterministic and needs no model, but it's *lexical*—it matches tokens, not
   meaning.
 - `--lexical-gate` (off by default) gates the semantic results by a **term-wise**
   lexical match and preserves lexical recall. It runs the semantic query wide,
@@ -53,7 +53,7 @@ protocol with `cwest/knowledge-base` so vectors are cross-verifiable.
   token. It **degrades to pure semantic** (a no-op, byte-identical to gate-off)
   when the query has no content terms (an all-stopword question like `"how should
   the"`) **or** a term matches more than 60% of the bundle (a term that broad
-  carries no discriminating signal — e.g. `agent` matches 73% of the reference
+  carries no discriminating signal—e.g. `agent` matches 73% of the reference
   corpus). Composes with `--path`/`--type`/`--tag` (which constrain both the
   semantic band and the appended lexical tail) and with `--half-life`.
 
@@ -61,7 +61,7 @@ protocol with `cwest/knowledge-base` so vectors are cross-verifiable.
 
 `--embedder model2vec` runs a genuine static embedding model (for example
 [`minishlab/potion-base-8M`](https://huggingface.co/minishlab/potion-base-8M)) in
-**pure Go** — the BERT WordPiece tokenizer and the Model2Vec inference math are
+**pure Go**—the BERT WordPiece tokenizer and the Model2Vec inference math are
 both ported into `internal/search`, so it compiles `CGO_ENABLED=0` and inherits
 the same self-contained, dependency-free profile as the `hash` embedder. Vectors
 match the upstream `model2vec` library's own output to
@@ -83,6 +83,6 @@ okfctl-search --embedder model2vec --model-path ~/models/potion-base-8M --semant
 The directory needs the standard model2vec layout: `config.json`,
 `model.safetensors`, and `tokenizer.json` (or `vocab.txt`). If no path is
 configured, `model2vec` fails with an actionable error rather than silently
-falling back to `hash` — a query answered by the wrong embedder is worse than one
+falling back to `hash`—a query answered by the wrong embedder is worse than one
 that refuses to run. An index records the model it was built with, so switching
 embedders requires a rebuild.

@@ -19,7 +19,7 @@ RED: internal/okfconfig/config_test.go
   - TestPath_HonorsEnvOverride: OKFCTL_CONFIG_HOME set -> Path() == <that>/config.json.
   - TestLoad_MissingIsEmpty: no file -> Load() returns empty map, nil err.
   - TestLoad_RoundTrip: write a config.json {"model_path":"/x"} -> Load()["model_path"]=="/x".
-GREEN: internal/okfconfig/config.go — exported Path() string + Load() (map[string]string, error),
+GREEN: internal/okfconfig/config.go—exported Path() string + Load() (map[string]string, error),
   lifted verbatim from cmd/config.go (same OKFCTL_CONFIG_HOME / UserConfigDir logic, stdlib json).
 REFACTOR: rewrite cmd/config.go's configPath/loadConfig/saveConfig to delegate to okfconfig
   (Path/Load; saveConfig keeps its write but uses okfconfig.Path). Run the existing cmd/config
@@ -65,7 +65,7 @@ GREEN: cmd/okfctl-search/main.go
   - resolveEmbedder("model2vec"): dir = --model-path || okfconfig.Load()["model_path"]; if empty
     -> error "set model_path via `okfctl config set model_path <dir>` or pass --model-path";
     else LoadModel2VecEmbedder(dir). Add --model-path persistent flag. hash stays default.
-  - README: model2vec section — offline hash default; model2vec needs a local model dir set via
+  - README: model2vec section—offline hash default; model2vec needs a local model dir set via
     `okfctl config set model_path <dir>` (or --model-path); no runtime download; JSON config.
   - Full gate: gofmt -l, go vet, go build ./..., go mod tidy -diff (NO new deps),
     internal/search + internal/okfconfig cobra/net-http/CGO-free, CGO_ENABLED=0 build, full -race.

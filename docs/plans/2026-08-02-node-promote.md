@@ -1,4 +1,4 @@
-# Plan — `node promote` (directory-as-concept index.md bulk remediation)
+# Plan—`node promote` (directory-as-concept index.md bulk remediation)
 
 **Spec:** `docs/specs/2026-08-02-node-promote.md` · **Branch:** `topic/node-promote`
 **Base:** `main` @ `59c22ac`
@@ -6,7 +6,7 @@
 TDD throughout: RED (failing test naming the missing behavior) → GREEN (minimal
 code) → REFACTOR. Full suite must stay green after each task.
 
-## Task 1 — model: detect promotable indexes (`internal/okf/promote.go`)
+## Task 1—model: detect promotable indexes (`internal/okf/promote.go`)
 
 RED: `promote_test.go::TestPromoteScan_FindsNonRootIndexWithFrontmatter`
 - fixture: bundle-root `index.md` (okf_version only), `foo/index.md` WITH
@@ -15,10 +15,10 @@ RED: `promote_test.go::TestPromoteScan_FindsNonRootIndexWithFrontmatter`
 - assert scan returns exactly `foo/index.md`, skipping the root index and the
   frontmatter-free `bar/index.md`.
 
-GREEN: `PromotableIndexes(b *Bundle) []string` — sorted non-root `index.md`
+GREEN: `PromotableIndexes(b *Bundle) []string`—sorted non-root `index.md`
 reserved paths with `len(Frontmatter) > 0`.
 
-## Task 2 — model: PromotePlan (moves + link rewrites, both spellings)
+## Task 2—model: PromotePlan (moves + link rewrites, both spellings)
 
 RED: `promote_test.go::TestPromotePlan_RewritesBothSpellings`
 - fixture: `foo/index.md` (frontmatter+body), `alpha.md` linking `foo/index.md`,
@@ -36,7 +36,7 @@ GREEN: `PromoteChange` struct (OldPath, NewPath, plus `[]LinkRewrite`) and
   `dir/index.md` or `dir/` (both spellings, all three relative forms), rewrite
   to the new concept path preserving form + title.
 
-## Task 3 — model: PromoteApply (verbatim body, created immutable)
+## Task 3—model: PromoteApply (verbatim body, created immutable)
 
 RED: `promote_test.go::TestPromoteApply_BodyVerbatim_CreatedImmutable`
 - assert: new file exists with byte-identical body region; `created` unchanged;
@@ -49,14 +49,14 @@ GREEN: `PromoteApply(root string, b *Bundle, changes []PromoteChange) error`:
   the yaml.Node round-trip) + verbatim body from `splitFrontmatterRaw`; then
   remove the old `index.md` (it will be regenerated clean by WriteIndex).
 
-## Task 4 — model: dry-run purity guard
+## Task 4—model: dry-run purity guard
 
-RED: `promote_test.go::TestPromotePlan_IsPure_NoWrites` — snapshot tree hashes,
+RED: `promote_test.go::TestPromotePlan_IsPure_NoWrites`—snapshot tree hashes,
 call `PromotePlan`, assert tree byte-identical (plan writes nothing).
-GREEN: satisfied by construction (PromotePlan does no disk writes) — the test
+GREEN: satisfied by construction (PromotePlan does no disk writes)—the test
 locks it.
 
-## Task 5 — cmd: `node promote` wiring (`cmd/node.go`, `cmd/derived.go`)
+## Task 5—cmd: `node promote` wiring (`cmd/node.go`, `cmd/derived.go`)
 
 RED: `cmd/node_promote_test.go`:
 - `--dry-run` prints every move + rewrite and writes zero bytes (tree hash
@@ -69,14 +69,14 @@ GREEN: `newNodePromoteCmd()` added to `newNodeCmd`; `--name`, `--dry-run`,
 `--bundle`-style positional `<bundle>`. On real run: `PromoteApply`, then
 `logOnPromote` per node + `maintainIndex` once (mirroring `node refresh`).
 
-## Task 6 — docs surfaces kept accurate
+## Task 6—docs surfaces kept accurate
 
 - `cmd/node.go` promote `Short`/`Long` help.
 - `README.md`: add `node promote` to the node verb list + a short remediation
   note.
 - `skills/okf-curation-health/SKILL.md` if it enumerates node verbs / remediation.
 
-## Task 7 — verification (HARD GATE)
+## Task 7—verification (HARD GATE)
 
 - `gofmt -w .` then `gofmt -l .` clean; `go vet ./...`; `CGO_ENABLED=0 go build
   ./...`; `go test ./... -race -count=1` all green.
@@ -86,7 +86,7 @@ GREEN: `newNodePromoteCmd()` added to `newNodeCmd`; `--name`, `--dry-run`,
   real run on a `cp -R` scratch copy; before/after `validate` counts +
   `broken-link` count → PR body.
 
-## Task 8 — commit + PR
+## Task 8—commit + PR
 
 - `commit-style` gate; signed; Conventional Commits + ✨ emoji; Apache header on
   new files; no attribution.

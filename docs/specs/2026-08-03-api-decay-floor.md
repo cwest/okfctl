@@ -1,4 +1,4 @@
-# okfctl-api — apply the recency-decay floor in `GET /api/v1/search`
+# okfctl-api—apply the recency-decay floor in `GET /api/v1/search`
 
 **Status:** Approved (design) · **Owner:** Casey West · **License:** Apache-2.0
 **Source of truth:** OKF `SPEC.md` **v0.2** §5.2 (generated), §13.1 (v0.1
@@ -20,7 +20,7 @@ landed the `DecayFloor` clamp and defaulted it to `0.25` on the CLI; the HTTP
 surface (`internal/apiserver/search.go`) built its `DecayOptions` with
 `DecayFloor` left at its zero value (= unbounded) and `MinRelevance: 0`
 hardcoded, and its comment still claimed those were "the exact DecayOptions the
-CLI builds" — true when the endpoint landed (#69), false since #67.
+CLI builds"—true when the endpoint landed (#69), false since #67.
 Additionally, `?decay_floor=` and `?min_relevance=` were silently ignored:
 HTTP 200, output byte-identical to omitting them, with no way for a caller to
 opt in and no signal the parameter did nothing.
@@ -30,12 +30,12 @@ opt in and no signal the parameter did nothing.
 All changes live in `internal/search/query.go` (one shared constant),
 `cmd/okfctl-search/main.go` (read the constant), and
 `internal/apiserver/search.go` (default the floor, accept two validated params,
-fix the stale comment) plus tests. The `search` engine math is untouched — the
+fix the stale comment) plus tests. The `search` engine math is untouched—the
 API composes `search.QueryWith` exactly as the CLI does, so a fix on both call
 sites is a fix to the shared behavior.
 
 1. **One shared default.** `search.DefaultDecayFloor = 0.25` is defined in the
-   `search` package — the package BOTH surfaces import. The CLI's `--decay-floor`
+   `search` package—the package BOTH surfaces import. The CLI's `--decay-floor`
    flag default and the API's `decay_floor` default both read this one constant,
    so the two cannot drift on the next merge-order accident. This is the
    structural half of the fix; without it the same bug recurs.
@@ -46,12 +46,12 @@ sites is a fix to the shared behavior.
    below a mediocre fresh one.
 
 3. **Two new validated params, matching #72's rules.**
-   - `decay_floor` — the lower clamp on the recency multiplier. Validated in
+   - `decay_floor`—the lower clamp on the recency multiplier. Validated in
      `[0, 1]`; out of range → HTTP 400 (a floor > 1 turns the clamp into a flat
      gain; a floor < 0 re-enables the #65 inversion). Omitted or empty
-     (`?decay_floor=`) reads as unset and takes the default — the `nonEmptyQuery`
+     (`?decay_floor=`) reads as unset and takes the default—the `nonEmptyQuery`
      contract already used for filters.
-   - `min_relevance` — the raw-cosine floor applied BEFORE decay reorders.
+   - `min_relevance`—the raw-cosine floor applied BEFORE decay reorders.
      Validated non-negative; negative → HTTP 400. Default 0 (admit everything).
    Error messages preserve #72's constraint language (`must be in [0, 1]`,
    non-negative) while naming each surface's own identifier (`decay_floor` vs
@@ -60,7 +60,7 @@ sites is a fix to the shared behavior.
 4. **Decay guard matches the CLI.** The endpoint builds `DecayOptions` iff
    `half_life > 0 || min_relevance > 0`, the same `needBundle`-adjacent guard the
    CLI uses. With both at their defaults the endpoint takes the plain-`Query`
-   path — so with `half_life` ABSENT, no decay is applied and the response is
+   path—so with `half_life` ABSENT, no decay is applied and the response is
    byte-identical to today. The floor never engages without decay.
 
 5. **Stale comment fixed.** The "exact DecayOptions the CLI builds" comment now

@@ -14,7 +14,7 @@ created`. A 2026-08 bulk reformat rewrote every corpus node's `modified:` to
 ~Aug 2026 (measured distribution: 08-04 ×158, 08-02 ×60, 08-08 ×18, 08-07 ×9),
 while `created:` stayed genuinely spread across Jun–Jul 2026. Because `modified`
 outranked `created` in the basis order, every node read as freshly edited and
-**both freshness signals returned zero** across all 246 nodes — even at
+**both freshness signals returned zero** across all 246 nodes—even at
 `--stale-days 45 --time-sensitive-fraction 0.25`. The signal stays blind until
 ~2026-Feb (180d after the touch). By its own contract `analyze` was correct
 (recently-`modified` nodes are not stale); the defect is that a mechanical
@@ -29,23 +29,23 @@ with §5.3 derived trust tiers, and okfctl already reads it (`Node.Verified()`,
 
 `freshnessBasis` now resolves in this order:
 
-1. **`verified[].at` (§5.2)** — the LATEST verification instant across the event
+1. **`verified[].at` (§5.2)**—the LATEST verification instant across the event
    list. This is the freshness axis: it records when a node's *claims* were last
    re-confirmed. A present `verified` date takes precedence over every
    mechanical-edit key below, so a bulk `modified:` touch no longer resets the
    clock.
 2. **`generated.at` (§5.2)** with the legacy `timestamp` fallback (§13.1).
-3. **`modified` → `created`** — okfctl-native compatibility, unchanged.
+3. **`modified` → `created`**—okfctl-native compatibility, unchanged.
 
 Both signals inherit the corrected basis for free: `stale` compares the
 verified-derived age to `--stale-days`; `time_sensitive` compares it to
 `--time-sensitive-fraction × --stale-days`. A marker-bearing node that was
 `modified`-touched but never `verified` falls back to its (old) `created` date
-and correctly surfaces for re-verification — no new special-case path.
+and correctly surfaces for re-verification—no new special-case path.
 
 ### Why not the alternatives
 
-- **A brand-new `verified:`/`reviewed:` convention key.** Unnecessary — the spec
+- **A brand-new `verified:`/`reviewed:` convention key.** Unnecessary—the spec
   already has `verified` (§5.2) with a working reader. Inventing a parallel key
   would fragment provenance.
 - **A content-signal path that surfaces marked nodes regardless of age.** Rejected
@@ -79,16 +79,16 @@ separately:
 
 `internal/okf/analyze_freshness_verified_test.go`:
 
-- `VerifiedBeatsModified` — fresh `modified`, old `verified` ⇒ stale (basis is
+- `VerifiedBeatsModified`—fresh `modified`, old `verified` ⇒ stale (basis is
   the verified date).
-- `LatestVerifiedWins` — old + recent verified events ⇒ the recent one wins ⇒
+- `LatestVerifiedWins`—old + recent verified events ⇒ the recent one wins ⇒
   fresh.
-- `VerifiedBeatsGenerated` — old `generated.at`, recent `verified` ⇒ fresh
+- `VerifiedBeatsGenerated`—old `generated.at`, recent `verified` ⇒ fresh
   (locks the full precedence).
-- `NoVerifiedFallsBackToModified` — no `verified` ⇒ prior behavior preserved.
-- `TimeSensitiveUsesVerifiedAge` — marker + fresh `modified` + old `verified` ⇒
+- `NoVerifiedFallsBackToModified`—no `verified` ⇒ prior behavior preserved.
+- `TimeSensitiveUsesVerifiedAge`—marker + fresh `modified` + old `verified` ⇒
   surfaces; fresh `verified` ⇒ quiet.
 
 All pre-existing freshness tests (`StaleByModified`, `ModifiedFallsBackToCreated`,
-`GeneratedAtBeatsModified`, `ResolvesLegacyTimestamp`, …) remain green — the
+`GeneratedAtBeatsModified`, `ResolvesLegacyTimestamp`, …) remain green—the
 change is additive.

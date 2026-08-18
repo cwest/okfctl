@@ -1,4 +1,4 @@
-# Spec: Increment 7 — semantic lint checks (`lint` consumes the neighbor set)
+# Spec: Increment 7—semantic lint checks (`lint` consumes the neighbor set)
 
 PRD: §8.6 ("Payoff for curation"), §8.5 (`related` "feeds lint").
 Branch: `topic/semantic-lint`  Base: `main` @ 911bb60
@@ -22,7 +22,7 @@ This increment closes that gap.
 ## The architectural question, and why it dissolves
 
 The apparent fork was: `lint` lives in core (dependency-free), `related` lives in
-the plugin — so either core shells out to the plugin, or the semantic checks move
+the plugin—so either core shells out to the plugin, or the semantic checks move
 into the plugin.
 
 Both horns assume the neighbor set requires the *embedder*. It does not:
@@ -36,7 +36,7 @@ embedder is needed to BUILD an index, never to READ one. The heavy,
 model-dependent half is `index build`; the query half is arithmetic over
 `[]float64`.
 
-Further, `internal/search` is already stdlib-only — no cobra, no `net/http`, no
+Further, `internal/search` is already stdlib-only—no cobra, no `net/http`, no
 CGO, no third-party deps (verified: `go list -deps`). The dependency boundary
 core protects is not threatened by depending on it.
 
@@ -44,7 +44,7 @@ core protects is not threatened by depending on it.
 an index if one is present.** `lint` grows a `--semantic` flag; with it, core
 loads `.okfctl/index.db` directly via `internal/search` and runs the two §8.6
 checks. No plugin dispatch, no subprocess, no output parsing, no duplicated
-similarity logic — one mechanism, called directly.
+similarity logic—one mechanism, called directly.
 
 This is strictly better than shelling out (which would mean parsing
 `0.4231\tpath` text across a process boundary, and re-running the ranking N times
@@ -56,7 +56,7 @@ question).
 
 | concern | home | why |
 |---|---|---|
-| build an index (needs a model) | plugin `okfctl-search index build` | model weights, tokenizer — the heavy half |
+| build an index (needs a model) | plugin `okfctl-search index build` | model weights, tokenizer—the heavy half |
 | read an index (arithmetic) | `internal/search`, callable by core | stdlib-only, no model |
 | structural lint checks | core `lint` | unchanged |
 | semantic lint checks | core `lint --semantic` | reads the index the plugin built |
@@ -71,14 +71,14 @@ Two checks, matching the PRD's two named examples.
 ### 1. `similar-unlinked`
 
 A pair of nodes whose cosine similarity ≥ threshold with **no link in either
-direction** — the "missing link?" finding. Reported once per pair (not twice),
+direction**—the "missing link?" finding. Reported once per pair (not twice),
 on the lexicographically-first path, naming the other node and the score.
 
 Default threshold **0.80**, tunable via `--similarity-threshold`.
 
 ### 2. `no-semantic-neighbors`
 
-A node whose best neighbor scores **below** a floor — semantically isolated, the
+A node whose best neighbor scores **below** a floor—semantically isolated, the
 "dead concept?" finding. This is the semantic complement to the structural
 `orphan` check: `orphan` means *nothing links here*, this means *nothing is even
 about the same thing*.
@@ -87,8 +87,8 @@ Default floor **0.20**, tunable via `--isolation-floor`. The floor is low by
 design: calibrated against potion-base-8M, same-topic-different-wording nodes
 score ~0.27–0.33 while a genuinely off-topic node scores ~0.13, so a 0.30 floor
 would flag legitimate on-topic nodes as dead concepts. Mean-pooled static
-embeddings compress absolute scores — the ranking is reliable, the magnitudes
-are not — so the floor targets the clear outlier rather than a semantic ideal.
+embeddings compress absolute scores—the ranking is reliable, the magnitudes
+are not—so the floor targets the clear outlier rather than a semantic ideal.
 
 ## Behavior
 
@@ -97,7 +97,7 @@ are not — so the floor targets the clear outlier rather than a semantic ideal.
 - **Missing index is a clear error, not a silent skip.** `lint --semantic` with
   no `.okfctl/index.db` fails naming the fix (`okfctl-search index build`). A
   silent structural-only fallback would let a CI job think it ran semantic checks
-  when it did not — the same class of lie as falling back to the hash embedder.
+  when it did not—the same class of lie as falling back to the hash embedder.
 - **Index/bundle drift is surfaced, not ignored.** Nodes in the bundle but absent
   from the index (added since the last `index build`) produce one bundle-level
   `stale-index` finding listing them, so a partial answer never reads as a

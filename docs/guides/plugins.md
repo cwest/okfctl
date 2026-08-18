@@ -7,7 +7,7 @@ plugin can call back), and propagates the plugin's exit code. Built-in
 subcommands always take precedence; an unknown subcommand with no matching plugin
 produces the usual error plus a did-you-mean suggestion.
 
-The bundled `okfctl-search` plugin is the reference example — see
+The bundled `okfctl-search` plugin is the reference example—see
 [Search](search.md).
 
 ## Discover plugins

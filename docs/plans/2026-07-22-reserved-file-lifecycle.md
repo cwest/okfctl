@@ -1,26 +1,26 @@
-# okfctl Increment 2a — Reserved-file Lifecycle Implementation Plan
+# okfctl Increment 2a—Reserved-file Lifecycle Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Deliver `index build`, `index check`, `log append`, `log show` — the reserved-file engine that keeps `index.md` and `log.md` regenerable and verifiable.
+**Goal:** Deliver `index build`, `index check`, `log append`, `log show`—the reserved-file engine that keeps `index.md` and `log.md` regenerable and verifiable.
 
 **Architecture:** New cobra-free model code in `internal/okf` renders a deterministic neighborhood-grouped index, compares it to disk, and appends log entries. `cmd/index.go` + `cmd/log.go` are thin adapters registered in `NewRootCmd()`.
 
 **Tech Stack:** Go 1.26; existing deps (cobra v1.10.2, yaml.v3). No new deps.
 
-**Ground truth (existing API this builds on):** `okf.Load(root)(*Bundle,error)`; `Bundle{Nodes map[string]*Node, Reserved map[string]*Node, OkfVersion string}` with `OutboundLinks`; `Node{Path, Frontmatter, Body}` + `Type() string`; `okf.Validate(b)[]Finding`; `okf.ReservedFiles` map; `okf.SpecVersion`. Nodes are keyed by bundle-relative slash-path. The cmd test helper `runOKF(t, args...)(string,error)` exists in `cmd/validate_test.go` — REUSE it.
+**Ground truth (existing API this builds on):** `okf.Load(root)(*Bundle,error)`; `Bundle{Nodes map[string]*Node, Reserved map[string]*Node, OkfVersion string}` with `OutboundLinks`; `Node{Path, Frontmatter, Body}` + `Type() string`; `okf.Validate(b)[]Finding`; `okf.ReservedFiles` map; `okf.SpecVersion`. Nodes are keyed by bundle-relative slash-path. The cmd test helper `runOKF(t, args...)(string,error)` exists in `cmd/validate_test.go`—REUSE it.
 
-**Constraints for the implementer:** commits signed (`-S`), repo-local identity is already `Casey West <casey@geeknest.com>` (never change; never @google); NO AI attribution anywhere; the pre-commit addlicense hook stamps `Copyright <year> Google LLC` on .go files (expected — if a commit is blocked "files were modified by this hook", run `addlicense -l apache -c "Google LLC" -y $(date +%Y) <files>` then re-add + commit). Verify by ground truth; never fabricate output.
+**Constraints for the implementer:** commits signed (`-S`), repo-local identity is already `Casey West <casey@geeknest.com>` (never change; never @google); NO AI attribution anywhere; the pre-commit addlicense hook stamps `Copyright <year> Google LLC` on .go files (expected—if a commit is blocked "files were modified by this hook", run `addlicense -l apache -c "Google LLC" -y $(date +%Y) <files>` then re-add + commit). Verify by ground truth; never fabricate output.
 
 ---
 
-## Task 1: RenderIndex — deterministic neighborhood-grouped index
+## Task 1: RenderIndex—deterministic neighborhood-grouped index
 
 **Files:**
 - Create: `internal/okf/reserved_lifecycle.go`
 - Test: `internal/okf/reserved_lifecycle_test.go`
 
-- [ ] **Step 1: Write the failing test** — `internal/okf/reserved_lifecycle_test.go`
+- [ ] **Step 1: Write the failing test**—`internal/okf/reserved_lifecycle_test.go`
 
 ```go
 package okf
@@ -99,9 +99,9 @@ func TestRenderIndex_Deterministic(t *testing.T) {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `go test ./internal/okf/ -run TestRenderIndex -v`
-Expected: FAIL — `RenderIndex` undefined.
+Expected: FAIL—`RenderIndex` undefined.
 
-- [ ] **Step 3: Write minimal implementation** — `internal/okf/reserved_lifecycle.go`
+- [ ] **Step 3: Write minimal implementation**—`internal/okf/reserved_lifecycle.go`
 
 ```go
 package okf
@@ -193,7 +193,7 @@ git commit -S -m "feat(okf): render deterministic neighborhood-grouped index"
 - Modify: `internal/okf/reserved_lifecycle.go`
 - Test: `internal/okf/reserved_lifecycle_test.go` (append)
 
-- [ ] **Step 1: Write the failing tests** — append to `internal/okf/reserved_lifecycle_test.go`
+- [ ] **Step 1: Write the failing tests**—append to `internal/okf/reserved_lifecycle_test.go`
 
 ```go
 func TestIndexInSync_TrueAfterBuildFalseAfterChange(t *testing.T) {
@@ -247,9 +247,9 @@ func TestAppendLog_CreatesAndAccumulates(t *testing.T) {
 - [ ] **Step 2: Run to verify fail**
 
 Run: `go test ./internal/okf/ -run 'IndexInSync|AppendLog' -v`
-Expected: FAIL — undefined.
+Expected: FAIL—undefined.
 
-- [ ] **Step 3: Implement** — append to `internal/okf/reserved_lifecycle.go`
+- [ ] **Step 3: Implement**—append to `internal/okf/reserved_lifecycle.go`
 
 ```go
 import (
@@ -333,7 +333,7 @@ git commit -S -m "feat(okf): index sync check and log append/read"
 - Create: `cmd/index.go`, `cmd/index_test.go`
 - Modify: `cmd/root.go` (register `newIndexCmd()` after the existing AddCommand lines)
 
-- [ ] **Step 1: Write the failing test** — `cmd/index_test.go`
+- [ ] **Step 1: Write the failing test**—`cmd/index_test.go`
 
 ```go
 package cmd
@@ -376,9 +376,9 @@ func TestIndexCheck_StaleExitsNonZero(t *testing.T) {
 - [ ] **Step 2: Run to verify fail**
 
 Run: `go test ./cmd/ -run TestIndex -v`
-Expected: FAIL — no `index` command.
+Expected: FAIL—no `index` command.
 
-- [ ] **Step 3: Implement** — `cmd/index.go`
+- [ ] **Step 3: Implement**—`cmd/index.go`
 
 ```go
 package cmd
@@ -474,7 +474,7 @@ git commit -S -m "feat(cmd): index build and check commands"
 - Create: `cmd/log.go`, `cmd/log_test.go`
 - Modify: `cmd/root.go` (register `newLogCmd()`), `README.md` (document the new verbs)
 
-- [ ] **Step 1: Write the failing test** — `cmd/log_test.go`
+- [ ] **Step 1: Write the failing test**—`cmd/log_test.go`
 
 ```go
 package cmd
@@ -513,9 +513,9 @@ func TestLogAppend_RequiresMessage(t *testing.T) {
 - [ ] **Step 2: Run to verify fail**
 
 Run: `go test ./cmd/ -run TestLog -v`
-Expected: FAIL — no `log` command.
+Expected: FAIL—no `log` command.
 
-- [ ] **Step 3: Implement** — `cmd/log.go`
+- [ ] **Step 3: Implement**—`cmd/log.go`
 
 ```go
 package cmd
@@ -579,9 +579,9 @@ Register in `cmd/root.go`:
 Run: `go test ./cmd/ -run TestLog -v`
 Expected: PASS.
 
-- [ ] **Step 5: Update README.md** — add `index build/check` and `log append/show` to the command reference and quickstart (keep it accurate to what's implemented; do NOT document 2b's node edit/mv/rm). No AI attribution.
+- [ ] **Step 5: Update README.md**—add `index build/check` and `log append/show` to the command reference and quickstart (keep it accurate to what's implemented; do NOT document 2b's node edit/mv/rm). No AI attribution.
 
-- [ ] **Step 6: Full verification gate (HARD — paste real output)**
+- [ ] **Step 6: Full verification gate (HARD—paste real output)**
 
 ```bash
 gofmt -l .            # empty
@@ -619,7 +619,7 @@ git commit -S -m "feat(cmd): log append and show; document reserved-file verbs"
 1. **Spec coverage** vs `docs/specs/2026-07-22-reserved-file-lifecycle.md`: RenderIndex (T1) · IndexInSync/AppendLog/ReadLog (T2) · index build/check (T3) · log append/show + README + verify (T4). All success criteria mapped.
 2. **Placeholder scan:** every step has complete code; no TBD.
 3. **Type consistency:** `RenderIndex`, `IndexInSync`, `AppendLog`, `ReadLog`, `bundleDirArg`, `newIndexCmd`, `newLogCmd` defined once, reused with identical signatures. `bundleDirArg` declared in exactly one file.
-4. **Determinism:** all index ordering is via `sort` — no map-iteration output (the class Lamport bounced in increment 1). The verify gate proves byte-identical repeated builds.
+4. **Determinism:** all index ordering is via `sort`—no map-iteration output (the class Lamport bounced in increment 1). The verify gate proves byte-identical repeated builds.
 
 ## Execution handoff
 

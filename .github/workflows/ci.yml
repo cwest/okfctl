@@ -155,18 +155,23 @@ jobs:
         run: python3 site/scripts/scan_page_prose.py $(find site/dist -name '*.html')
 
   # Gates the SHIPPED Markdown prose against the SAME negative-listing cadence the
-  # site gate catches in rendered HTML. WHY THIS EXISTS, and why it is separate
-  # from the site job: the site gate scans site/dist/**/*.html, so it never saw
-  # the README — a .md that ships straight to readers on GitHub. The README's
-  # line 30 once read "no CGO, no Python, and no model runtime", the precise
-  # cadence the gate exists to block, and CI stayed green because that surface was
-  # not HTML in site/dist. The gate guarded one door while the same defect walked
-  # through another. This closes it: the ONE detector in scan_page_prose.py now
-  # runs against the Markdown prose surfaces this repo ships, via a Markdown front
-  # end (extract_prose_markdown) that shares the pattern set — it is not a forked
-  # copy. Internal, unpublished Markdown (docs/PRD.md, docs/adr/, docs/plans/,
-  # docs/specs/, testdata/) is deliberately excluded: fixture prose, not reader
-  # copy, and gating it would train everyone to ignore the check.
+  # site gate catches in rendered HTML, PLUS spaced em-dash drift. WHY THIS EXISTS,
+  # and why it is separate from the site job: the site gate scans
+  # site/dist/**/*.html, so it never saw the README — a .md that ships straight to
+  # readers on GitHub. The README's line 30 once read "no CGO, no Python, and no
+  # model runtime", the precise cadence the gate exists to block, and CI stayed
+  # green because that surface was not HTML in site/dist. The gate guarded one door
+  # while the same defect walked through another. This closes it: the detectors in
+  # scan_page_prose.py now run against the Markdown prose surfaces this repo ships,
+  # via a Markdown front end (extract_prose_markdown) that shares the pattern set —
+  # it is not a forked copy. The scanner carries TWO detectors on that one
+  # extraction pass: negative-listing cadence, and a SPACED em dash ( — ) in prose,
+  # which the house style (closed-up Chicago, word—word) forbids. Both ride the
+  # same code-fence / inline-code / frontmatter exemptions, so neither ever fires
+  # on code or CLI-help typography. Internal, unpublished Markdown (docs/PRD.md,
+  # docs/adr/, docs/plans/, docs/specs/, testdata/) is deliberately excluded:
+  # fixture prose, not reader copy, and gating it would train everyone to ignore
+  # the check.
   #
   # ALWAYS runs so it can be a required status check; on a PR that touches none of
   # the prose surfaces (nor the scanner) it is a fast no-op. Stdlib-only Python,
@@ -185,12 +190,15 @@ jobs:
         with:
           python-version: '3.12'
       - name: prose gate — the scanner's own tests (asserts BOTH controls)
-        # Prove the gate works before trusting its verdict on the corpus: the
-        # tests assert the negative-listing cadence FAILS in a Markdown prose
-        # block (the README hole) AND that a legitimate look-alike PASSES — the
-        # same facts as discrete bullets, or inside a fenced code block. The
+        # Prove the gate works before trusting its verdict on the corpus. For
+        # EACH detector the tests assert both controls: negative-listing cadence
+        # FAILS in a Markdown prose block (the README hole) while a legitimate
+        # look-alike PASSES (the same facts as discrete bullets, or inside a
+        # fenced code block); and a SPACED em dash in prose FAILS while the same
+        # dash in a code fence / inline code / frontmatter / URL PASSES. The
         # negative control is the load-bearing half; a gate that fires on a
-        # bulleted spec list is a nuisance that gets disabled. Stdlib only.
+        # bulleted spec list or on code typography is a nuisance that gets
+        # disabled. Stdlib only.
         if: needs.changes.outputs.prose == 'true' || github.ref == 'refs/heads/main'
         run: python3 -m unittest discover -s site/scripts -p '*_test.py' -v
       - name: prose gate — scan the shipped Markdown surfaces
