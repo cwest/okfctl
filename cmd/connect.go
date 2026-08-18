@@ -38,7 +38,7 @@ func newConnectCmd() *cobra.Command {
 			"directory (default: a directory named after the source).\n\n" +
 			"A fresh destination is cloned; an existing checkout of the same source " +
 			"is fast-forwarded (never a history-rewriting merge). A non-empty " +
-			"directory that is not that git checkout is left untouched.",
+			"directory that isn't that git checkout is left untouched.",
 		Example: "  # Clone a registered remote into a directory named after the source\n" +
 			"  okfctl connect knowledge\n\n" +
 			"  # Clone an ad-hoc git URL into a chosen directory\n" +

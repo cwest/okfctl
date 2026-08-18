@@ -74,7 +74,7 @@ func newLintCmd() *cobra.Command {
 		Use:   "lint [bundle-dir]",
 		Short: "Report a bundle's curation health (orphans, broken links, coverage gaps, hygiene)",
 		Long: "lint surfaces judgment-worthy curation findings, not spec-floor violations " +
-			"(use validate for those). It never mutates the bundle. By default it is advisory " +
+			"(use validate for those). It never mutates the bundle. By default it's advisory " +
 			"and exits 0 even with findings; pass --strict to exit non-zero on any finding.\n\n" +
 			"A broken-link finding reports an internal .md link that resolves to no node when a " +
 			"node with the same basename exists elsewhere — a moved or mistyped path (a defect), " +

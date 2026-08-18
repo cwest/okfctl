@@ -33,7 +33,7 @@ func newTemplateCmd() *cobra.Command {
 		Use:   "list [bundle-dir]",
 		Short: "List the type templates a bundle declares (target type, required fields, body sections)",
 		Long: "template list shows the type templates a bundle declares. Templates are okfctl's " +
-			"opt-in team overlay (PRD §9): they are authored as ordinary OKF nodes whose type is " +
+			"opt-in team overlay (PRD §9): they're authored as ordinary OKF nodes whose type is " +
 			"`Type Template`, NOT a spec concept, and they never affect the spec floor. Each row " +
 			"names a target type and how many required fields and body sections its template " +
 			"defines. Read-only. A bundle with no templates prints a notice and exits zero.",

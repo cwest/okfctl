@@ -28,8 +28,8 @@ func newIndexCmd() *cobra.Command {
 		Use:   "build [dir]",
 		Short: "Regenerate index.md from the current bundle",
 		Long: "index build regenerates the reserved index.md navigation file(s) from the bundle's " +
-			"current concept nodes (OKF §8: index files are a reserved, generated navigation " +
-			"surface). It rewrites index.md at the bundle root and in each directory that has one; " +
+			"current concept nodes (OKF §8: index files are reserved, generated navigation " +
+			"files). It rewrites index.md at the bundle root and in each directory that has one; " +
 			"it never edits concept nodes. Run it after adding, moving, or removing nodes by hand " +
 			"(the node verbs regenerate it for you).",
 		Example: "  # Regenerate index.md for the current bundle\n" +
@@ -58,7 +58,7 @@ func newIndexCmd() *cobra.Command {
 		Use:   "check [dir]",
 		Short: "Verify index.md is current (nonzero exit if stale)",
 		Long: "index check verifies the reserved index.md (OKF §8) is in sync with the bundle's " +
-			"current nodes, without writing anything. It is the CI-friendly counterpart to " +
+			"current nodes, without writing anything. It's the CI-friendly counterpart to " +
 			"`index build`: it exits zero when the index is current and non-zero (printing what " +
 			"drifted) when a rebuild is needed. Read-only — it never rewrites the index.",
 		Example: "  # Verify the index is current (exit 0) or report drift (exit 1)\n" +
