@@ -6,6 +6,9 @@ This tree is for three audiences. Pick your lane.
 
 Start here:
 
+- **[Install](install.md)** — Homebrew, the one-liner, and `go install` cover
+  most people from the README; this page has prebuilt archives, deb/rpm packages,
+  cosign verification, and building from source.
 - **[Concepts](concepts.md)** — what a bundle is, what a node is, the reserved
   `index.md`/`log.md`, the link graph, the spec-floor-vs-overlay distinction, and
   the v0.1→v0.2 story. Read this first; it makes every other page make sense.
