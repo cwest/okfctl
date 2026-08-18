@@ -38,7 +38,7 @@ Three deliberate behaviors:
   read.
 - **A missing index is an error, not a silent skip** — it names `okfctl-search
   index build`. A quiet structural-only fallback would let CI believe semantic
-  checks ran when they did not.
+  checks ran when they didn't.
 - **Index drift is surfaced.** Nodes added since the last `index build` produce
   one `stale-index` finding listing them, so a partial pass never reads as a
   clean one.
@@ -52,11 +52,11 @@ See the [search guide](search.md) for embedder setup.
 ## `eval` — TACA-style trustworthiness
 
 `validate` and `lint` check **format**; `eval` is the first machine gate that
-touches **trust**. It decomposes node trust the way the TACA lens prescribes —
-**T**ransparency, **A**ccuracy, **C**alibration, **A**lignment — as far as a
-pure-Go, offline, no-model tool honestly can. Only Transparency is machine-
-decidable without a model or the network; the other three are *scaffolded* for a
-human or an out-of-band LLM judge, never auto-graded.
+touches **trust**. TACA decomposes node trust into four dimensions —
+**T**ransparency, **A**ccuracy, **C**alibration, **A**lignment — and `eval`
+scores them as far as a pure-Go, offline, no-model tool can. Only Transparency is
+machine-decidable without a model or the network; the other three are *scaffolded*
+for a human or an out-of-band LLM judge, never auto-graded.
 
 ### `eval transparency` — the gate
 
@@ -75,7 +75,7 @@ carried by at least `--grade-vocabulary-floor` nodes (default 2) counts as the
 vocabulary; rarer values are flagged as drift. This catches the one-off typo
 (`authority: high`) without inventing an enum the OKF spec deliberately leaves
 open. External `http(s)` citations are out of scope — verifying them needs the
-network (that is the sampler / human pass, see the `verifying-citation-link-fit`
+network (that's the sampler / human pass, see the `verifying-citation-link-fit`
 discipline).
 
 ```sh
@@ -89,7 +89,7 @@ conformance gate.
 ### `eval sample` — the spot-check scaffold
 
 Selects a sample of nodes and emits a structured eval-set for the three
-dimensions okfctl cannot automate. It computes **no truth verdict** — it
+dimensions okfctl can't automate. It computes **no truth verdict** — it
 pre-populates every field it can extract (title, description, grades, sources,
 candidate claims) and leaves the judgment slots empty for a reviewer to fill in.
 
@@ -128,5 +128,5 @@ Two guardrails keep this from silently eating your work:
   `--no-ignore`.
 
 This is a built-in default, not a policy read from config — `okfctl` deliberately
-does not consult `.gitignore` (curation scope and version-control scope are
+doesn't consult `.gitignore` (curation scope and version-control scope are
 different questions) and needs no `.okfctlignore` to be usable on a real tree.

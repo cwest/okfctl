@@ -17,7 +17,7 @@ okfctl plugin list                   # okfctl-<name> executables on PATH, sorted
 okfctl plugin list --path "$PATH"    # inspect a specific PATH
 ```
 
-Executable detection uses Unix permission bits (macOS/Linux); Windows is not yet
+Executable detection uses Unix permission bits (macOS/Linux); Windows isn't yet
 supported.
 
 ## Install a plugin
@@ -31,5 +31,5 @@ The default destination is `$OKFCTL_CONFIG_HOME/plugins` (or `<user config
 dir>/okfctl/plugins`), the same config-home convention `config` uses; override
 with `--dir`. Put that directory on your `PATH`. The source's base name must
 follow `okfctl-<name>`; the copy is written with execute bits. If the destination
-is not on your `PATH`, install prints a note to stderr so the plugin is not
+isn't on your `PATH`, install prints a note to stderr so the plugin isn't
 silently undiscoverable.

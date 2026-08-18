@@ -29,7 +29,7 @@ right for an incremental edit, but a **bulk mechanical commit** — a one-time
 migration that rewrites frontmatter across the whole corpus on day one — has no
 authoring intent, and treating its date as the node's `modified` collapses the
 real authoring history into the migration date. Git records *when* a commit
-landed, not *why*, so the tool cannot tell the two apart on its own.
+landed, not *why*, so the tool can't tell the two apart on its own.
 
 Declare the intent with a checked-in `.okf-drift-ignore-revs` at the bundle root,
 mirroring `git blame --ignore-revs-file` — a convention users already understand:
@@ -42,7 +42,7 @@ mirroring `git blame --ignore-revs-file` — a convention users already understa
 
 When a node's last-touching commit is on the list, the drift comparison **walks
 back to the prior real commit** for that file. Incremental edits (commits *not*
-on the list) still drift normally — the check is not narrowed into uselessness.
+on the list) still drift normally — the check isn't narrowed into uselessness.
 Full or abbreviated (≥7-char) SHAs both match. This is the recommended cure when
 `node refresh` refuses a bulk-dominated plan (the guardrail against collapsing
 real authoring dates into one migration date).

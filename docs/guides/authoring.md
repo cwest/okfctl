@@ -23,7 +23,7 @@ template governs `--type`, the node is scaffolded from it: required fields are
 stubbed with `TODO` placeholders, recommended fields stubbed empty, and the
 template's body sections laid down as empty `##` headings.
 
-List what you have:
+List what's there:
 
 ```sh
 okfctl node list --bundle mykb
@@ -46,7 +46,7 @@ okfctl bundle info mykb      # nodes: 1, reserved: 3, okf_version: 0.2
 
 ## Moving and removing nodes
 
-A node's path is its identity, so moving it is a graph operation:
+A node's path is its identity, so a move is a graph operation:
 
 ```sh
 okfctl node mv concepts/tannin.md concepts/tannins.md --bundle mykb --dry-run

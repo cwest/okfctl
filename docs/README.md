@@ -35,7 +35,7 @@ Start here:
 
 ## Spec readers — the format itself
 
-okfctl consumes the Open Knowledge Format; it does not author it. The
+okfctl consumes the Open Knowledge Format; it doesn't author it. The
 authoritative source is the upstream
 [OKF v0.2 specification](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md).
 Confirm the version line (`**Version 0.2**`) before citing a section number —

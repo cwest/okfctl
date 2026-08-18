@@ -17,7 +17,7 @@ okfctl migrate ./mykb --plan migrate-plan.json --generated-by "casey"
 This is read-only. It computes every deterministic §13.1 edit and enumerates
 every **judgment item** — a prose citation with no follow-able resource (§5.1),
 or a `timestamp` rename with no actor (§7) — writing only the plan file.
-Judgment items are left in the plan for a human (or agent) to resolve; they are
+Judgment items are left in the plan for a human (or agent) to resolve; they're
 never auto-guessed.
 
 ## Phase 2 — apply

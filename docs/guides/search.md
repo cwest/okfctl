@@ -1,17 +1,17 @@
 # Search
 
-okfctl has two layers of search: a core, always-available lexical/graph layer
-built into `okfctl` itself, and an optional semantic layer shipped as the
+okfctl offers two kinds of search: a core, always-available lexical/graph search
+built into `okfctl` itself, and an optional semantic search shipped as the
 `okfctl-search` plugin.
 
 ## Core lexical and graph search
 
 `okfctl search` is stdlib-only: it runs without an embedding model or a prebuilt
-index, so it is always available.
+index, so it's always available.
 
 - `okfctl search "query" [dir]` matches concept nodes case-insensitively by
-  title, tag, type, or body substring; restrict the surface with `--field
-  title|tag|type|body` (default `any`). Reserved files (`index.md`/`log.md`) are
+  title, tag, type, or body substring; restrict the match to a field with
+  `--field title|tag|type|body` (default `any`). Reserved files (`index.md`/`log.md`) are
   never results. A zero-result query is not an error. Add `--json` for a
   deterministic, CI-diffable array.
 - `okfctl search --neighbors <node-path> [dir]` is a graph-structural query: the
@@ -33,7 +33,7 @@ protocol with `cwest/knowledge-base` so vectors are cross-verifiable.
 
 - `okfctl-search index build [bundle-dir]` — embed every concept node into
   `.okfctl/index.db`, recording the embedder model + dimension. Content-hash
-  keyed: an unchanged node is not re-embedded; deterministic for a fixed embedder.
+  keyed: an unchanged node isn't re-embedded; deterministic for a fixed embedder.
 - `okfctl-search --semantic "query" [bundle-dir]` — rank nodes by cosine
   similarity to the query (top-`--k`, default 5). Refuses an index built under a
   different model (rebuild with `index build`).
@@ -41,7 +41,7 @@ protocol with `cwest/knowledge-base` so vectors are cross-verifiable.
   (self excluded); the neighbor set `lint --semantic` consumes for its
   similarity-driven checks (§8.6).
 - `--embedder hash` (default) is the offline, dependency-free embedder. It is
-  deterministic and needs no model, but it is *lexical* — it matches tokens, not
+  deterministic and needs no model, but it's *lexical* — it matches tokens, not
   meaning.
 - `--lexical-gate` (off by default) gates the semantic results by a **term-wise**
   lexical match and preserves lexical recall. It runs the semantic query wide,
