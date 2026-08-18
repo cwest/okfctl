@@ -125,7 +125,7 @@ runnable example, or read the [command reference](docs/commands/README.md).
 - [`version`](docs/commands/README.md#okfctl-version) — print the okfctl version (also `okfctl --version`).
 
 Semantic search over a bundle ships as the bundled `okfctl-search` plugin,
-invoked as `okfctl search --semantic …`. See the
+invoked as `okfctl-search --semantic "query"`. See the
 [search guide](docs/guides/search.md).
 
 ## Use as an agent plugin
