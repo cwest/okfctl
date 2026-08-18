@@ -78,6 +78,7 @@ hr{ border:0; border-top:var(--rule) solid var(--border); margin:0 }
 .hdr[data-scrolled="true"]{ border-bottom-color:var(--border) }
 .hdr-in{ display:flex; align-items:center; gap:var(--s-5); height:60px }
 .brand{ display:flex; align-items:center; gap:var(--s-3); font-family:var(--font-mono); font-weight:700; letter-spacing:-0.02em }
+.brand-wm{ white-space:nowrap }
 .brand .dot{ color:var(--accent) }
 .nav{ display:flex; align-items:center; gap:var(--s-2); margin-left:auto }
 .nav a{

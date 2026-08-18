@@ -125,7 +125,7 @@ const goInstallCmd = version.tag
             <circle cx="4" cy="15" r="2" fill="currentColor" opacity=".55" />
             <circle cx="16" cy="10" r="2" fill="currentColor" opacity=".55" />
           </svg>
-          okfctl<span class="dot">.</span>dev
+          <span class="brand-wm">okfctl<span class="dot">.</span>dev</span>
         </a>
         <nav class="nav" aria-label="Primary">
           <a href="#graph" class="sec-link">Link graph</a>
@@ -201,8 +201,8 @@ const goInstallCmd = version.tag
             <p class="small" style="margin-top:var(--s-3)">
               With Homebrew: <code class="mono" style="color:var(--fg-muted)">brew install cwest/tap/okfctl</code>.
               With a Go toolchain: <code class="mono" style="color:var(--fg-muted)">{goInstallCmd}</code>.
-              Or grab a prebuilt binary for darwin/linux · amd64/arm64 from
-              <a href="https://github.com/cwest/okfctl/releases" style="color:var(--fg-muted);border-bottom:1px solid var(--border-loud)" rel="noopener">releases</a>.
+              Or grab a prebuilt binary for darwin/linux · amd64/arm64{" "}
+              <span style="white-space:nowrap">from{" "}<a href="https://github.com/cwest/okfctl/releases" style="color:var(--fg-muted);border-bottom:1px solid var(--border-loud)" rel="noopener">releases</a>.</span>
             </p>
 
             <div class="specstrip">
@@ -242,8 +242,8 @@ const goInstallCmd = version.tag
         <div class="wrap band-in">
           <p class="eyebrow" style="flex:none">The spec</p>
           <p>
-            <strong>OKF is a specification okfctl consumes and conforms to — it does not author it.</strong>
-            The format is maintained by Google in
+            <strong>OKF is a specification okfctl consumes and conforms to — it does not author it.</strong>{" "}
+            The format is maintained by Google in{" "}
             <a href="https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md" rel="noopener">GoogleCloudPlatform/knowledge-catalog</a>.
             Where the spec defines behaviour, the spec wins. okfctl enforces the floor for everyone and keeps anything
             stricter behind an explicit opt-in overlay (<code class="mono" style="color:var(--fg)">--templates</code>, §9.4), so an
@@ -604,7 +604,7 @@ const goInstallCmd = version.tag
       <div class="wrap">
         <div class="ft-grid">
           <div>
-            <a href="#main" class="brand" style="margin-bottom:var(--s-3)">okfctl<span class="dot">.</span>dev</a>
+            <a href="#main" class="brand" style="margin-bottom:var(--s-3)"><span class="brand-wm">okfctl<span class="dot">.</span>dev</span></a>
             <p class="small" style="max-width:34ch">A command-line tool for authoring and maintaining Open Knowledge Format bundles. One static Go binary you drop on your PATH.</p>
           </div>
           <div>
