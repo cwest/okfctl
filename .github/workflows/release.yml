@@ -19,6 +19,14 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with: { go-version: '1.26.6' }
+      # Refuse to publish a tag whose version has no real changelog entry. This
+      # runs BEFORE goreleaser, so an empty release fails the build rather than
+      # publishing and being reported after the fact. The gate asserts a dated,
+      # non-empty `## [X.Y.Z]` section exists for the tag being built (see
+      # scripts/check-changelog.sh); v0.3.0 and v0.3.1 once shipped with no
+      # changelog entry at all, and this makes that impossible to repeat.
+      - name: changelog gate — the tag must have a real changelog entry
+        run: bash scripts/check-changelog.sh "${{ github.ref_name }}"
       # SBOM generation (goreleaser `sboms:` shells out to syft).
       - uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
       # Keyless signing (goreleaser `signs:` shells out to cosign).
