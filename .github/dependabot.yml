@@ -5,6 +5,13 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # The three github/codeql-action/* pins share one SHA and must move
+      # together; a per-action split yields mutually-broken PRs that run
+      # mismatched CodeQL versions. Keep them in one PR.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
 
   - package-ecosystem: "gomod"
     directory: "/"
