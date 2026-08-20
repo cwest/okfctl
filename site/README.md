@@ -95,12 +95,14 @@ The site emits a Google Analytics 4 tag, gated so it appears **only** on a
 production build with a configured measurement id:
 
 - **Where the id comes from:** the `PUBLIC_GA_MEASUREMENT_ID` env var
-  (`G-XXXXXXXXXX`), wired in `.github/workflows/docs.yml` from the repo secret of
-  the same name. It is never hardcoded.
+  (`G-XXXXXXXXXX`), wired in `.github/workflows/docs.yml` from the repo
+  **variable** of the same name (`vars.PUBLIC_GA_MEASUREMENT_ID`, not a
+  secret—a measurement id ships in public client HTML and is not a credential).
+  It is never hardcoded.
 - **Building without it:** a missing or empty value degrades to **no tag**—the
   build stays clean. So `npm run dev` (not a production build) and any fork or PR
-  preview building without the secret emit nothing. There is nothing to configure
-  locally.
+  preview building without the variable emit nothing. There is nothing to
+  configure locally.
 - **One tag, two render paths:** the snippet is defined once in
   `src/lib/analytics.ts` and injected into BOTH the standalone homepage
   (`src/components/Analytics.astro`) and the Starlight docs `head` array

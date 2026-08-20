@@ -47,12 +47,14 @@ jobs:
         run: npm run build --prefix site
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # The GA4 measurement id (G-XXXXXXXXXX). src/lib/analytics.ts gates the
-          # tag on this being set AND a production build, so an empty/missing
-          # secret degrades to no-tag — a fork building without it still gets a
-          # clean build. Provisioning of the property/secret is tracked
-          # separately; wiring it here is safe before the value exists.
-          PUBLIC_GA_MEASUREMENT_ID: ${{ secrets.PUBLIC_GA_MEASUREMENT_ID }}
+          # The GA4 measurement id (G-XXXXXXXXXX). Referenced as a repo VARIABLE,
+          # not a secret: a measurement id ships in public client HTML and is not
+          # a credential, so masking it as a secret would only break a build that
+          # prints it (***) while protecting nothing. src/lib/analytics.ts gates
+          # the tag on this being set AND a production build, so an empty/missing
+          # value degrades to no-tag — a fork building without the variable still
+          # gets a clean build.
+          PUBLIC_GA_MEASUREMENT_ID: ${{ vars.PUBLIC_GA_MEASUREMENT_ID }}
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
