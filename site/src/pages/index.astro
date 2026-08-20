@@ -103,17 +103,25 @@ const goInstallCmd = version.tag
       rel="stylesheet"
     />
     {/* Set the theme before first paint, sharing Starlight's `starlight-theme`
-        key so the choice persists across the homepage and the docs. */}
+        key so the choice persists across the homepage and the docs. This is a
+        FOUC-safe copy of the pure logic in src/lib/theme.ts (unit-tested); it
+        MUST stay in lockstep with that module. Starlight encodes "follow the
+        system" as the EMPTY STRING, so '', null, and any unknown value all mean
+        "system" — never a literal 'system' in that key. `data-theme` carries the
+        EFFECTIVE theme (what the CSS keys off, shared with Starlight);
+        `data-theme-choice` carries the tri-state CHOICE (what the icon + label
+        key off). */}
     <script is:inline>
       (() => {
-        const stored = localStorage.getItem("starlight-theme");
-        const t =
-          stored === "light" || stored === "dark"
-            ? stored
-            : matchMedia("(prefers-color-scheme: light)").matches
-              ? "light"
-              : "dark";
-        document.documentElement.dataset.theme = t;
+        const normalizeChoice = (raw) =>
+          raw === "light" || raw === "dark" ? raw : "system";
+        const choice = normalizeChoice(localStorage.getItem("starlight-theme"));
+        const systemPrefersDark = matchMedia("(prefers-color-scheme: dark)").matches;
+        const effective =
+          choice === "system" ? (systemPrefersDark ? "dark" : "light") : choice;
+        const root = document.documentElement;
+        root.dataset.theme = effective;
+        root.dataset.themeChoice = choice;
       })();
     </script>
     <Analytics />
@@ -144,18 +152,56 @@ const goInstallCmd = version.tag
             class="icon-btn"
             id="theme"
             type="button"
-            aria-label="Switch to light theme"
+            aria-label="Theme: system (tap for light)"
           >
+            {/* Three inline SVGs — one per tri-state choice. Exactly one shows,
+                selected by html[data-theme-choice] (set FOUC-safe above and
+                updated on each cycle in the runtime script below). */}
             <svg
+              class="theme-icon theme-icon-system"
               width="15"
               height="15"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
               stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
               aria-hidden="true"
-              id="theme-icon"
             >
+              {/* Split-disc: circle outline with the left half filled = follow system. */}
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
+            </svg>
+            <svg
+              class="theme-icon theme-icon-light"
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              {/* Sun. */}
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+            </svg>
+            <svg
+              class="theme-icon theme-icon-dark"
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              {/* Moon. */}
               <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
             </svg>
           </button>
@@ -658,23 +704,55 @@ const goInstallCmd = version.tag
         const live = $("#live");
         const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-        /* ── theme (shares Starlight's `starlight-theme` key) ──────────────── */
+        /* ── theme: tri-state (system / light / dark) sharing Starlight's
+              `starlight-theme` key ────────────────────────────────────────────
+           A runtime copy of the pure logic in src/lib/theme.ts (unit-tested);
+           it MUST stay in lockstep with that module. Starlight encodes "follow
+           the system" as the EMPTY STRING and writes only 'light'/'dark'
+           literally, so '', null, and any unknown value all mean "system" —
+           never a literal 'system' in the shared key. `data-theme` is the
+           EFFECTIVE theme the CSS keys off (shared with Starlight);
+           `data-theme-choice` is the tri-state CHOICE the icon + label key off. */
         const root = document.documentElement,
-          tbtn = $("#theme"),
-          ticon = $("#theme-icon");
-        const MOON = "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z";
-        const SUN =
-          "M12 4V2M12 22v-2M4 12H2M22 12h-2M6.3 6.3 4.9 4.9M19.1 19.1l-1.4-1.4M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z";
-        const paint = (t) => {
-          root.dataset.theme = t;
-          ticon.innerHTML = `<path d="${t === "dark" ? MOON : SUN}"/>`;
-          tbtn.setAttribute("aria-label", `Switch to ${t === "dark" ? "light" : "dark"} theme`);
+          tbtn = $("#theme");
+        const THEME_CHOICES = ["system", "light", "dark"];
+        const normalizeChoice = (raw) =>
+          raw === "light" || raw === "dark" ? raw : "system";
+        const nextChoice = (cur) =>
+          THEME_CHOICES[(THEME_CHOICES.indexOf(normalizeChoice(cur)) + 1) % THEME_CHOICES.length];
+        const systemPrefersDark = () => matchMedia("(prefers-color-scheme: dark)").matches;
+        const resolveEffective = (choice) => {
+          const n = normalizeChoice(choice);
+          return n === "system" ? (systemPrefersDark() ? "dark" : "light") : n;
         };
-        paint(root.dataset.theme || "dark");
+        const ariaLabelFor = (choice) => {
+          const c = normalizeChoice(choice);
+          return `Theme: ${c} (tap for ${nextChoice(c)})`;
+        };
+        const choiceToStorage = (choice) => {
+          const n = normalizeChoice(choice);
+          return n === "system" ? "" : n;
+        };
+        // Reflect a choice into the DOM: effective theme, icon selector, label.
+        const reflectChoice = (choice) => {
+          const c = normalizeChoice(choice);
+          root.dataset.theme = resolveEffective(c);
+          root.dataset.themeChoice = c;
+          tbtn.setAttribute("aria-label", ariaLabelFor(c));
+        };
+        reflectChoice(localStorage.getItem("starlight-theme"));
         tbtn.addEventListener("click", () => {
-          const t = root.dataset.theme === "dark" ? "light" : "dark";
-          localStorage.setItem("starlight-theme", t);
-          paint(t);
+          const advanced = nextChoice(localStorage.getItem("starlight-theme"));
+          localStorage.setItem("starlight-theme", choiceToStorage(advanced));
+          reflectChoice(advanced);
+        });
+        // Live OS listener: while in 'system' mode, re-resolve when the OS flips
+        // light<->dark mid-session. An explicit light/dark choice is unaffected
+        // because resolveEffective ignores the OS for those.
+        matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+          if (normalizeChoice(localStorage.getItem("starlight-theme")) === "system") {
+            reflectChoice("system");
+          }
         });
 
         /* ── header hairline on scroll ─────────────────────────────────────── */

@@ -98,6 +98,15 @@ hr{ border:0; border-top:var(--rule) solid var(--border); margin:0 }
 }
 .icon-btn:hover{ color:var(--fg); border-color:var(--border-loud) }
 
+/* ── tri-state theme toggle: show exactly one icon, chosen by the tri-state
+      `data-theme-choice` on <html>. Default to the system icon before the
+      attribute is set so there is no flash of the wrong glyph. ───────────── */
+.theme-icon{ display:none }
+html[data-theme-choice="system"] .theme-icon-system,
+html:not([data-theme-choice]) .theme-icon-system{ display:block }
+html[data-theme-choice="light"] .theme-icon-light{ display:block }
+html[data-theme-choice="dark"] .theme-icon-dark{ display:block }
+
 /* ── small-screen header ────────────────────────────────────────────────  *
    Below 900px the inline nav cannot fit, so the section links move into a
    disclosure sheet rather than simply disappearing. The theme toggle and the
