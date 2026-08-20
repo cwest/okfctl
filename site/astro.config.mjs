@@ -19,6 +19,23 @@ import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
 import { LEGACY_TO_CLEAN } from "./scripts/prepare-content.mjs";
+import { buildAnalyticsHeadTags } from "./src/lib/analytics.ts";
+
+// The GA4 gate for the Starlight `head` render path. Unlike a .astro component,
+// astro.config.mjs is NOT part of Vite's transformed app graph, so Vite never
+// injects PUBLIC_* env vars into `import.meta.env` here (proven: at config load
+// `import.meta.env.PUBLIC_GA_MEASUREMENT_ID` is undefined while process.env has
+// it) and `import.meta.env.PROD` is a constant `true` that cannot tell dev from
+// build. The two signals that ARE authoritative at config load are process.env
+// (where the CI-wired secret arrives) and the Astro subcommand in process.argv
+// (`build` only on a production build — never on `astro dev`/`preview`). The
+// component path (src/components/Analytics.astro) uses the import.meta.env-based
+// helper instead; both call the SAME buildAnalyticsHeadTags(), so the tag and
+// its gate cannot drift.
+const analyticsHead = buildAnalyticsHeadTags({
+  enabled: process.argv.includes("build"),
+  measurementId: process.env.PUBLIC_GA_MEASUREMENT_ID,
+});
 
 // https://astro.build/config
 export default defineConfig({
@@ -131,6 +148,12 @@ export default defineConfig({
             href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&display=swap",
           },
         },
+        // Google Analytics 4. Covers every docs page (the second of the site's
+        // two <head> render paths — the standalone homepage carries the same tag
+        // via src/components/Analytics.astro). Both draw from src/lib/analytics.ts,
+        // so the tag and its production gate are defined exactly once. Spreads to
+        // nothing outside a production build with PUBLIC_GA_MEASUREMENT_ID set.
+        ...analyticsHead,
       ],
       social: [
         {
