@@ -89,6 +89,25 @@ tokens, so:
 `https://api.github.com/repos/cwest/okfctl/releases/latest` at build time. No
 version string is hand-typed anywhere in this site.
 
+## Analytics
+
+The site emits a Google Analytics 4 tag, gated so it appears **only** on a
+production build with a configured measurement id:
+
+- **Where the id comes from:** the `PUBLIC_GA_MEASUREMENT_ID` env var
+  (`G-XXXXXXXXXX`), wired in `.github/workflows/docs.yml` from the repo secret of
+  the same name. It is never hardcoded.
+- **Building without it:** a missing or empty value degrades to **no tag**—the
+  build stays clean. So `npm run dev` (not a production build) and any fork or PR
+  preview building without the secret emit nothing. There is nothing to configure
+  locally.
+- **One tag, two render paths:** the snippet is defined once in
+  `src/lib/analytics.ts` and injected into BOTH the standalone homepage
+  (`src/components/Analytics.astro`) and the Starlight docs `head` array
+  (`astro.config.mjs`). `tests/analytics.test.mjs` builds the site and greps the
+  emitted HTML to prove the tag reaches both paths when the id is set and neither
+  when it is unset.
+
 ## Local development
 
 ```sh

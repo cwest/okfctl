@@ -37,6 +37,11 @@
 import "../styles/tokens.css";
 import "../styles/homepage.css";
 import { fetchLatestVersion } from "../lib/version.ts";
+// Google Analytics 4. This standalone route is one of the site's two <head>
+// render paths (the other is the Starlight `head` array in astro.config.mjs);
+// both draw the tag from the same src/lib/analytics.ts, so they cannot diverge.
+// Emits nothing outside a production build with PUBLIC_GA_MEASUREMENT_ID set.
+import Analytics from "../components/Analytics.astro";
 
 const version = await fetchLatestVersion();
 // The chip shows the derived tag when a release exists, or a neutral,
@@ -111,6 +116,7 @@ const goInstallCmd = version.tag
         document.documentElement.dataset.theme = t;
       })();
     </script>
+    <Analytics />
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
