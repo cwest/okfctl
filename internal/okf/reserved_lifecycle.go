@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 )
 
 // neighborhood returns the top-level directory of a bundle-relative slash path,
@@ -390,7 +389,11 @@ func AppendLog(root, message string) error {
 	if message == "" {
 		return fmt.Errorf("log message must not be empty")
 	}
-	entry := fmt.Sprintf("- %s — %s\n", time.Now().UTC().Format("2006-01-02"), message)
+	// The log.md date heading reads the package clock (nowUTC, backed by the
+	// shared internal/clock source), so a pinned SOURCE_DATE_EPOCH produces a
+	// reproducible log entry rather than tracking wall time. §9 date headings
+	// are YYYY-MM-DD in the corpus form.
+	entry := fmt.Sprintf("- %s — %s\n", nowUTC().Format("2006-01-02"), message)
 
 	p := filepath.Join(root, "log.md")
 	existing, err := os.ReadFile(p) //nolint:gosec // G304: reading the user's own bundle log.md

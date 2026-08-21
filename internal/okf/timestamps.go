@@ -14,11 +14,18 @@
 
 package okf
 
-import "time"
+import (
+	"time"
 
-// nowUTC is the package clock. It is a package var (not a direct time.Now call)
-// so tests can pin it to a fixed instant; production reads real UTC wall time.
-var nowUTC = func() time.Time { return time.Now().UTC() }
+	"github.com/cwest/okfctl/internal/clock"
+)
+
+// nowUTC is the package clock for every timestamp the okf layer WRITES. It reads
+// the single process-wide source (internal/clock), so a pinned SOURCE_DATE_EPOCH
+// flows through here to created/modified stamps and the log.md date heading. It
+// stays a package var (not a direct clock.Now call site) so tests can pin it to
+// a fixed instant independently; production delegates to the shared clock.
+var nowUTC = clock.Now
 
 // timestampLayout is the frontmatter timestamp form. The real corpus stamps
 // created/modified as RFC3339 (e.g. "2026-06-26T00:00:00Z"), so okfctl writes

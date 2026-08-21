@@ -69,9 +69,11 @@ type searchService struct {
 	embedder search.Embedder
 	load     storeLoader
 	// now is the clock recency decay measures ages from. It defaults to the
-	// package now (time.Now) and is overridable in tests so a cross-surface
-	// equivalence assertion can pin the SAME instant into both the endpoint and
-	// the CLI-equivalent oracle and get byte-identical decayed scores.
+	// package now (the shared internal/clock source, so a pinned
+	// SOURCE_DATE_EPOCH makes decayed ranking reproducible) and is overridable
+	// in tests so a cross-surface equivalence assertion can pin the SAME instant
+	// into both the endpoint and the CLI-equivalent oracle and get byte-identical
+	// decayed scores.
 	now func() time.Time
 
 	mu      sync.Mutex

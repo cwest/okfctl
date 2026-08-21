@@ -24,8 +24,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
+	"github.com/cwest/okfctl/internal/clock"
 	"github.com/cwest/okfctl/internal/okf"
 	"github.com/cwest/okfctl/internal/okfconfig"
 	"github.com/cwest/okfctl/internal/search"
@@ -99,6 +99,19 @@ func newSearchCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.ArbitraryArgs,
+		// Honour SOURCE_DATE_EPOCH here too, so decayed ranking is reproducible
+		// under a pinned clock — the same front door okfctl core uses. This is a
+		// separate static binary (PATH-dispatch plugin), so it resolves the clock
+		// itself rather than inheriting core's process-wide install. A malformed
+		// value is a hard error before any query runs.
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			fn, err := clock.Resolve()
+			if err != nil {
+				return err
+			}
+			clock.Install(fn)
+			return nil
+		},
 		// Root with --semantic runs a query; without it, prints help.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if semantic == "" {
@@ -171,7 +184,7 @@ func newSearchCmd() *cobra.Command {
 				// scale-free search.DefaultDecayFloor.
 				opts.Decay = &search.DecayOptions{
 					HalfLifeDays: halfLife,
-					Now:          time.Now(),
+					Now:          clock.Now(),
 					MinRelevance: minRelevance,
 					DecayFloor:   decayFloor,
 				}

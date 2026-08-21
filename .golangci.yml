@@ -16,7 +16,20 @@ linters:
     - errorlint     # correct error comparison/wrapping (errors.Is/As).
     - misspell      # typos in comments and strings.
     - unconvert     # redundant type conversions.
+    - forbidigo     # forbids a direct time.Now() outside the one sanctioned clock source (#143).
   settings:
+    forbidigo:
+      # Reproducibility gate (#143): a direct time.Now() is the leak that makes
+      # okfctl's output track wall time. The ONE sanctioned wall-clock source is
+      # internal/clock (excluded below); every other production seam must read
+      # the shared clock (clock.Now / the package nowUTC/now vars that delegate
+      # to it) so a pinned SOURCE_DATE_EPOCH reaches every written timestamp. A
+      # reintroduced time.Now() under internal/okf or cmd is caught here.
+      forbid:
+        - pattern: '^time\.Now$'
+          msg: "direct time.Now() forbidden here (#143 reproducibility): read the shared clock via clock.Now() or the package clock seam (nowUTC/nowUTCcmd/now), so SOURCE_DATE_EPOCH pins it. The one sanctioned wall-clock source is internal/clock."
+      # forbidigo does not analyze comments/strings by default; keep it that way.
+      analyze-types: true
     errcheck:
       # errcheck is ENABLED (2026-08-08 re-triage). The only findings excluded are
       # unchecked writes to an io.Writer via the fmt.Fprint* family — writing to
@@ -31,6 +44,18 @@ linters:
   exclusions:
     generated: lax
     rules:
+      # forbidigo (#143): the time.Now() ban targets the WRITE/response seams
+      # under internal/okf and cmd. Two categories are legitimately exempt:
+      #   1. internal/clock — the ONE sanctioned wall-clock source; the whole
+      #      point is that wall time is read here and nowhere else.
+      #   2. _test.go — tests measure elapsed real time (e.g. asserting the
+      #      wall-clock fallback returns "now"); the ban is on non-test code.
+      - path: internal/clock/
+        linters:
+          - forbidigo
+      - path: _test\.go
+        linters:
+          - forbidigo
       # Determinism tests deliberately call the same pure function twice and
       # assert the results are byte-identical (f(x) != f(x) as a nondeterminism
       # probe). staticcheck's SA4000 "identical expressions" cannot see the

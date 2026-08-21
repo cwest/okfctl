@@ -31,6 +31,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/cwest/okfctl/internal/clock"
 	"github.com/cwest/okfctl/internal/okf"
 	"github.com/cwest/okfctl/internal/search"
 )
@@ -102,8 +103,12 @@ type graphNode struct {
 	GeneratedAt string `json:"generated_at"`
 }
 
-// now is the clock stats reads for generated_at; overridable in tests.
-var now = time.Now
+// now is the clock stats reads for generated_at and the seed for the search
+// service's recency-decay clock. It reads the single process-wide source
+// (internal/clock), so a pinned SOURCE_DATE_EPOCH makes /stats generated_at and
+// decayed search ranking reproducible. It stays a package var so tests can pin
+// it independently; production delegates to the shared clock.
+var now = clock.Now
 
 // NewHandler builds the read-only /api/v1 HTTP handler for a loaded bundle:
 //

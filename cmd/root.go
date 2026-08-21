@@ -20,6 +20,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/cwest/okfctl/internal/clock"
 	"github.com/cwest/okfctl/internal/plugin"
 	"github.com/spf13/cobra"
 )
@@ -34,6 +35,23 @@ func NewRootCmd() *cobra.Command {
 		// Wire --version to the same build metadata as the `version`
 		// subcommand, so both report the ldflags-injected value.
 		Version: versionString(),
+		// Resolve the clock ONCE, before any subcommand runs. This is the single
+		// front door for reproducibility: SOURCE_DATE_EPOCH is read here and the
+		// resolved instant is installed process-wide, so every write seam
+		// (created/modified, log.md) and every response seam (apiserver
+		// generated_at, search decay) reads the SAME clock. A malformed value is
+		// a hard error returned BEFORE any subcommand RunE executes — cobra
+		// aborts non-zero and nothing is written. Resolve is pure (it does not
+		// mutate state), so the error path installs nothing; only a valid or
+		// absent value reaches Install.
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			fn, err := clock.Resolve()
+			if err != nil {
+				return err
+			}
+			clock.Install(fn)
+			return nil
+		},
 	}
 	// Print just the version string for --version, matching `version`.
 	root.SetVersionTemplate("{{.Version}}\n")

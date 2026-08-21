@@ -17,16 +17,17 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
-	"time"
 
+	"github.com/cwest/okfctl/internal/clock"
 	"github.com/cwest/okfctl/internal/okf"
 	"github.com/spf13/cobra"
 )
 
-// nowUTCcmd is the cmd-layer clock (real UTC wall time). It exists as a var so
-// timestamp-dependent command behavior stays consistent with the model's clock
-// seam; production reads real time.
-var nowUTCcmd = func() time.Time { return time.Now().UTC() }
+// nowUTCcmd is the cmd-layer clock. It reads the single process-wide source
+// (internal/clock), so a pinned SOURCE_DATE_EPOCH flows through here to the
+// modified timestamp `node edit` writes. It stays a var so tests can pin it
+// independently of the model seam; production delegates to the shared clock.
+var nowUTCcmd = clock.Now
 
 // bundleRel converts an absolute node path (as returned by okf.NewNode) into a
 // bundle-relative slash path rooted at dir.
