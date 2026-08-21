@@ -20,6 +20,7 @@ Start here:
   - [Migrating a v0.1 bundle to v0.2](guides/migrating.md)
   - [Remote sources: `registry` and `connect`](guides/remote-sources.md)
   - [Extending okfctl with plugins](guides/plugins.md)
+  - [Consuming a bundle from Go with `pkg/okf`](guides/go-consumer.md)
 - **[Command reference](commands/README.md)**—one entry per command,
   generated from the command tree (a CI drift check keeps it in lockstep with
   the binary). `okfctl <cmd> --help` is the authoritative, always-current form.
