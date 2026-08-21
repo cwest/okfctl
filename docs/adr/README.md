@@ -23,6 +23,7 @@ than duplicating the argument.
 | [0004](0004-flat-json-vector-store.md) | Flat Go-native JSON vector store | Accepted | 2026-07-24 |
 | [0005](0005-pure-go-embedder.md) | Pure-Go Model2Vec + WordPiece embedder | Accepted | 2026-07-25 |
 | [0006](0006-vanilla-js-embedded-visualizer.md) | Vanilla-JS `go:embed`-ed visualizer front-end | Accepted | 2026-07-23 |
+| [0007](0007-mcp-server-surface.md) | Grow an MCP server surface over the existing read handlers | Accepted | 2026-08-21 |
 
 ## When to write a new one
 

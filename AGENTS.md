@@ -179,9 +179,14 @@ decision nobody reviewed.
 This repo is packaged as an [Agent Plugins 1.0.0](https://agent-plugins.org)
 plugin so agent clients can install okfctl's skills as one unit. The rules:
 
-- **`plugin.json` is spec-only + AGENTS.md** (strategy 1). No MCP server and no
-  client shim directories (`.claude-plugin/`, `.cursor-plugin/`, …)—a
-  compatible client reads the root `plugin.json` directly.
+- **`plugin.json` is spec-only + AGENTS.md** (strategy 1). No client shim
+  directories (`.claude-plugin/`, `.cursor-plugin/`, …)—a compatible client reads
+  the root `plugin.json` directly. A programmatic MCP server surface is *not*
+  excluded: [ADR 0007](docs/adr/0007-mcp-server-surface.md) decides okfctl MAY
+  grow one as a thin read-only transport adapter over the existing
+  `internal/apiserver/handler.go` handlers (the same functions `NewHandler`
+  calls, so the MCP view can never disagree with the HTTP view or the CLI). The
+  server itself is a separate follow-up, not part of this packaging manifest.
 - **`$schema` is pinned** to
   `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json` (a `const` in the
   schema—any other value fails). The schema's root is
