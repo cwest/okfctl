@@ -22,7 +22,7 @@ import (
 )
 
 func newValidateCmd() *cobra.Command {
-	var templates, strict bool
+	var templates, strict, checkComputations bool
 	var noIgnore *bool
 	c := &cobra.Command{
 		Use:   "validate [bundle-dir]",
@@ -31,15 +31,20 @@ func newValidateCmd() *cobra.Command {
 			"It also reports git drift: a node whose frontmatter `modified` contradicts " +
 			"its git last-commit date (read-only — it never rewrites the file, and " +
 			"degrades to nothing outside a git repo). With --templates it runs the opt-in " +
-			"team overlay (§9.4) as well, reporting template drift. All drift is " +
+			"team overlay (§9.4) as well, reporting template drift. With --check-computations " +
+			"it also checks the §10 attested-computation contract shape on " +
+			"`type: Attested Computation` nodes (structural only — it never reads or executes " +
+			"anything named by computation/executor/attester). All drift is " +
 			"advisory by default (exit 0); pass --strict to exit non-zero on any drift. " +
-			"Floor violations always fail regardless of --strict.",
+			"Floor violations and §10 findings always fail regardless of --strict.",
 		Example: "  # Check the spec floor for the bundle in the current directory\n" +
 			"  okfctl validate\n\n" +
 			"  # Check a bundle elsewhere\n" +
 			"  okfctl validate ./bundles/knowledge\n\n" +
 			"  # Also run the opt-in team template overlay, failing CI on any drift\n" +
-			"  okfctl validate --templates --strict ./bundles/knowledge",
+			"  okfctl validate --templates --strict ./bundles/knowledge\n\n" +
+			"  # Also check the §10 attested-computation contract shape\n" +
+			"  okfctl validate --check-computations ./bundles/knowledge",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."
@@ -52,6 +57,15 @@ func newValidateCmd() *cobra.Command {
 			}
 			out := cmd.OutOrStdout()
 			findings := okf.Validate(b)
+			// §10 attested-computation contract-shape checks are opt-in behind
+			// --check-computations, so flagless validate output stays byte-
+			// identical. These are shape rules (runtime REQUIRED for the type,
+			// §10.2), not curation guidance, so a finding fails the run like a
+			// floor finding. They apply only to `type: Attested Computation`
+			// nodes and are inert otherwise.
+			if checkComputations {
+				findings = append(findings, okf.CheckComputations(b)...)
+			}
 			for _, f := range findings {
 				fmt.Fprintf(out, "FAIL %s: %s\n", f.Path, f.Message)
 			}
@@ -96,6 +110,7 @@ func newValidateCmd() *cobra.Command {
 	}
 	c.Flags().BoolVar(&templates, "templates", false, "also run the opt-in type-template overlay (§9.4), reporting drift as warnings")
 	c.Flags().BoolVar(&strict, "strict", false, "exit non-zero on any drift (git drift and, with --templates, template drift); default: advisory, exit 0")
+	c.Flags().BoolVar(&checkComputations, "check-computations", false, "also check the OKF §10 attested-computation contract shape on `type: Attested Computation` nodes (runtime present, exactly one computation source, well-formed parameters); a finding fails the run")
 	noIgnore = addNoIgnoreFlag(c)
 	return c
 }

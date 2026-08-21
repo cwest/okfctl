@@ -1015,7 +1015,7 @@ Example:
 
 Check a bundle for OKF spec-floor conformance (optionally overlay team type-templates)
 
-validate enforces the OKF spec floor (type present + non-empty, §7). It also reports git drift: a node whose frontmatter `modified` contradicts its git last-commit date (read-only — it never rewrites the file, and degrades to nothing outside a git repo). With --templates it runs the opt-in team overlay (§9.4) as well, reporting template drift. All drift is advisory by default (exit 0); pass --strict to exit non-zero on any drift. Floor violations always fail regardless of --strict.
+validate enforces the OKF spec floor (type present + non-empty, §7). It also reports git drift: a node whose frontmatter `modified` contradicts its git last-commit date (read-only — it never rewrites the file, and degrades to nothing outside a git repo). With --templates it runs the opt-in team overlay (§9.4) as well, reporting template drift. With --check-computations it also checks the §10 attested-computation contract shape on `type: Attested Computation` nodes (structural only — it never reads or executes anything named by computation/executor/attester). All drift is advisory by default (exit 0); pass --strict to exit non-zero on any drift. Floor violations and §10 findings always fail regardless of --strict.
 
 ```
 okfctl validate [bundle-dir] [flags]
@@ -1032,14 +1032,18 @@ Example:
 
   # Also run the opt-in team template overlay, failing CI on any drift
   okfctl validate --templates --strict ./bundles/knowledge
+
+  # Also check the §10 attested-computation contract shape
+  okfctl validate --check-computations ./bundles/knowledge
 ```
 
 Flags:
 
 ```
-      --no-ignore   walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
-      --strict      exit non-zero on any drift (git drift and, with --templates, template drift); default: advisory, exit 0
-      --templates   also run the opt-in type-template overlay (§9.4), reporting drift as warnings
+      --check-computations type: Attested Computation   also check the OKF §10 attested-computation contract shape on type: Attested Computation nodes (runtime present, exactly one computation source, well-formed parameters); a finding fails the run
+      --no-ignore                                       walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --strict                                          exit non-zero on any drift (git drift and, with --templates, template drift); default: advisory, exit 0
+      --templates                                       also run the opt-in type-template overlay (§9.4), reporting drift as warnings
 ```
 
 
