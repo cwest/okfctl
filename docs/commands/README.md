@@ -754,6 +754,41 @@ Flags:
 ```
 
 
+### okfctl node verify
+
+Append a §5.2 verification stamp asserting a node was checked
+
+verify appends a §5.2 `verified` event { by, at } to a node's frontmatter. The stamp asserts that a HUMAN or a NAMED PROCESS actually CHECKED the node against its sources — it is a trust signal, not a mechanical touch, so it is never fabricated. --by is REQUIRED, has no default, and is NEVER inferred from git config or anywhere else; it is validated against the §7 actor forms (`human:<id>` for a person, `process:<id>` for an automated process, or `<producer>/<version>` for a tool). The event is APPENDED — an existing `verified` list is extended and a prior entry is never modified, because §5.2 models verification history AS history; `created` and `modified` are never touched. With a trailing path it stamps a single node. Without a path it targets the WHOLE bundle, which is REFUSED without --all because a bulk rubber-stamp converts a trust signal into noise; bulk mode is a dry-run plan by default (reporting which nodes it would skip) and writes only with --write. Writes go through the order- and body-preserving frontmatter writer, and log.md/index.md are maintained.
+
+```
+okfctl node verify <bundle> [path] --by <actor> [flags]
+```
+
+Example:
+
+```
+# Stamp a single node with a human verifier
+  okfctl node verify ./bundles/knowledge concepts/revenue --by human:casey
+
+  # Stamp a node as checked by a named process
+  okfctl node verify ./bundles/knowledge concepts/revenue --by process:finance-nightly
+
+  # Plan a whole-bundle verify (dry-run; writes nothing)
+  okfctl node verify ./bundles/knowledge --by human:casey --all
+
+  # Actually stamp the whole bundle (explicit override + write)
+  okfctl node verify ./bundles/knowledge --by human:casey --all --write
+```
+
+Flags:
+
+```
+      --all         confirm stamping the WHOLE bundle (required for bulk verify; a bulk rubber-stamp is noise)
+      --by string   actor asserting the check (required; §7 form, no default, never inferred)
+      --write       actually write in bulk mode (bulk verify is a dry-run plan by default)
+```
+
+
 ## okfctl plugin
 
 Discover and manage okfctl plugins (okfctl-<name> on PATH)

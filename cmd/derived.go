@@ -93,6 +93,16 @@ func logOnPromote(cmd *cobra.Command, dir, oldRel, newRel string) {
 	}
 }
 
+// logOnVerify records a single node's verification stamp in log.md. Like
+// logOnRefresh it does NOT regenerate index.md — the single-node path regenerates
+// the index itself and a bulk verify regenerates it once at the end, so the index
+// is not rebuilt N times. Best-effort: reported, never fatal.
+func logOnVerify(cmd *cobra.Command, dir, rel string) {
+	if err := okf.AppendLog(dir, "verified "+rel); err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not update log.md: %v\n", err)
+	}
+}
+
 // maintainIndex regenerates index.md from the current bundle so it never
 // silently drifts after a node create/edit/delete/rename. A build step a human
 // must remember is a build step that drifts; okfctl maintains it automatically.
