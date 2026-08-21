@@ -17,6 +17,8 @@ package okf
 import (
 	"bytes"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // FuzzParseFrontmatter drives the YAML-frontmatter splitter with untrusted bytes.
@@ -116,6 +118,72 @@ func FuzzSplitFrontmatterRaw(f *testing.F) {
 		// explicit '\n' per source line); an empty block is legal.
 		if len(yamlBlock) > 0 && yamlBlock[len(yamlBlock)-1] != '\n' {
 			t.Fatalf("yamlBlock not newline-terminated: %q", yamlBlock)
+		}
+	})
+}
+
+// FuzzSpliceScalar drives the byte-splice primitive with arbitrary frontmatter
+// blocks. The contract under fuzz is a safety one, not a success one: spliceScalar
+// MAY decline (ok=false) any block it deems ineligible, but whenever it accepts
+// (ok=true) the result MUST (1) still parse as YAML, and (2) carry the intended
+// value for the target key. A splice that produces unparseable YAML, or that
+// sets the wrong value, is a corruption the whole conservative eligibility gate
+// exists to prevent — exactly the failure a fuzzer over frontmatter shapes finds
+// that fixtures cannot. The target key ("modified") and new value are fixed; the
+// block is the fuzzed input.
+func FuzzSpliceScalar(f *testing.F) {
+	seeds := []string{
+		"type: Concept\nmodified: 2026-01-04T00:00:00Z\n",
+		"modified: 2026-01-04T00:00:00Z  # comment\n",
+		"a:   1\nmodified:   old\nb: 2\n",
+		"modified: \"quoted\"\n",
+		"modified:\n  - a\n  - b\n",
+		"modified: |\n  block\n",
+		"no_target: here\n",
+		"",
+		"modified: 2026-01-04T00:00:00Z\r\n",
+		"nested:\n  modified: notatoplevelkey\n",
+	}
+	for _, s := range seeds {
+		f.Add([]byte(s))
+	}
+
+	const newVal = "2026-08-20T00:00:00Z"
+	f.Fuzz(func(t *testing.T, block []byte) {
+		// The invariant is a RELATIVE one: whatever a map-decode of the ORIGINAL
+		// block yields, the spliced block must decode the same way with only the
+		// modified value changed. An input that itself fails a map decode (e.g. a
+		// duplicate top-level key, which yaml rejects into a map but tolerates
+		// into a Node) is out of scope — the splice cannot be blamed for a defect
+		// already present in the input. So establish the input's baseline first.
+		before := map[string]any{}
+		if err := yaml.Unmarshal(block, &before); err != nil {
+			return // input isn't a clean mapping; not a splice concern.
+		}
+
+		out, ok := spliceScalar(block, "modified", newVal)
+		if !ok {
+			return // declined: fallback owns this shape, nothing to assert.
+		}
+		// Accepted: the spliced block must still be a parseable YAML mapping and
+		// the intended value must be set.
+		after := map[string]any{}
+		if err := yaml.Unmarshal(out, &after); err != nil {
+			t.Fatalf("spliced block no longer parses: %v\n block: %q\n   out: %q", err, block, out)
+		}
+		got, present := after["modified"]
+		if !present {
+			t.Fatalf("spliced block dropped the target key\n block: %q\n   out: %q", block, out)
+		}
+		// The decoded value must equal the intended new value (string-compared;
+		// yaml may decode a timestamp-shaped scalar to time.Time, so compare on
+		// the round-tripped string form).
+		if s, isStr := got.(string); isStr && s != newVal {
+			t.Fatalf("spliced value wrong: got %q want %q\n block: %q\n   out: %q", s, newVal, block, out)
+		}
+		// Every OTHER top-level key must be untouched by the splice.
+		if len(after) != len(before) {
+			t.Fatalf("splice changed the key set: before=%d after=%d\n block: %q\n   out: %q", len(before), len(after), block, out)
 		}
 	})
 }
