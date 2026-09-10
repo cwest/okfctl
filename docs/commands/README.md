@@ -342,6 +342,8 @@ Regenerate index.md from the current bundle
 
 index build regenerates the reserved index.md navigation file(s) from the bundle's current concept nodes (OKF §8: index files are reserved, generated navigation files). It rewrites index.md at the bundle root and in each directory that has one; it never edits concept nodes. Run it after adding, moving, or removing nodes by hand (the node verbs regenerate it for you).
 
+Each subdirectory entry carries a shape suffix — the child's own concept count, its types, its shared tags, and (when it nests deeper) a subtree total — so a reader can decide which branch to open without opening it. Tune it with --shape-tag-min / --shape-tag-max, or drop it with --no-shape.
+
 ```
 okfctl index build [dir] [flags]
 ```
@@ -359,7 +361,10 @@ Example:
 Flags:
 
 ```
-      --no-ignore   walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --no-ignore           walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --no-shape            omit the subdirectory shape suffix (concept count, types, shared tags, subtree total)
+      --shape-tag-max int   cap the shared-tag list at this many tags (most-shared-first, ellipsis on truncation) (default 12)
+      --shape-tag-min int   a shared tag prints only when at least this many of a directory's own concepts carry it (default 2)
 ```
 
 
@@ -368,6 +373,8 @@ Flags:
 Verify index.md is current (nonzero exit if stale)
 
 index check verifies the reserved index.md (OKF §8) is in sync with the bundle's current nodes, without writing anything. It's the CI-friendly counterpart to `index build`: it exits zero when the index is current and non-zero (printing what drifted) when a rebuild is needed. Read-only — it never rewrites the index.
+
+Pass the SAME shape flags you built with (--shape-tag-min / --shape-tag-max / --no-shape); a check against a different shape configuration than the build reports drift by design.
 
 ```
 okfctl index check [dir] [flags]
@@ -386,7 +393,10 @@ Example:
 Flags:
 
 ```
-      --no-ignore   walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --no-ignore           walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --no-shape            omit the subdirectory shape suffix (concept count, types, shared tags, subtree total)
+      --shape-tag-max int   cap the shared-tag list at this many tags (most-shared-first, ellipsis on truncation) (default 12)
+      --shape-tag-min int   a shared tag prints only when at least this many of a directory's own concepts carry it (default 2)
 ```
 
 
