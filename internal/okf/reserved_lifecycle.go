@@ -240,6 +240,20 @@ func entry(title, url, desc string) string {
 	return fmt.Sprintf("* [%s](%s) - %s\n", title, url, desc)
 }
 
+// subdirEntry renders one §8 Subdirectories bullet: the standard
+// `* [Title](url) - description` (or the bare form when description is empty),
+// with the tool-owned shape suffix appended on the SAME line before the newline.
+// shape is "" when the shape feature is disabled (--no-shape), in which case the
+// bullet is byte-identical to the pre-feature output.
+func subdirEntry(title, url, desc, shape string) string {
+	line := fmt.Sprintf("* [%s](%s)", title, url)
+	if desc != "" {
+		line += " - " + desc
+	}
+	line += shape
+	return line + "\n"
+}
+
 // RenderDirIndex produces the deterministic index.md body for one directory of
 // the bundle (dir is bundle-relative slash form; "" is the bundle root), per OKF
 // §8: it enumerates ONLY that directory's own immediate contents — its
@@ -250,7 +264,21 @@ func entry(title, url, desc string) string {
 // bundle-relative. Only the bundle-root index carries frontmatter (the §12
 // okf_version carve-out); every nested index carries none. Output is byte-stable
 // (all ordering via sort) and passes Validate.
+//
+// Subdirectory entries additionally carry the tool-owned shape suffix (see
+// dirShape / IndexShapeOptions) so a reader can decide which branch to open
+// without opening it — the whole point of §8 progressive disclosure. This is the
+// zero-arg form used by build, check, and the auto-maintenance path; it renders
+// with DefaultShapeOptions so those three paths stay byte-identical.
 func RenderDirIndex(b *Bundle, dir string) string {
+	return RenderDirIndexWithOptions(b, dir, DefaultShapeOptions())
+}
+
+// RenderDirIndexWithOptions is RenderDirIndex with an explicit shape config. It
+// exists for the CLI flags (--shape-tag-min/--shape-tag-max/--no-shape), which
+// must be threaded identically through build and check; the zero-arg
+// RenderDirIndex delegates here with DefaultShapeOptions.
+func RenderDirIndexWithOptions(b *Bundle, dir string, opts IndexShapeOptions) string {
 	var sb strings.Builder
 	if dir == "" {
 		sb.WriteString(rootFrontmatter(b))
@@ -270,7 +298,10 @@ func RenderDirIndex(b *Bundle, dir string) string {
 		for _, child := range kids {
 			title, desc := childDirIndexTitleDesc(b, child)
 			// Dir-relative link: the child's base name plus a trailing slash.
-			sb.WriteString(entry(title, path.Base(child)+"/", desc))
+			// The shape suffix trails the §8 `[Title](url) - description`
+			// grammar on the SAME bullet, so a consumer reading only that
+			// grammar loses nothing.
+			sb.WriteString(subdirEntry(title, path.Base(child)+"/", desc, dirShape(b, child, opts)))
 		}
 	}
 	if len(concepts) > 0 {
@@ -311,6 +342,13 @@ func indexPathFor(root, dir string) string {
 // of it) is pruned, so a subsequent `index check` is clean. This is the stale
 // parent/sibling index class the pre-§8 flat model left behind.
 func WriteIndex(b *Bundle) error {
+	return WriteIndexWithOptions(b, DefaultShapeOptions())
+}
+
+// WriteIndexWithOptions is WriteIndex with an explicit shape config, for the CLI
+// flags. The zero-arg WriteIndex delegates here with DefaultShapeOptions so the
+// build/maintenance paths stay byte-identical to a default check.
+func WriteIndexWithOptions(b *Bundle, opts IndexShapeOptions) error {
 	want := map[string]bool{}
 	for _, dir := range IndexDirs(b) {
 		want[dir] = true
@@ -318,7 +356,7 @@ func WriteIndex(b *Bundle) error {
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil { //nolint:gosec // G301: shareable bundle content dir; 0o755 is intended
 			return err
 		}
-		if err := os.WriteFile(p, []byte(RenderDirIndex(b, dir)), 0o644); err != nil { //nolint:gosec // G306: a bundle index file is shareable content; 0o644 is intended
+		if err := os.WriteFile(p, []byte(RenderDirIndexWithOptions(b, dir, opts)), 0o644); err != nil { //nolint:gosec // G306: a bundle index file is shareable content; 0o644 is intended
 			return err
 		}
 	}
@@ -345,6 +383,14 @@ func WriteIndex(b *Bundle) error {
 // carry none. A missing, stale, or orphaned index counts as out of sync, and
 // the report names the first offending path.
 func IndexInSync(b *Bundle) (bool, string) {
+	return IndexInSyncWithOptions(b, DefaultShapeOptions())
+}
+
+// IndexInSyncWithOptions is IndexInSync with an explicit shape config, for the
+// CLI flags. The zero-arg IndexInSync delegates here with DefaultShapeOptions.
+// A build and a check MUST use the same options or the check reports drift — the
+// CLI layer threads identical flags into both.
+func IndexInSyncWithOptions(b *Bundle, opts IndexShapeOptions) (bool, string) {
 	want := map[string]bool{}
 	for _, dir := range IndexDirs(b) {
 		want[dir] = true
@@ -353,7 +399,7 @@ func IndexInSync(b *Bundle) (bool, string) {
 		if err != nil {
 			return false, fmt.Sprintf("%s is missing or unreadable; run `okfctl index build`", filepath.ToSlash(rel(b.Root, p)))
 		}
-		if string(onDisk) != RenderDirIndex(b, dir) {
+		if string(onDisk) != RenderDirIndexWithOptions(b, dir, opts) {
 			return false, fmt.Sprintf("%s is out of date; run `okfctl index build` to regenerate", filepath.ToSlash(rel(b.Root, p)))
 		}
 	}
