@@ -183,6 +183,76 @@ func TestMigrate_AlreadyV02NoChange(t *testing.T) {
 	}
 }
 
+// End-to-end repro of #171 (v0.2 §5): a bundle with BOTH a quoted and an
+// UNQUOTED legacy timestamp of the same instant migrates so that each
+// generated.at carries the full datetime. Before the fix the unquoted node
+// truncated to a bare date; after, both nodes agree at full precision. Asserts on
+// the PLAN JSON (phase 1) AND the applied node (phase 2), proving they agree.
+func TestMigrate_Issue171UnquotedTimestampPrecision_Section5(t *testing.T) {
+	dir := mkPromoteCLIBundle(t, map[string]string{
+		".okf":        "okf_version: 0.1\n",
+		"index.md":    "---\nokf_version: \"0.1\"\n---\n\n# KB\n",
+		"log.md":      "# Log\n",
+		"quoted.md":   "---\ntype: Metric\ntimestamp: '2026-08-01T06:28:39Z'\n---\n\n# Quoted\n",
+		"unquoted.md": "---\ntype: Metric\ntimestamp: 2026-08-01T06:28:39Z\n---\n\n# Unquoted\n",
+	})
+	planPath := filepath.Join(t.TempDir(), "p.json")
+	if out, err := runOKF(t, "migrate", dir, "--plan", planPath, "--generated-by", "agent/v1"); err != nil {
+		t.Fatalf("plan phase must exit 0: err=%v out=%q", err, out)
+	}
+	// Phase 1: the plan carries the faithful value for BOTH nodes — the unquoted
+	// one is no longer truncated to the bare date.
+	planJSON := readFileStr(t, planPath)
+	if strings.Count(planJSON, `"at": "2026-08-01T06:28:39Z"`) != 2 {
+		t.Fatalf("plan must carry full precision for BOTH nodes (v0.2 §5):\n%s", planJSON)
+	}
+	if strings.Contains(planJSON, `"at": "2026-08-01"`) {
+		t.Fatalf("plan truncated a timestamp to a bare date (#171 regression):\n%s", planJSON)
+	}
+	// Phase 2: applying yields the same full-precision value in both nodes.
+	if out, err := runOKF(t, "migrate", dir, "--apply", "--plan", planPath); err != nil {
+		t.Fatalf("apply phase must exit 0: err=%v out=%q", err, out)
+	}
+	for _, rel := range []string{"quoted.md", "unquoted.md"} {
+		node := readFileStr(t, filepath.Join(dir, rel))
+		if !strings.Contains(node, "2026-08-01T06:28:39Z") {
+			t.Errorf("%s lost the time-of-day after migrate:\n%s", rel, node)
+		}
+		if strings.Contains(node, "timestamp:") {
+			t.Errorf("%s still carries a legacy timestamp key:\n%s", rel, node)
+		}
+	}
+	// validate stays clean as v0.2.
+	if out, err := runOKF(t, "validate", dir); err != nil {
+		t.Fatalf("validate must pass after migrate: err=%v out=%q", err, out)
+	}
+}
+
+// v0.1 fallback path (#7): a bundle declared v0.1 with the spec's own unquoted
+// datetime example form migrates to full-precision generated.at and validates.
+func TestMigrate_V01UnquotedTimestampMigratesFullPrecision_Section5(t *testing.T) {
+	dir := mkPromoteCLIBundle(t, map[string]string{
+		".okf":     "okf_version: 0.1\n",
+		"index.md": "---\nokf_version: \"0.1\"\n---\n\n# KB\n",
+		"log.md":   "# Log\n",
+		"a.md":     "---\ntype: Metric\ntimestamp: 2026-08-01T06:28:39Z\n---\n\n# A\n",
+	})
+	planPath := filepath.Join(t.TempDir(), "p.json")
+	if out, err := runOKF(t, "migrate", dir, "--plan", planPath, "--generated-by", "human:casey"); err != nil {
+		t.Fatalf("plan phase must exit 0: err=%v out=%q", err, out)
+	}
+	if out, err := runOKF(t, "migrate", dir, "--apply", "--plan", planPath); err != nil {
+		t.Fatalf("apply phase must exit 0: err=%v out=%q", err, out)
+	}
+	node := readFileStr(t, filepath.Join(dir, "a.md"))
+	if !strings.Contains(node, "2026-08-01T06:28:39Z") {
+		t.Errorf("v0.1 unquoted timestamp lost precision after migrate:\n%s", node)
+	}
+	if out, err := runOKF(t, "validate", dir); err != nil {
+		t.Fatalf("validate must pass after migrate: err=%v out=%q", err, out)
+	}
+}
+
 // apply without a plan file is a clear error, not a silent no-op.
 func TestMigrate_ApplyWithoutPlanErrors(t *testing.T) {
 	dir := mkPromoteCLIBundle(t, migrateFixtureFiles())

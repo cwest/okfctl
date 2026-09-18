@@ -17,6 +17,7 @@ package okf
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -135,6 +136,131 @@ func TestMigratePlan_TimestampRenameWithoutActorIsJudgment_Section7(t *testing.T
 	}
 	if !hasJudgment(plan, "a.md", JudgmentMissingActor) {
 		t.Fatalf("expected a missing-actor judgment item for a.md, got %+v", plan.Judgment)
+	}
+}
+
+// --- §13.1 timestamp -> generated.at: full-precision fidelity (v0.2 §5) --------
+//
+// v0.2 §5 "Provenance, trust, and lifecycle": "Every timestamp-valued key in OKF
+// is an ISO 8601 datetime with an explicit UTC offset." The rename must carry the
+// legacy `timestamp` value across at full precision — it must not silently reduce
+// a datetime to a bare date. yaml.v3 resolves an UNQUOTED ISO datetime to a
+// time.Time and a QUOTED one to a string; a faithful rename must be identical
+// across that asymmetry, keying off the SOURCE SCALAR, not a re-render of the
+// parsed time.
+
+// Positive control (v0.2 §5): an UNQUOTED datetime — the v0.1 spec's own
+// frontmatter example form (§4.3, §4.4) — carries the time-of-day and offset
+// across the rename verbatim. This is the exact loss #171 reports.
+func TestMigratePlan_UnquotedTimestampKeepsTimeOfDay_Section5(t *testing.T) {
+	dir := mkMigrateBundle(t, map[string]string{
+		".okf":     "okf_version: 0.1\n",
+		"index.md": "---\nokf_version: \"0.1\"\n---\n\n# KB\n",
+		"log.md":   "# Log\n",
+		// UNQUOTED — yaml.v3 resolves this to a time.Time (the truncating branch).
+		"a.md": "---\ntype: Metric\ntimestamp: 2026-08-01T06:28:39Z\n---\n\n# A\n",
+	})
+	b := loadMigrate(t, dir)
+	plan, err := PlanMigration(b, "reference_agent/gemini-2.5-pro")
+	if err != nil {
+		t.Fatalf("MigratePlan: %v", err)
+	}
+	nm := findNodeMigration(t, plan, "a.md")
+	if nm.Generated == nil {
+		t.Fatalf("a.md: no generated edit planned")
+	}
+	// The whole instant survives — NOT truncated to the bare date 2026-08-01.
+	if nm.Generated.At != "2026-08-01T06:28:39Z" {
+		t.Errorf("generated.at = %q, want the full-precision datetime %q (v0.2 §5)",
+			nm.Generated.At, "2026-08-01T06:28:39Z")
+	}
+}
+
+// Phase-1/phase-2 agreement (#2): the plan value is exactly what the rendered
+// node carries, so --plan, --dry-run, and a real apply cannot disagree. Asserts
+// on the rendered bytes, not just the in-memory plan.
+func TestMigrate_UnquotedTimestampPlanAndRenderAgree_Section5(t *testing.T) {
+	dir := mkMigrateBundle(t, map[string]string{
+		".okf":     "okf_version: 0.1\n",
+		"index.md": "---\nokf_version: \"0.1\"\n---\n\n# KB\n",
+		"log.md":   "# Log\n",
+		"a.md":     "---\ntype: Metric\ntimestamp: 2026-08-01T06:28:39Z\n---\n\n# A\n",
+	})
+	b := loadMigrate(t, dir)
+	plan, err := PlanMigration(b, "human:casey")
+	if err != nil {
+		t.Fatalf("MigratePlan: %v", err)
+	}
+	nm := findNodeMigration(t, plan, "a.md")
+	raw, err := os.ReadFile(filepath.Join(dir, "a.md"))
+	if err != nil {
+		t.Fatalf("read a.md: %v", err)
+	}
+	out, err := renderMigratedNode(raw, *nm)
+	if err != nil {
+		t.Fatalf("renderMigratedNode: %v", err)
+	}
+	// The rendered generated.at must be the same full-precision value as the plan.
+	if !strings.Contains(string(out), nm.Generated.At) {
+		t.Errorf("rendered node does not carry the plan's at=%q:\n%s", nm.Generated.At, out)
+	}
+	if !strings.Contains(string(out), "06:28:39") {
+		t.Errorf("rendered node lost the time-of-day:\n%s", out)
+	}
+}
+
+// Negative control #5 (load-bearing): a legitimate BARE DATE (no time component)
+// migrates unchanged — the fix must NOT invent a T00:00:00Z the source never had.
+func TestMigratePlan_BareDateTimestampStaysBareDate_Section5(t *testing.T) {
+	dir := mkMigrateBundle(t, map[string]string{
+		".okf":     "okf_version: 0.1\n",
+		"index.md": "---\nokf_version: \"0.1\"\n---\n\n# KB\n",
+		"log.md":   "# Log\n",
+		// yaml.v3 resolves a bare date to a time.Time at midnight UTC; the source
+		// carried no time, so the rename must not manufacture one.
+		"a.md": "---\ntype: Metric\ntimestamp: 2026-08-01\n---\n\n# A\n",
+	})
+	b := loadMigrate(t, dir)
+	plan, err := PlanMigration(b, "human:casey")
+	if err != nil {
+		t.Fatalf("MigratePlan: %v", err)
+	}
+	nm := findNodeMigration(t, plan, "a.md")
+	if nm.Generated == nil {
+		t.Fatalf("a.md: no generated edit planned")
+	}
+	if nm.Generated.At != "2026-08-01" {
+		t.Errorf("generated.at = %q, want the bare date %q unchanged (no invented time)",
+			nm.Generated.At, "2026-08-01")
+	}
+	if strings.Contains(nm.Generated.At, "T00:00:00") {
+		t.Errorf("generated.at invented a midnight time the source never had: %q", nm.Generated.At)
+	}
+}
+
+// Negative control #4 (load-bearing): a QUOTED value stays byte-identical
+// pass-through — no re-rendering, and NO offset normalization (+00:00 must NOT
+// become Z).
+func TestMigratePlan_QuotedTimestampByteIdenticalNoOffsetNorm_Section5(t *testing.T) {
+	dir := mkMigrateBundle(t, map[string]string{
+		".okf":     "okf_version: 0.1\n",
+		"index.md": "---\nokf_version: \"0.1\"\n---\n\n# KB\n",
+		"log.md":   "# Log\n",
+		"a.md":     "---\ntype: Metric\ntimestamp: '2026-05-28T22:53:05+00:00'\n---\n\n# A\n",
+	})
+	b := loadMigrate(t, dir)
+	plan, err := PlanMigration(b, "human:casey")
+	if err != nil {
+		t.Fatalf("MigratePlan: %v", err)
+	}
+	nm := findNodeMigration(t, plan, "a.md")
+	if nm.Generated == nil {
+		t.Fatalf("a.md: no generated edit planned")
+	}
+	// The offset form the author wrote is preserved verbatim: NOT normalized to Z.
+	if nm.Generated.At != "2026-05-28T22:53:05+00:00" {
+		t.Errorf("generated.at = %q, want the quoted value verbatim %q (no offset normalization)",
+			nm.Generated.At, "2026-05-28T22:53:05+00:00")
 	}
 }
 

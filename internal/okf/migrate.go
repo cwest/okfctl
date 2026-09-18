@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -131,7 +132,21 @@ func PlanMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 		// already present (idempotence) and a legacy timestamp exists.
 		if _, has := n.Frontmatter["generated"]; !has {
 			if ts, ok := n.Frontmatter["timestamp"]; ok {
-				atStr := frontmatterTimeString(ts)
+				// v0.2 §5 "Provenance, trust, and lifecycle": every timestamp-valued
+				// key is an ISO 8601 datetime with an explicit UTC offset, so the
+				// rename must carry the legacy value across at FULL precision. The
+				// lossless source is the raw frontmatter scalar: yaml.v3 resolves an
+				// unquoted ISO datetime to time.Time (dropping precision if re-rendered
+				// as a bare date) and a quoted one to a string, so re-rendering the
+				// parsed time is asymmetric and lossy. Carrying the source scalar makes
+				// quoted and unquoted identical by construction and never invents a
+				// time-of-day (a bare `2026-08-01` stays `2026-08-01`, not
+				// `2026-08-01T00:00:00Z`). migrateTimeString is the fallback for the
+				// rare case the raw scalar is unreachable (e.g. an unreadable file).
+				atStr, ok := rawTimestampScalar(b.Root, rel)
+				if !ok {
+					atStr = migrateTimeString(ts)
+				}
 				if atStr == "" {
 					atStr = fmt.Sprintf("%v", ts)
 				}
@@ -171,6 +186,62 @@ func PlanMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 		}
 	}
 	return plan, nil
+}
+
+// rawTimestampScalar returns the VERBATIM source scalar of a node's legacy
+// `timestamp` frontmatter key — the lossless value the v0.2 §5 rename must carry
+// across. It re-reads the node file (PlanMigration is pure read, so this keeps
+// that contract) and reads the raw yaml.Node scalar, which preserves the author's
+// exact text regardless of yaml.v3 tag resolution: an unquoted datetime keeps its
+// time-of-day and offset, a quoted value round-trips byte-identical, and a bare
+// date stays a bare date (no invented T00:00:00Z). ok is false when the file is
+// unreadable, has no frontmatter mapping, or the timestamp value is not a scalar —
+// callers fall back to migrateTimeString.
+func rawTimestampScalar(root, rel string) (string, bool) {
+	abs := filepath.Join(root, filepath.FromSlash(rel))
+	raw, err := os.ReadFile(abs) //nolint:gosec // G304: reading a node from the user's own bundle
+	if err != nil {
+		return "", false
+	}
+	yamlBlock, _, ok := splitFrontmatterRaw(raw)
+	if !ok {
+		return "", false
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(yamlBlock, &doc); err != nil {
+		return "", false
+	}
+	m := frontmatterMapping(&doc)
+	if m == nil {
+		return "", false
+	}
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == "timestamp" {
+			v := m.Content[i+1]
+			if v.Kind != yaml.ScalarNode {
+				return "", false
+			}
+			return v.Value, true
+		}
+	}
+	return "", false
+}
+
+// migrateTimeString renders a legacy `timestamp` value for the v0.2 §5
+// `generated.at` rename when the raw source scalar is unreachable. Unlike the
+// display helper frontmatterTimeString (which truncates a time.Time to a bare
+// date for analyze's freshness basis), this preserves full precision: a string
+// passes through verbatim and a time.Time renders with the package
+// timestampLayout (RFC3339, the layout §5 requires). It is the fallback path;
+// the primary path carries the source scalar (rawTimestampScalar).
+func migrateTimeString(v any) string {
+	switch t := v.(type) {
+	case time.Time:
+		return t.UTC().Format(timestampLayout) // time.RFC3339 — v0.2 §5
+	case string:
+		return t
+	}
+	return ""
 }
 
 // MigrateApply applies a plan's deterministic edits to disk, order-preserving
