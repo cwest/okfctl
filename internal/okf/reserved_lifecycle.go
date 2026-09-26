@@ -19,6 +19,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -254,6 +255,101 @@ func subdirEntry(title, url, desc, shape string) string {
 	return line + "\n"
 }
 
+// subdirBulletRE matches one §8 Subdirectories bullet, capturing the link
+// target (group 2) and the trailing text after `](url)` (group 3). The trailing
+// text holds an optional ` - description` and/or the tool-owned shape suffix; we
+// separate those deterministically in preservedSubdirDescriptions rather than
+// with a greedy regex, so a description that itself ends in `(…)` survives.
+var subdirBulletRE = regexp.MustCompile(`^\* \[([^\]]*)\]\(([^)]+/)\)(.*)$`)
+
+// toolShapeSuffixRE matches a tool-owned shape suffix at the END of a bullet's
+// trailing text, STRUCTURALLY (not by equality against a freshly recomputed
+// dirShape). The suffix dirShape renders is always a parenthesised group that
+// begins with the mandatory concept-count segment (`N concept` / `N concepts`,
+// see dirShape) optionally followed by ` · <types/tags>`, then an OPTIONAL
+// ` · N in subtree` total. Anchoring on that count-segment signature is what
+// makes stripping idempotent across builds: when the child's subtree changes,
+// the recomputed suffix differs from the one on disk, but both still match this
+// shape, so the stale one is removed rather than captured into the description
+// (OKF §8: the description is curator-owned/verbatim, the suffix is
+// tool-owned/regenerated). A curator description ending in `(draft)` does NOT
+// begin with a concept count, so it is never mistaken for the suffix.
+var toolShapeSuffixRE = regexp.MustCompile(` \(\d+ concepts?(?: · [^)]*)?\)(?: · \d+ in subtree)?$`)
+
+// stripKnownShapeSuffix removes the tool-owned shape suffix from the tail of a
+// bullet's trailing text. When shape rendering is DISABLED (--no-shape) the tool
+// emits no suffix, so nothing is stripped and a description that happens to end
+// in `(…)` is left fully intact. When shape is enabled, the last structural
+// shape group (see toolShapeSuffixRE) is removed — matched by its shape, not by
+// string-equality against what dirShape would render NOW, so a stale on-disk
+// suffix from a build where the child's subtree differed is still stripped (OKF
+// §8: the suffix is tool-owned and regenerated every build; the description is
+// curator-owned and preserved verbatim).
+func stripKnownShapeSuffix(trailing string, opts IndexShapeOptions) string {
+	if !opts.Enabled {
+		return trailing
+	}
+	return toolShapeSuffixRE.ReplaceAllString(trailing, "")
+}
+
+// preservedSubdirDescriptions parses the EXISTING on-disk index.md for dir and
+// returns the curator-owned subdirectory descriptions, keyed by dir-relative
+// link target (e.g. "topics/"). It is the mechanism behind §8 description
+// preservation across `index build`: the tool regenerates headings, order,
+// titles, entries, and the shape suffix, but a hand-written subdirectory
+// description is curator-owned and must survive verbatim.
+//
+// Keying is by LINK TARGET, never by title — the title is regenerated every
+// build, so a renamed-title entry (or one whose folder was removed) must still
+// resolve its description by the stable `child/` link. A description is the text
+// after ` - ` with the tool-owned shape suffix removed; the suffix is separated
+// STRUCTURALLY (the last parenthesised concept-count group plus its optional
+// `· N in subtree` tail — see stripKnownShapeSuffix), so the split is idempotent
+// even when the child's subtree changed since the index was last written, and a
+// curator description ending in `(…)` is never mistaken for the suffix.
+//
+// An entry whose link target is no longer content-bearing is simply not looked
+// up by the renderer (it iterates the live child set), so a stale description on
+// a vanished folder is never resurrected onto a different one.
+func preservedSubdirDescriptions(b *Bundle, dir string, opts IndexShapeOptions) map[string]string {
+	out := map[string]string{}
+	idxRel := "index.md"
+	if dir != "" {
+		idxRel = dir + "/index.md"
+	}
+	idx, ok := b.Reserved[idxRel]
+	if !ok || idx == nil {
+		return out
+	}
+	for _, line := range strings.Split(idx.Body, "\n") {
+		m := subdirBulletRE.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		linkTarget := m[2] // e.g. "topics/"
+		trailing := m[3]   // e.g. " - Parts of speech. (1 concept · Concept)"
+		// Strip the tool-owned shape suffix STRUCTURALLY (see stripKnownShapeSuffix
+		// / toolShapeSuffixRE): the last parenthesised concept-count group plus its
+		// optional `· N in subtree` tail. This is idempotent even when the child's
+		// subtree changed since the on-disk index was written — the recomputed
+		// suffix differs, but the stale one still matches the shape and is removed
+		// rather than captured into the description. Under --no-shape nothing is
+		// stripped, so a description ending in `(…)` survives intact.
+		trailing = stripKnownShapeSuffix(trailing, opts)
+		// What remains is either "" (bare entry) or " - description".
+		desc := strings.TrimPrefix(trailing, " - ")
+		if desc == trailing {
+			// No " - " present: bare entry, no curator description.
+			continue
+		}
+		desc = strings.TrimSpace(desc)
+		if desc != "" {
+			out[linkTarget] = desc
+		}
+	}
+	return out
+}
+
 // RenderDirIndex produces the deterministic index.md body for one directory of
 // the bundle (dir is bundle-relative slash form; "" is the bundle root), per OKF
 // §8: it enumerates ONLY that directory's own immediate contents — its
@@ -295,13 +391,26 @@ func RenderDirIndexWithOptions(b *Bundle, dir string, opts IndexShapeOptions) st
 
 	if len(kids) > 0 {
 		sb.WriteString("\n## Subdirectories\n\n")
+		// Curator-owned subdirectory descriptions preserved from the existing
+		// on-disk index (OKF §8: the description is curator-owned; headings,
+		// order, titles, entries, and the shape suffix are tool-owned). Keyed by
+		// dir-relative link target so a regenerated title still resolves.
+		preserved := preservedSubdirDescriptions(b, dir, opts)
 		for _, child := range kids {
 			title, desc := childDirIndexTitleDesc(b, child)
+			// Precedence (§8): a preserved on-disk description wins; the child
+			// index's frontmatter description is only the FALLBACK, so a first
+			// build still honors it and every later build keeps the preserved
+			// value even though nested indexes carry no frontmatter (§8).
+			linkTarget := path.Base(child) + "/"
+			if pd, ok := preserved[linkTarget]; ok {
+				desc = pd
+			}
 			// Dir-relative link: the child's base name plus a trailing slash.
 			// The shape suffix trails the §8 `[Title](url) - description`
 			// grammar on the SAME bullet, so a consumer reading only that
 			// grammar loses nothing.
-			sb.WriteString(subdirEntry(title, path.Base(child)+"/", desc, dirShape(b, child, opts)))
+			sb.WriteString(subdirEntry(title, linkTarget, desc, dirShape(b, child, opts)))
 		}
 	}
 	if len(concepts) > 0 {
