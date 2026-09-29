@@ -75,7 +75,14 @@ Parse the existing file into: pre-heading preamble (everything before the first
 - **Regroup** any legacy `- YYYY-MM-DD — msg` lines found in the preamble into
   `* msg` entries under their date group, merging into an existing `## date`
   group when present, preserving intra-group order, keeping the whole log
-  newest-first (AC-L1). Idempotent and lossless (AC-L2).
+  newest-first (AC-L1). Idempotent and lossless (AC-L2). A legacy bullet carries
+  its **continuation block** — every following line (indented tables, nested
+  lists, multi-line prose, embedded blank lines) up to the next top-level bullet
+  or heading — into its date group verbatim. Without this the block is stranded
+  in the preamble above the first heading, detached from its entry and date:
+  silent history corruption of an append-only record that `validate` cannot see
+  (it only inspects headings). A log whose legacy bullets are all single-line
+  regroups byte-identically to the plain `* msg` form.
 - **Insert** the new entry as `* <message>` (no inline date): if the newest date
   heading equals today (UTC), prepend to that group; else insert `## <today>` +
   `* <message>` above the first heading (AC-A2).

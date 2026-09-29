@@ -50,7 +50,15 @@ type logGroup struct {
 
 type legacyEntry struct {
 	date string
-	msg  string
+	// text is the entry's VERBATIM multi-line body with the `- YYYY-MM-DD — `
+	// leader already rewritten to `* ` — the bullet's message plus every indented
+	// continuation line (tables, nested lists, prose) up to the next top-level
+	// bullet or heading. Carrying the block with its bullet is load-bearing: the
+	// real corpus has legacy sweep bullets with embedded ledger tables, and
+	// lifting only the bullet line strands the table above the first heading,
+	// detaching it from its entry and date (silent history corruption of an
+	// append-only record).
+	text string
 }
 
 // legacyDatedBulletRe matches a legacy `- YYYY-MM-DD — msg` bullet (an em dash
@@ -76,6 +84,27 @@ func parseLog(content string) *logModel {
 	var cur *logGroup
 	var pending []string // the entry block currently being accumulated in cur
 
+	// A legacy dated bullet in the preamble owns every following line — indented
+	// tables, nested lists, prose, blank lines — up to the next top-level bullet
+	// or heading. pendingLegacy accumulates that verbatim block so it travels
+	// with its bullet into a date group rather than being stranded in the
+	// preamble. legacyDate is the ISO date parsed from the bullet leader.
+	var pendingLegacy []string
+	var legacyDate string
+
+	flushLegacy := func() {
+		if len(pendingLegacy) == 0 {
+			return
+		}
+		// Trim trailing blank lines from the legacy block.
+		for len(pendingLegacy) > 0 && strings.TrimSpace(pendingLegacy[len(pendingLegacy)-1]) == "" {
+			pendingLegacy = pendingLegacy[:len(pendingLegacy)-1]
+		}
+		lg.legacy = append(lg.legacy, legacyEntry{date: legacyDate, text: strings.Join(pendingLegacy, "\n")})
+		pendingLegacy = nil
+		legacyDate = ""
+	}
+
 	flush := func() {
 		if cur == nil || len(pending) == 0 {
 			pending = nil
@@ -93,6 +122,7 @@ func parseLog(content string) *logModel {
 
 	for _, line := range lines {
 		if strings.HasPrefix(line, "## ") {
+			flushLegacy()
 			flush()
 			date := strings.TrimSpace(strings.TrimPrefix(line, "## "))
 			cur = &logGroup{date: date}
@@ -100,9 +130,30 @@ func parseLog(content string) *logModel {
 			continue
 		}
 		if cur == nil {
-			// Preamble region. Lift legacy dated bullets out; keep the rest.
+			// Preamble region. A legacy `- YYYY-MM-DD — msg` bullet starts a new
+			// legacy entry; its continuation block accumulates until the next
+			// top-level bullet or heading. Everything else is real preamble —
+			// unless we are mid-legacy-block, in which case it belongs to that
+			// entry (its indented table/body).
 			if m := legacyDatedBulletRe.FindStringSubmatch(line); m != nil {
-				lg.legacy = append(lg.legacy, legacyEntry{date: m[1], msg: m[2]})
+				flushLegacy()
+				legacyDate = m[1]
+				// Rewrite the `- YYYY-MM-DD — ` leader to `* <msg>` in place, so the
+				// entry renders as a §9 bullet while its continuation stays verbatim.
+				pendingLegacy = []string{"* " + m[2]}
+				continue
+			}
+			if len(pendingLegacy) > 0 {
+				// A top-level bullet (a `* `/`- ` at column 0 that is NOT a legacy
+				// dated bullet) ends the current legacy block and is itself real
+				// preamble. Anything else (indented content, blank line, prose)
+				// continues the legacy entry.
+				if isTopLevelBullet(line) {
+					flushLegacy()
+					lg.preamble = append(lg.preamble, line)
+					continue
+				}
+				pendingLegacy = append(pendingLegacy, line)
 				continue
 			}
 			lg.preamble = append(lg.preamble, line)
@@ -126,6 +177,7 @@ func parseLog(content string) *logModel {
 		}
 		pending = append(pending, line)
 	}
+	flushLegacy()
 	flush()
 
 	// Drop a single trailing blank line in the preamble; render adds exactly one
@@ -176,7 +228,7 @@ func (lg *logModel) addEntry(today, message string) {
 	// both the pre-existing group content and the legacy order intact.
 	for _, le := range lg.legacy {
 		g := lg.groupFor(le.date)
-		g.entries = append(g.entries, "* "+le.msg)
+		g.entries = append(g.entries, le.text)
 	}
 	lg.legacy = nil
 
