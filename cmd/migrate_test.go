@@ -28,7 +28,7 @@ func migrateFixtureFiles() map[string]string {
 	return map[string]string{
 		".okf":     "okf_version: 0.1\n",
 		"index.md": "---\nokf_version: \"0.1\"\n---\n\n# Knowledge Base\n",
-		"log.md":   "# Change Log\n\n_No entries yet._\n",
+		"log.md":   "# Change Log\n",
 		"a.md": "---\ntype: Metric\ntimestamp: '2026-05-28T22:53:05+00:00'\nkeep_me: preserved\n---\n\n" +
 			"# Definition\n\nThe metric.\n\n# Citations\n" +
 			"- https://wiki.acme/finance/fpa-handbook\n" +

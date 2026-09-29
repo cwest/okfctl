@@ -22,7 +22,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 )
 
 // neighborhood returns the top-level directory of a bundle-relative slash path,
@@ -534,9 +533,25 @@ func rel(root, abs string) string {
 	return abs
 }
 
-// AppendLog prepends a timestamped entry to log.md (newest-first), creating the
-// file with a heading when absent. A multi-line message is flattened to its first
-// line to keep the log well-formed; an empty message is rejected.
+// AppendLog records a change in log.md as an OKF v0.2 §9 date-grouped entry
+// (newest-first), creating the file with a title when absent.
+//
+// §9 shape: a `# ` title, then `## YYYY-MM-DD` date headings each followed by
+// `* <message>` entries, newest date first. AppendLog:
+//   - keeps everything before the first `## ` heading verbatim (any H1 title),
+//     writing logHeader only when creating a new file, and drops the scaffold
+//     placeholder;
+//   - regroups legacy `- YYYY-MM-DD — msg` bullets (the pre-fix inline-dated
+//     form) into `* msg` entries under their date group, merging into an
+//     existing `## date` group when present — so a log okfctl wrote before this
+//     change converges to §9 the next time it is written (the invariant:
+//     validate never rejects a log okfctl wrote);
+//   - inserts the new entry as `* <message>` (no inline date): into today's
+//     group when the newest heading is today, else under a new `## <today>`
+//     heading inserted above the first heading.
+//
+// A multi-line message is flattened to its first line; an empty message is
+// rejected.
 func AppendLog(root, message string) error {
 	message = strings.TrimSpace(message)
 	if i := strings.IndexByte(message, '\n'); i >= 0 {
@@ -545,19 +560,19 @@ func AppendLog(root, message string) error {
 	if message == "" {
 		return fmt.Errorf("log message must not be empty")
 	}
-	entry := fmt.Sprintf("- %s — %s\n", time.Now().UTC().Format("2006-01-02"), message)
+	today := nowUTC().Format("2006-01-02")
 
 	p := filepath.Join(root, "log.md")
 	existing, err := os.ReadFile(p) //nolint:gosec // G304: reading the user's own bundle log.md
 	if err != nil {
-		return os.WriteFile(p, []byte(logHeader+entry), 0o644) //nolint:gosec // G306: log.md is shareable bundle content; 0o644 is intended
+		// Create a fresh §9 log with the default title.
+		out := logHeader + "## " + today + "\n* " + message + "\n"
+		return os.WriteFile(p, []byte(out), 0o644) //nolint:gosec // G306: log.md is shareable bundle content; 0o644 is intended
 	}
-	// Strip the header, then drop the scaffold placeholder when it is the only
-	// content — otherwise the fresh-scaffold "no entries yet" hint stays pinned
-	// below every real entry.
-	rest := strings.TrimPrefix(string(existing), logHeader)
-	rest = strings.TrimPrefix(rest, logPlaceholder)
-	return os.WriteFile(p, []byte(logHeader+entry+rest), 0o644) //nolint:gosec // G306: log.md is shareable bundle content; 0o644 is intended
+
+	lg := parseLog(string(existing))
+	lg.addEntry(today, message)
+	return os.WriteFile(p, []byte(lg.render()), 0o644) //nolint:gosec // G306: log.md is shareable bundle content; 0o644 is intended
 }
 
 // ReadLog returns the log.md body (empty string if the file is absent).

@@ -87,26 +87,41 @@ func validateReserved(b *Bundle) []Finding {
 	var out []Finding
 	for _, path := range paths {
 		n := b.Reserved[path]
-		if filepath.Base(path) != "index.md" {
-			continue
+		switch filepath.Base(path) {
+		case "index.md":
+			out = append(out, validateReservedIndex(path, n)...)
+		case "log.md":
+			out = append(out, validateReservedLog(path, n)...)
 		}
-		if n.Frontmatter == nil {
-			out = append(out, Finding{Path: path, Message: "unparseable frontmatter"})
-			continue
-		}
-		if len(n.Frontmatter) == 0 {
-			continue // §8: no frontmatter — conformant.
-		}
-		if path != "index.md" {
-			// §12's carve-out is bundle-root-only; a non-root index may carry
-			// no frontmatter at all.
-			out = append(out, Finding{Path: path, Message: "index files contain no frontmatter (§8); frontmatter is permitted only on the bundle-root index and only for okf_version (§12)"})
-			continue
-		}
-		// Bundle-root index: the block must be exactly {okf_version}.
-		for _, key := range extraIndexKeys(n.Frontmatter) {
-			out = append(out, Finding{Path: path, Message: "bundle-root index frontmatter may contain only okf_version (§12); found disallowed key: " + key})
-		}
+	}
+	return out
+}
+
+// validateReservedIndex enforces the §8/§12 frontmatter rule on a reserved
+// index.md. A present-but-empty frontmatter block (`---\n---`) is a violation,
+// not "no block": HasFrontmatterBlock distinguishes the two even though both
+// parse to an empty map.
+func validateReservedIndex(path string, n *Node) []Finding {
+	var out []Finding
+	if n.Frontmatter == nil {
+		return append(out, Finding{Path: path, Message: "unparseable frontmatter"})
+	}
+	if !n.HasFrontmatterBlock {
+		return out // §8: no frontmatter block — conformant.
+	}
+	if path != "index.md" {
+		// §12's carve-out is bundle-root-only; a non-root index may carry no
+		// frontmatter block at all (empty or keyed).
+		return append(out, Finding{Path: path, Message: "index files contain no frontmatter (§8); frontmatter is permitted only on the bundle-root index and only for okf_version (§12)"})
+	}
+	// Bundle-root index: a present block must be exactly {okf_version}. An empty
+	// block has no okf_version, so it is caught by extraIndexKeys returning no
+	// extras AND okf_version being absent.
+	if _, ok := n.Frontmatter["okf_version"]; !ok {
+		out = append(out, Finding{Path: path, Message: "bundle-root index frontmatter must contain okf_version (§12); found an empty or okf_version-absent block"})
+	}
+	for _, key := range extraIndexKeys(n.Frontmatter) {
+		out = append(out, Finding{Path: path, Message: "bundle-root index frontmatter may contain only okf_version (§12); found disallowed key: " + key})
 	}
 	return out
 }

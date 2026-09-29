@@ -17,7 +17,6 @@ package okf
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -38,35 +37,18 @@ import (
 // TestConformance_GeneratedBundleValidatesClean goes RED — the closed loop
 // (generate → validate) that never existed at authoring time now exists.
 
-// isoDateHeading matches an OKF §9 date heading: a `## ` line whose text is an
-// ISO-8601 YYYY-MM-DD date.
-var isoDateHeading = regexp.MustCompile(`^## \d{4}-\d{2}-\d{2}$`)
-
-// assertLogConformsSection9 checks a log.md body against the OKF §9 grammar:
-// a leading `# ` title, then zero or more `## YYYY-MM-DD` date headings each
-// followed by list entries, newest date first. It tolerates the scaffold's
-// "no entries yet" placeholder (a log with no entries is still well-formed).
+// assertLogConformsSection9 checks a log.md body against the OKF §9 grammar by
+// running the PRODUCTION validator (validateReservedLog) rather than duplicating
+// the grammar here. Duplicated test logic is exactly why the parent defect
+// shipped green: the old helper only inspected `## ` lines, so it accepted the
+// impossible date `2025-13-45` and passed a heading-less log vacuously. Routing
+// through the production validator means this helper cannot drift from the rule
+// okfctl actually enforces.
 func assertLogConformsSection9(t *testing.T, body string) {
 	t.Helper()
-	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
-	if len(lines) == 0 || !strings.HasPrefix(lines[0], "# ") {
-		t.Fatalf("§9: log.md must open with a `# ` title heading; got:\n%s", body)
-	}
-	var dates []string
-	for _, line := range lines[1:] {
-		if strings.HasPrefix(line, "## ") {
-			if !isoDateHeading.MatchString(line) {
-				t.Errorf("§9: date heading must be `## YYYY-MM-DD`; got %q in:\n%s", line, body)
-			}
-			dates = append(dates, strings.TrimPrefix(line, "## "))
-		}
-	}
-	// Newest-first: dates must be in non-increasing order. ISO-8601 sorts
-	// lexicographically, so a plain string comparison suffices.
-	for i := 1; i < len(dates); i++ {
-		if dates[i] > dates[i-1] {
-			t.Errorf("§7: log entries must be newest-first; %q precedes newer %q in:\n%s", dates[i-1], dates[i], body)
-		}
+	n := &Node{Path: "log.md", Frontmatter: map[string]any{}, Body: body, HasFrontmatterBlock: false}
+	if fs := validateReservedLog("log.md", n); len(fs) != 0 {
+		t.Errorf("§9: log.md body is not conformant; findings %v in:\n%s", fs, body)
 	}
 }
 

@@ -11,6 +11,26 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+### Fixed
+
+- `validate` now enforces OKF v0.2 §9 on every reserved `log.md` at any depth:
+  each `## ` date heading must be a valid ISO-8601 `YYYY-MM-DD` (rejecting
+  impossible dates like `2025-13-45` and non-dates like `last Tuesday`),
+  consecutive headings must be newest-first, a log with entries must carry at
+  least one date heading, a log must open with a `# ` title (a frontmatter block
+  is rejected), and legacy inline-dated bullets are flagged for regrouping. An
+  empty log, a title-only log, and the `bundle init` scaffold stay conformant.
+  Also closes a §8 gap where a non-root `index.md` with an empty frontmatter
+  block (`---` immediately followed by `---`) slipped through. (#176)
+- `log append` now writes §9 date-grouped entries — `## <today>` headings with
+  `* <message>` items, newest-first — instead of inline-dated bullets, and
+  preserves any existing `# ` title rather than stacking a second `# Change Log`
+  header over it. On write it regroups pre-existing legacy `- YYYY-MM-DD — msg`
+  bullets under their date headings (merging into an existing group, idempotent
+  and lossless). Every node-mutation command that records to the log inherits the
+  §9 shape. Together with the `validate` change this holds the invariant that
+  `okfctl validate` never rejects a log okfctl wrote. (#177)
+
 ## [0.4.0] - 2026-08-19
 
 ### Added

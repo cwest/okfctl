@@ -23,6 +23,12 @@ type Node struct {
 	Path        string         // bundle-relative, e.g. "wine/tannin.md"
 	Frontmatter map[string]any // parsed YAML frontmatter
 	Body        string         // markdown after the frontmatter
+	// HasFrontmatterBlock records whether a leading `---\n ... \n---` block was
+	// physically present in the source, independent of whether it carried any
+	// keys. Frontmatter is an empty (non-nil) map for BOTH "no block" and an
+	// empty block (`---\n---`); this bit is the only way to tell them apart,
+	// which §8/§12 validation needs (a present empty block is a violation).
+	HasFrontmatterBlock bool
 }
 
 // Type returns the node's type value ("" if absent or not a string).

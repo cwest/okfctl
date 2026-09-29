@@ -25,13 +25,23 @@ import (
 // Markdown body. Missing frontmatter yields an empty (non-nil) map and no error;
 // malformed YAML frontmatter is an error.
 func ParseFrontmatter(src []byte) (map[string]any, string, error) {
-	fm := map[string]any{}
+	fm, body, _, err := ParseFrontmatterDetailed(src)
+	return fm, body, err
+}
+
+// ParseFrontmatterDetailed is ParseFrontmatter plus the presence bit: present is
+// true when a leading `---\n ... \n---` block was physically found, regardless
+// of whether it carried any keys. An empty block (`---\n---`) parses to an empty
+// map exactly like "no block", so present is the only signal that distinguishes
+// them — §8/§12 validation of reserved index files depends on that distinction.
+func ParseFrontmatterDetailed(src []byte) (fm map[string]any, body string, present bool, err error) {
+	fm = map[string]any{}
 	rest, ok := splitFrontmatter(src)
 	if !ok {
-		return fm, string(src), nil
+		return fm, string(src), false, nil
 	}
-	if err := yaml.Unmarshal(rest.yamlBlock, &fm); err != nil {
-		return nil, "", err
+	if uerr := yaml.Unmarshal(rest.yamlBlock, &fm); uerr != nil {
+		return nil, "", true, uerr
 	}
 	// yaml.Unmarshal of a null document (a bare `!` tag, a literal `null`, or a
 	// block that reduces to null) into a map leaves fm nil and returns NO error.
@@ -43,7 +53,7 @@ func ParseFrontmatter(src []byte) (map[string]any, string, error) {
 	if fm == nil {
 		fm = map[string]any{}
 	}
-	return fm, string(rest.body), nil
+	return fm, string(rest.body), true, nil
 }
 
 type split struct {
