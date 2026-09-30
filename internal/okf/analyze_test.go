@@ -646,6 +646,34 @@ func TestCitationCount_LabelStyleMarkers(t *testing.T) {
 			want: 0,
 		},
 		{
+			name: "line-start inline markdown link not counted (negative control)",
+			// A `# Citations` section that carries only a line-start
+			// cross-reference link `[text](url)` has zero citations. The widened
+			// bracket class must NOT count a markdown link as an entry — that is
+			// the mirror-image over-count of the bare-alphanumeric under-count.
+			body: "Prose.\n\n# Citations\n\n" +
+				"[science of doing hard things](/research/science-of-doing-hard-things.md)\n",
+			want: 0,
+		},
+		{
+			name: "line-start reference-style markdown link not counted",
+			body: "Prose.\n\n# Citations\n\n" +
+				"[some node][ref-1]\n",
+			want: 0,
+		},
+		{
+			name: "genuine entry counted, sibling link line excluded (corpus shape)",
+			// The exact false-departure shape from the corpus (default-mode-network,
+			// hormesis, llms-txt): a line-start cross-reference link followed by a
+			// genuine `[1] VERIFIED — …` numbered entry. Only the real entry counts,
+			// so the node stays at 1 (single_citation), not 2.
+			body: "Prose.\n\n# Citations\n\n" +
+				"[science of doing hard things](/research/science-of-doing-hard-things.md)\n" +
+				"\n" +
+				"[1] VERIFIED — Author A, Author B (2006), Title, Journal.\n",
+			want: 1,
+		},
+		{
 			name: "no citations section yields zero",
 			body: "Prose with no citations heading at all.\n",
 			want: 0,

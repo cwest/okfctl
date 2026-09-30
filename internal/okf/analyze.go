@@ -416,16 +416,27 @@ func bodyLineCount(body string) int {
 // label-style marker whose brackets carry spaces, em-dashes and punctuation
 // (e.g. `- **[VERIFIED — cloned + RUN]** …`, widely used in the corpus) is
 // counted, not only bare alphanumeric keys like `[1]`/`[P]`.
+//
+// citationLinkRe rejects a line whose leading `[...]` token is an ordinary
+// markdown LINK — inline `[text](url)` or reference `[text][ref]` — rather than a
+// citation marker. A `# Citations` section routinely carries line-start
+// cross-reference links to sibling nodes; those are navigation, not sources, and
+// counting them would inflate the coverage signal (the mirror-image of the
+// bare-alphanumeric bug that only counted `[1]`). Go's regexp (RE2) has no
+// lookahead, so the link case is detected by a separate anchored pattern and the
+// line is skipped, exactly as a legend line is.
 var (
 	citationEntryRe   = regexp.MustCompile(`^\s*(?:[-*]\s*)?(?:\*\*)?\[[^\]\n]+\]`)
 	citationOrderedRe = regexp.MustCompile(`^\s*(?:[-*]\s*)?\d+\.\s+\S`)
 	citationLegendRe  = regexp.MustCompile(`^\s*(?:[-*]\s*)?(?:\*\*)?\[[^\]\n]+\](?:\*\*)?\s*=`)
+	citationLinkRe    = regexp.MustCompile(`^\s*(?:[-*]\s*)?(?:\*\*)?\[[^\]\n]+\](?:\*\*)?[([]`)
 	citationsHeadRe   = regexp.MustCompile(`(?im)^#+\s*Citations\s*$`)
 )
 
 // citationCount counts distinct entry lines under a "# Citations" heading. A
-// status-key legend line ([key] = ...) is not an entry. Counting is per line so
-// a line matching multiple styles counts once.
+// status-key legend line ([key] = ...) and a line-start markdown link
+// ([text](url) / [text][ref]) are not entries. Counting is per line so a line
+// matching multiple styles counts once.
 func citationCount(body string) int {
 	loc := citationsHeadRe.FindStringIndex(body)
 	if loc == nil {
@@ -434,7 +445,7 @@ func citationCount(body string) int {
 	section := body[loc[1]:]
 	count := 0
 	for _, line := range strings.Split(section, "\n") {
-		if citationLegendRe.MatchString(line) {
+		if citationLegendRe.MatchString(line) || citationLinkRe.MatchString(line) {
 			continue
 		}
 		if citationEntryRe.MatchString(line) || citationOrderedRe.MatchString(line) {
