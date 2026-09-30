@@ -583,6 +583,83 @@ func TestAnalyze_SummaryCountsNodes(t *testing.T) {
 	}
 }
 
+// TestCitationCount_LabelStyleMarkers proves citationCount() counts the corpus's
+// widely-used label-style `[...]` markers (labels carrying spaces, em-dashes and
+// punctuation), not only bare alphanumeric keys like `[1]`/`[P]`. It also pins
+// the existing numbered/bullet-numbered styles as a regression control and the
+// legend-line exclusion ([LABEL] = definition) as the negative control that must
+// stay silent.
+func TestCitationCount_LabelStyleMarkers(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want int
+	}{
+		{
+			name: "label-style markers with spaces and em-dash (bulleted+bold)",
+			// The reproduction shape from the corpus: `- **[VERIFIED — …]** …`.
+			body: "Prose.\n\n# Citations\n\n" +
+				"- **[VERIFIED — cloned + RUN on home-m2u-01]** `petergyang/human-review` works.\n" +
+				"- **[VERIFIED — GitHub compare API]** `quinn-code-agent/human-review`, matches.\n",
+			want: 2,
+		},
+		{
+			name: "bare label markers without bullet or bold",
+			body: "Prose.\n\n# Citations\n\n" +
+				"[VERIFIED — checked] a source.\n" +
+				"[SEEN in prod] another source.\n",
+			want: 2,
+		},
+		{
+			name: "numbered entries still counted (regression control)",
+			body: "Prose.\n\n# Citations\n\n[1] One.\n[2] Two.\n",
+			want: 2,
+		},
+		{
+			name: "bullet-numbered entries still counted (regression control)",
+			body: "Prose.\n\n# Citations\n\n- [1] One.\n- [2] Two.\n",
+			want: 2,
+		},
+		{
+			name: "bare alphanumeric label keys still counted",
+			body: "Prose.\n\n# Citations\n\n[S1] One.\n- [P] Two.\n",
+			want: 2,
+		},
+		{
+			name: "ordered-list entries still counted",
+			body: "Prose.\n\n# Citations\n\n1. One source.\n2. Two source.\n",
+			want: 2,
+		},
+		{
+			name: "legend line excluded (negative control)",
+			// A `[LABEL] = definition` legend line defines a status key and must
+			// NOT be counted as a citation entry, even in label style.
+			body: "Prose.\n\n# Citations\n\n" +
+				"[VERIFIED] = checked against a primary source\n" +
+				"- **[VERIFIED — cloned + RUN]** an actual cited source.\n",
+			want: 1,
+		},
+		{
+			name: "legend line with bold+em-dash label excluded",
+			body: "Prose.\n\n# Citations\n\n" +
+				"**[VERIFIED — status key]** = the meaning of the key\n",
+			want: 0,
+		},
+		{
+			name: "no citations section yields zero",
+			body: "Prose with no citations heading at all.\n",
+			want: 0,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := citationCount(tc.body); got != tc.want {
+				t.Errorf("citationCount() = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func pathIn(items []AnalyzeNodeRef, path string) bool {
 	for _, it := range items {
 		if it.Path == path {

@@ -411,11 +411,15 @@ func bodyLineCount(body string) int {
 
 // citationEntryRe / citationOrderedRe / citationLegendRe mirror the reference
 // corpus.py citation markers: bracketed keys ([1], [S1], [VERIFIED], bullet/bold
-// variants), ordered-list entries (1., 2.), minus status-key legend lines.
+// variants), ordered-list entries (1., 2.), minus status-key legend lines. The
+// bracket class is `[^\]\n]+` — a non-empty, single-line `[...]` token — so a
+// label-style marker whose brackets carry spaces, em-dashes and punctuation
+// (e.g. `- **[VERIFIED — cloned + RUN]** …`, widely used in the corpus) is
+// counted, not only bare alphanumeric keys like `[1]`/`[P]`.
 var (
-	citationEntryRe   = regexp.MustCompile(`^\s*(?:[-*]\s*)?(?:\*\*)?\[[A-Za-z0-9]+\]`)
+	citationEntryRe   = regexp.MustCompile(`^\s*(?:[-*]\s*)?(?:\*\*)?\[[^\]\n]+\]`)
 	citationOrderedRe = regexp.MustCompile(`^\s*(?:[-*]\s*)?\d+\.\s+\S`)
-	citationLegendRe  = regexp.MustCompile(`^\s*(?:[-*]\s*)?(?:\*\*)?\[[A-Za-z0-9]+\](?:\*\*)?\s*=`)
+	citationLegendRe  = regexp.MustCompile(`^\s*(?:[-*]\s*)?(?:\*\*)?\[[^\]\n]+\](?:\*\*)?\s*=`)
 	citationsHeadRe   = regexp.MustCompile(`(?im)^#+\s*Citations\s*$`)
 )
 
