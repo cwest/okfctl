@@ -11,6 +11,21 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+### Added
+
+- A knowledge bundle can now reference a separate type-template bundle instead of
+  vendoring one. Declare it with a `templates: <path>` key in the bundle's `.okf`
+  sidecar (resolved relative to the bundle root), or pass `--templates-from <dir>`
+  to `validate`, `node new`, `template list`, and `template show` (the flag
+  overrides the sidecar key). Referenced templates are folded in and local `Type
+  Template` nodes overlay them (local wins per `target_type`); `template list` and
+  `template show` report each template's `source`, and `template list` flags a
+  local entry that shadows a referenced one. The referenced bundle is never part
+  of the consumer's node set and is never written, so `validate`, `lint`, `index
+  build`, and `index check` are byte-identical with or without the key; a
+  reference that cannot be loaded is a hard error naming the path (plain
+  `validate` without `--templates` never consults the key). (#182)
+
 ### Fixed
 
 - `validate` now enforces OKF v0.2 §9 on every reserved `log.md` at any depth:

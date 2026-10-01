@@ -33,6 +33,13 @@ type Template struct {
 	RecommendedFields []string
 	BodySections      []string
 	Path              string // bundle-relative path of the template node
+	// Source records where the resolved template came from (PRD §9.2): for a
+	// template folded from a referenced bundle it is the referenced path joined
+	// with the template's in-bundle path (e.g. "../tpl/playbook.md"); for a
+	// local Type Template node it is the node's own bundle-relative path. It is
+	// set by ResolveTemplates; Templates() alone leaves it empty (callers that
+	// want provenance go through the resolver).
+	Source string
 }
 
 // Templates folds every `type: Type Template` node in the bundle into a map
@@ -75,8 +82,21 @@ type DriftFinding struct {
 // absent. recommended_fields are advisory and never reported here. A node whose
 // type has no governing template never drifts (unknown types are fine, §7.4).
 // Output is deterministic (sorted by node path, then finding order).
+//
+// This is the single-bundle read: only the consumer's own local Type Template
+// nodes govern. For the referenced-bundle overlay (§9.2) use TemplateDriftWith
+// with a resolved template map.
 func TemplateDrift(b *Bundle) []DriftFinding {
-	tmpls := Templates(b)
+	return TemplateDriftWith(b, Templates(b))
+}
+
+// TemplateDriftWith reports template drift against an explicit template map,
+// letting the caller supply the §9.2-resolved set (referenced bundle folded in,
+// local overlaid) instead of only the consumer's local Type Template nodes. The
+// drift semantics are identical to TemplateDrift; only the governing template
+// source differs. A node whose type is itself `Type Template` is never governed
+// by a template (a template is not governed by itself).
+func TemplateDriftWith(b *Bundle, tmpls map[string]Template) []DriftFinding {
 	if len(tmpls) == 0 {
 		return nil
 	}

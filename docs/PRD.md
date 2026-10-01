@@ -238,8 +238,12 @@ graph TD
 - **`index build`**—regenerate `index.md` from the current bundle for progressive
   disclosure. **`index check`**—verify `index.md` matches the bundle.
 - **`log append`**—add a conformant change entry. **`log show`**—print history.
-- **`template list`** / **`template show`**—read the linked type-template bundle
-  (§9.3). Read-only; templates are authored as ordinary OKF nodes.
+- **`template list`** / **`template show`**—read the type templates a bundle
+  declares or references (§9.2/§9.3). A bundle references a separate type-template
+  bundle via its `.okf` `templates: <path>` key (or `--templates-from <dir>`,
+  which overrides it); referenced templates are folded in and local `Type
+  Template` nodes overlay them (local wins per target type). Read-only; templates
+  are authored as ordinary OKF nodes.
 
 ### 6.2 Validation vs. curation—two distinct verbs
 
@@ -523,6 +527,41 @@ commands as any knowledge bundle. It has its own `index.md`, its own `log.md`, i
 own git history, and its own `okf_version`. A team publishes it once—say
 `cwest/okf-type-templates`—and every knowledge bundle references it. Forking a
 convention is forking a git repo, not patching the tool.
+
+**Referencing a separate template bundle.** A knowledge bundle points at a
+separate type-template bundle with a `templates: <path>` key in its `.okf`
+sidecar, resolved relative to the bundle root:
+
+```yaml
+# mykb/.okf
+okf_version: 0.2
+templates: ../okf-type-templates
+```
+
+`--templates-from <dir>` on `validate`, `node new`, `template list`, and
+`template show` overrides the sidecar key (and works with no key at all). When a
+reference is in effect, `okfctl` loads the referenced bundle **on its own**, folds
+its templates, then overlays the consumer's local `Type Template` nodes; **local
+wins per `target_type`**, and `template list` flags a local entry that shadows a
+referenced one. Each resolved template records its `source`—the referenced path
+(e.g. `../okf-type-templates/playbook.md`) or the local node path.
+
+The reference is a read-only overlay, and it is deliberately narrow:
+
+- The referenced bundle is **never** part of the consumer's node set and is
+  **never** written. An out-of-tree reference (`../okf-type-templates`) is simply
+  not on the consumer's walk, so `validate`, `lint`, `index build`, and `index
+  check` behave **byte-for-byte identically** to the same consumer without the key.
+  The key changes template resolution only—it adds **no** skip to the loader, so
+  an in-tree reference is still walked as ordinary consumer content.
+- A reference that cannot be loaded as a bundle directory is a hard error that
+  names the offending path, for every template command (`validate --templates`,
+  `node new --type …`, `template list`, `template show`). Plain `validate`
+  (without `--templates`) never consults the key, so a bundle with a broken
+  reference still passes the spec floor.
+
+Out of scope for this mechanism (tracked separately): git-URL/registry
+resolution, pinning, caching, and multiple referenced bundles.
 
 ### 9.3 Scaffolding—`node new --type` reads the template
 

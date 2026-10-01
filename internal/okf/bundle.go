@@ -190,23 +190,15 @@ func Load(root string, opts ...LoadOption) (*Bundle, error) {
 }
 
 // readOkfVersion returns the okf_version declared in the bundle's .okf file, or
-// SpecVersion if the file is absent or carries no okf_version key. The .okf is a
-// small YAML document (e.g. "okf_version: 0.1"); a missing or unreadable file is
-// not an error here — Load stays lenient and falls back to the build's version.
+// SpecVersion if the file is absent or carries no (non-empty) okf_version key.
+// The .okf is a small YAML document (e.g. "okf_version: 0.1"); a missing or
+// unreadable file is not an error here — Load stays lenient and falls back to
+// the build's version. It reads through the generalized sidecar parser
+// (readOkfSidecar) so a bundle carrying other sidecar keys — e.g. a §9.2
+// `templates` reference — does not change the version read.
 func readOkfVersion(root string) string {
-	// root is the user's bundle root; reading its .okf sidecar is intended.
-	data, err := os.ReadFile(filepath.Join(root, ".okf")) //nolint:gosec // G304: reading the user's own bundle sidecar
-	if err != nil {
-		return SpecVersion
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		key, val, ok := strings.Cut(line, ":")
-		if !ok || strings.TrimSpace(key) != "okf_version" {
-			continue
-		}
-		if v := strings.TrimSpace(val); v != "" {
-			return v
-		}
+	if v := strings.TrimSpace(readOkfSidecar(root)["okf_version"]); v != "" {
+		return v
 	}
 	return SpecVersion
 }

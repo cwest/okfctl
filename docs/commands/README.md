@@ -620,7 +620,7 @@ Flags:
 
 Create a conformant node (type required, PRD §7)
 
-new creates a conformant concept node at <path>. A non-empty --type is REQUIRED: type is the one managed field (PRD §7 — a node must carry a non-empty type; the value itself is open per PRD §7.4, so any string is accepted). The presence requirement is the spec floor (OKF §4.1 / §11: every frontmatter block carries a non-empty type). If a type template governs the given type, the node is scaffolded from it (PRD §9.3); otherwise a plain conformant node is written. Creation is recorded in log.md and index.md is regenerated, so a new node is never an audit gap. It doesn't open an editor — use `okfctl node edit` for that.
+new creates a conformant concept node at <path>. A non-empty --type is REQUIRED: type is the one managed field (PRD §7 — a node must carry a non-empty type; the value itself is open per PRD §7.4, so any string is accepted). The presence requirement is the spec floor (OKF §4.1 / §11: every frontmatter block carries a non-empty type). If a type template governs the given type, the node is scaffolded from it (PRD §9.3); the template may be local or referenced from a separate bundle (the .okf `templates:` key, or --templates-from which overrides it, §9.2). Otherwise a plain conformant node is written. Creation is recorded in log.md and index.md is regenerated, so a new node is never an audit gap. It doesn't open an editor — use `okfctl node edit` for that.
 
 ```
 okfctl node new <path> [flags]
@@ -634,14 +634,18 @@ Example:
 
   # Create in a bundle elsewhere
   okfctl node new concepts/revenue --type Concept --bundle ./bundles/knowledge
+
+  # Scaffold from a referenced template bundle, overriding the .okf reference
+  okfctl node new runbooks/deploy --type Playbook --templates-from ../okf-type-templates
 ```
 
 Flags:
 
 ```
-      --bundle string   bundle directory to operate on (default ".")
-      --title string    title for the new node (omitted from frontmatter when empty)
-      --type string     type to assign the new node (required; any non-empty value, PRD §7.4)
+      --bundle string           bundle directory to operate on (default ".")
+      --templates-from string   resolve type templates from this bundle directory, overriding the .okf templates key (PRD §9.2)
+      --title string            title for the new node (omitted from frontmatter when empty)
+      --type string             type to assign the new node (required; any non-empty value, PRD §7.4)
 ```
 
 
@@ -983,10 +987,10 @@ Read the type-template bundle (templates are authored as ordinary OKF nodes)
 
 List the type templates a bundle declares (target type, required fields, body sections)
 
-template list shows the type templates a bundle declares. Templates are okfctl's opt-in team overlay (PRD §9): they're authored as ordinary OKF nodes whose type is `Type Template`, NOT a spec concept, and they never affect the spec floor. Each row names a target type and how many required fields and body sections its template defines. Read-only. A bundle with no templates prints a notice and exits zero.
+template list shows the type templates a bundle declares. Templates are okfctl's opt-in team overlay (PRD §9): they're authored as ordinary OKF nodes whose type is `Type Template`, NOT a spec concept, and they never affect the spec floor. A bundle may REFERENCE a separate type-template bundle via its .okf `templates: <path>` key (or --templates-from, which overrides it); referenced templates are folded in and local `Type Template` nodes overlay them (local wins per target type). Each row names a target type, how many required fields and body sections its template defines, and the source node it came from; a local entry that shadows a referenced one is flagged. Read-only. A bundle with no templates prints a notice and exits zero.
 
 ```
-okfctl template list [bundle-dir]
+okfctl template list [bundle-dir] [flags]
 ```
 
 Example:
@@ -997,6 +1001,15 @@ Example:
 
   # List templates in a bundle elsewhere
   okfctl template list ./bundles/knowledge
+
+  # Resolve templates from a specific bundle, overriding the .okf reference
+  okfctl template list --templates-from ../okf-type-templates ./bundles/knowledge
+```
+
+Flags:
+
+```
+      --templates-from string   resolve type templates from this bundle directory, overriding the .okf templates key (PRD §9.2)
 ```
 
 
@@ -1004,10 +1017,10 @@ Example:
 
 Show a single type template's required/recommended fields and body sections
 
-template show prints one type template in full: its target type, source node, and its required fields, recommended fields, and body sections. Templates are okfctl's opt-in team overlay (PRD §9), authored as ordinary OKF nodes — this command only reads them and never mutates the bundle. It errors if no template governs the given type. See what `okfctl validate --templates` will enforce and what `node new` will scaffold.
+template show prints one type template in full: its target type, source node, and its required fields, recommended fields, and body sections. Templates are okfctl's opt-in team overlay (PRD §9), authored as ordinary OKF nodes — this command only reads them and never mutates the bundle. The governing template may come from a referenced bundle (the .okf `templates:` key, or --templates-from which overrides it) or from a local `Type Template` node, with local winning per target type; `source` names where it resolved from. It errors if no template governs the given type. See what `okfctl validate --templates` will enforce and what `node new` will scaffold.
 
 ```
-okfctl template show <target-type> [bundle-dir]
+okfctl template show <target-type> [bundle-dir] [flags]
 ```
 
 Example:
@@ -1018,6 +1031,15 @@ Example:
 
   # Show a template in a bundle elsewhere
   okfctl template show Runbook ./bundles/knowledge
+
+  # Resolve from a specific template bundle, overriding the .okf reference
+  okfctl template show Runbook --templates-from ../okf-type-templates ./bundles/knowledge
+```
+
+Flags:
+
+```
+      --templates-from string   resolve type templates from this bundle directory, overriding the .okf templates key (PRD §9.2)
 ```
 
 
@@ -1025,7 +1047,7 @@ Example:
 
 Check a bundle for OKF spec-floor conformance (optionally overlay team type-templates)
 
-validate enforces the OKF spec floor (type present + non-empty, §7). It also reports git drift: a node whose frontmatter `modified` contradicts its git last-commit date (read-only — it never rewrites the file, and degrades to nothing outside a git repo). With --templates it runs the opt-in team overlay (§9.4) as well, reporting template drift. All drift is advisory by default (exit 0); pass --strict to exit non-zero on any drift. Floor violations always fail regardless of --strict.
+validate enforces the OKF spec floor (type present + non-empty, §7). It also reports git drift: a node whose frontmatter `modified` contradicts its git last-commit date (read-only — it never rewrites the file, and degrades to nothing outside a git repo). With --templates it runs the opt-in team overlay (§9.4) as well, reporting template drift; templates may be referenced from a separate bundle via the .okf `templates:` key or --templates-from (§9.2). All drift is advisory by default (exit 0); pass --strict to exit non-zero on any drift. Floor violations always fail regardless of --strict.
 
 ```
 okfctl validate [bundle-dir] [flags]
@@ -1042,14 +1064,18 @@ Example:
 
   # Also run the opt-in team template overlay, failing CI on any drift
   okfctl validate --templates --strict ./bundles/knowledge
+
+  # Overlay templates from a specific bundle, overriding the .okf reference
+  okfctl validate --templates --templates-from ../okf-type-templates ./bundles/knowledge
 ```
 
 Flags:
 
 ```
-      --no-ignore   walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
-      --strict      exit non-zero on any drift (git drift and, with --templates, template drift); default: advisory, exit 0
-      --templates   also run the opt-in type-template overlay (§9.4), reporting drift as warnings
+      --no-ignore               walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --strict                  exit non-zero on any drift (git drift and, with --templates, template drift); default: advisory, exit 0
+      --templates               also run the opt-in type-template overlay (§9.4), reporting drift as warnings
+      --templates-from string   resolve type templates from this bundle directory, overriding the .okf templates key (PRD §9.2)
 ```
 
 
