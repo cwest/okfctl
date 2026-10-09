@@ -15,6 +15,7 @@
 package okf
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path"
@@ -320,7 +321,7 @@ func preservedSubdirDescriptions(b *Bundle, dir string, opts IndexShapeOptions) 
 	if !ok || idx == nil {
 		return out
 	}
-	for _, line := range strings.Split(idx.Body, "\n") {
+	for _, line := range strings.Split(normalizeEOL(idx.Body), "\n") {
 		m := subdirBulletRE.FindStringSubmatch(line)
 		if m == nil {
 			continue
@@ -464,7 +465,14 @@ func WriteIndexWithOptions(b *Bundle, opts IndexShapeOptions) error {
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil { //nolint:gosec // G301: shareable bundle content dir; 0o755 is intended
 			return err
 		}
-		if err := os.WriteFile(p, []byte(RenderDirIndexWithOptions(b, dir, opts)), 0o644); err != nil { //nolint:gosec // G306: a bundle index file is shareable content; 0o644 is intended
+		out := RenderDirIndexWithOptions(b, dir, opts)
+		// Keep the line endings of the index being replaced (see usesCRLF): a CRLF
+		// checkout (Windows, core.autocrlf=true) stays CRLF instead of flipping
+		// every line. A new or mixed-ending index gets the canonical LF.
+		if existing, err := os.ReadFile(p); err == nil && usesCRLF(existing) { //nolint:gosec // G304: reading the tool's own generated index file
+			out = strings.ReplaceAll(out, "\n", "\r\n")
+		}
+		if err := os.WriteFile(p, []byte(out), 0o644); err != nil { //nolint:gosec // G306: a bundle index file is shareable content; 0o644 is intended
 			return err
 		}
 	}
@@ -507,7 +515,9 @@ func IndexInSyncWithOptions(b *Bundle, opts IndexShapeOptions) (bool, string) {
 		if err != nil {
 			return false, fmt.Sprintf("%s is missing or unreadable; run `okfctl index build`", filepath.ToSlash(rel(b.Root, p)))
 		}
-		if string(onDisk) != RenderDirIndexWithOptions(b, dir, opts) {
+		// Line endings are not content: a CRLF checkout of an LF-built index is
+		// in sync. Everything else is still compared byte for byte.
+		if normalizeEOL(string(onDisk)) != RenderDirIndexWithOptions(b, dir, opts) {
 			return false, fmt.Sprintf("%s is out of date; run `okfctl index build` to regenerate", filepath.ToSlash(rel(b.Root, p)))
 		}
 	}
@@ -522,6 +532,20 @@ func IndexInSyncWithOptions(b *Bundle, opts IndexShapeOptions) (bool, string) {
 		}
 	}
 	return true, ""
+}
+
+// normalizeEOL folds CRLF line endings to LF, the form RenderDirIndex emits.
+func normalizeEOL(s string) string {
+	return strings.ReplaceAll(s, "\r\n", "\n")
+}
+
+// usesCRLF reports whether every line break in src is CRLF (and there is at
+// least one). Mixed endings, or none, report false so the writer falls back to
+// LF. The decision depends only on the file being replaced, never on other
+// files or on the machine running the tool.
+func usesCRLF(src []byte) bool {
+	crlf := bytes.Count(src, []byte("\r\n"))
+	return crlf > 0 && crlf == bytes.Count(src, []byte("\n"))
 }
 
 // rel returns the bundle-relative form of an absolute path, best-effort (the
