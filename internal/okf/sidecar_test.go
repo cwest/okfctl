@@ -25,7 +25,8 @@ import (
 func TestReadOkfVersion_UnchangedWithBothKeys(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, ".okf", "okf_version: 0.9\ntemplates: ../tpl\n")
-	if got := readOkfVersion(dir); got != "0.9" {
+	// No root index loaded, so only the sidecar leg of readOkfVersion is exercised.
+	if got := (&Bundle{Root: dir}).readOkfVersion(); got != "0.9" {
 		t.Errorf("readOkfVersion = %q, want 0.9 (version read must survive a templates key)", got)
 	}
 }
@@ -36,7 +37,7 @@ func TestReadOkfVersion_UnchangedWithBothKeys(t *testing.T) {
 func TestReadOkfVersion_TemplatesKeyOnlyStillFallsBack(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, ".okf", "templates: ../tpl\n")
-	if got := readOkfVersion(dir); got != SpecVersion {
+	if got := (&Bundle{Root: dir}).readOkfVersion(); got != SpecVersion {
 		t.Errorf("readOkfVersion = %q, want fallback %q", got, SpecVersion)
 	}
 }

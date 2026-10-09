@@ -219,6 +219,80 @@ func TestConformance_GeneratedIndexPreservesOkfVersionMarker(t *testing.T) {
 	}
 }
 
+// TestConformance_LoadReadsRootIndexOkfVersionMarker closes the §12 loop from
+// the consumer side: the marker that TestConformance_GeneratedIndexPreservesOkfVersionMarker
+// proves `index build` preserves must also be what Load reports, with or
+// without okfctl's .okf sidecar — otherwise the tool writes a declaration it
+// then ignores when reading the same bundle back.
+func TestConformance_LoadReadsRootIndexOkfVersionMarker(t *testing.T) {
+	mk := func(t *testing.T, sidecar bool, marker string) string {
+		t.Helper()
+		dir := t.TempDir()
+		if sidecar {
+			if err := os.WriteFile(filepath.Join(dir, ".okf"), []byte("okf_version: "+SpecVersion+"\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		index := "# Knowledge Base\n"
+		if marker != "" {
+			index = "---\nokf_version: \"" + marker + "\"\n---\n\n" + index
+		}
+		if err := os.WriteFile(filepath.Join(dir, "index.md"), []byte(index), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "log.md"), []byte(logHeader+logPlaceholder), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		writeNode(t, dir, "wine/tannin.md", "Reference", "Tannin")
+		return dir
+	}
+
+	// Positive: a spec-only bundle (marker, no sidecar) reports what it declares
+	// and still validates clean — §12 says consume best-effort, never refuse.
+	dir := mk(t, false, "0.1")
+	b, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.OkfVersion != "0.1" {
+		t.Errorf("§12: marker-only bundle OkfVersion = %q, want 0.1", b.OkfVersion)
+	}
+	if f := Validate(b); len(f) != 0 {
+		t.Errorf("§12: marker-only bundle must validate clean; got findings: %v", f)
+	}
+
+	// Round trip: after index build the marker survives (§12) and Load still
+	// reads the same value — producer and consumer agree.
+	if err := WriteIndex(b); err != nil {
+		t.Fatalf("WriteIndex: %v", err)
+	}
+	b2, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b2.OkfVersion != "0.1" {
+		t.Errorf("§12: after index build OkfVersion = %q, want 0.1", b2.OkfVersion)
+	}
+
+	// Negative: a sidecar-only bundle (okfctl's own pin, no §12 marker) keeps
+	// reporting the sidecar, and a bundle with neither keeps SpecVersion — the
+	// change adds a source, it does not move the existing ones.
+	b3, err := Load(mk(t, true, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b3.OkfVersion != SpecVersion {
+		t.Errorf("sidecar-only bundle OkfVersion = %q, want %q", b3.OkfVersion, SpecVersion)
+	}
+	b4, err := Load(mk(t, false, ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b4.OkfVersion != SpecVersion {
+		t.Errorf("no declaration: OkfVersion = %q, want fallback %q", b4.OkfVersion, SpecVersion)
+	}
+}
+
 // TestConformance_ValidateFlagsGeneratedIndexRegression is the guard the parent
 // defect lacked, expressed at the Validate seam: the exact non-conformant shape
 // the old generator emitted (`type: Index`) must be FLAGGED by validate. This

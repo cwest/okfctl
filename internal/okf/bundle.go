@@ -84,7 +84,7 @@ type Bundle struct {
 	Root       string
 	Nodes      map[string]*Node // concept nodes only (excludes reserved)
 	Reserved   map[string]*Node // index.md, log.md
-	OkfVersion string           // okf_version from the bundle's .okf, or SpecVersion if absent
+	OkfVersion string           // the declared version: §12 root-index marker, else .okf sidecar, else SpecVersion
 	// SkippedDirs holds the bundle-relative slash paths of directories pruned
 	// from the walk by the default skip list (see DefaultSkipDirs), sorted.
 	// Empty when WithNoIgnore was passed or nothing matched. The CLI announces
@@ -184,20 +184,39 @@ func Load(root string, opts ...LoadOption) (*Bundle, error) {
 		}
 		sort.Strings(b.SkippedDirs)
 	}
-	b.OkfVersion = readOkfVersion(root)
+	b.OkfVersion = b.readOkfVersion()
 	b.buildEdges()
 	return b, nil
 }
 
-// readOkfVersion returns the okf_version declared in the bundle's .okf file, or
-// SpecVersion if the file is absent or carries no (non-empty) okf_version key.
-// The .okf is a small YAML document (e.g. "okf_version: 0.1"); a missing or
-// unreadable file is not an error here — Load stays lenient and falls back to
-// the build's version. It reads through the generalized sidecar parser
-// (readOkfSidecar) so a bundle carrying other sidecar keys — e.g. a §9.2
-// `templates` reference — does not change the version read.
-func readOkfVersion(root string) string {
-	if v := strings.TrimSpace(readOkfSidecar(root)["okf_version"]); v != "" {
+// readOkfVersion resolves the OKF version the loaded bundle declares, in the
+// same order `index build` writes the marker (bundleRootOkfVersion), so load
+// and build never disagree about which version a bundle targets:
+//
+//  1. `okf_version` in the bundle-ROOT index.md frontmatter — the declaration
+//     §12 defines: "Bundles MAY declare the version they target with
+//     okf_version: "0.2" in a bundle-root index.md frontmatter block". Only
+//     the root index counts; §12 permits the marker nowhere else, so a nested
+//     index.md carrying the key is not consulted.
+//  2. Else `okf_version` in the .okf sidecar, okfctl's own pin (not part of
+//     the spec). Read through the generalized sidecar parser (readOkfSidecar)
+//     so other sidecar keys — e.g. a §9.2 `templates` reference — do not
+//     change the version read.
+//  3. Else SpecVersion. A missing or unreadable sidecar is not an error here —
+//     Load stays lenient and falls back to the build's version.
+//
+// Whatever is declared is reported as declared: per §12 a consumer that does
+// not understand the version attempts best-effort consumption, it never
+// refuses the bundle, so nothing here validates the string.
+func (b *Bundle) readOkfVersion() string {
+	if idx, ok := b.Reserved["index.md"]; ok && idx != nil {
+		if v, ok := idx.Frontmatter["okf_version"]; ok {
+			if s := strings.TrimSpace(scalarString(v)); s != "" {
+				return s
+			}
+		}
+	}
+	if v := strings.TrimSpace(readOkfSidecar(b.Root)["okf_version"]); v != "" {
 		return v
 	}
 	return SpecVersion
