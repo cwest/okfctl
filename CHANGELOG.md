@@ -46,6 +46,12 @@ tagged release, goreleaser generates the release notes from the commit log
   §9 shape. Together with the `validate` change this holds the invariant that
   `okfctl validate` never rejects a log okfctl wrote. (#177)
 
+### Build
+
+- The Go toolchain was bumped from 1.26.6 to 1.26.9 to pick up patched
+  standard-library fixes for seven disclosed vulnerabilities (GO-2026-6603,
+  -6607, -6608, -6611, -6612, -6613, -6617), clearing `govulncheck` in CI.
+
 ## [0.4.0] - 2026-08-19
 
 ### Added
