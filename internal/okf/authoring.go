@@ -85,8 +85,10 @@ func NewNodeFromTemplate(root, relPath, typ, title string, t Template) (string, 
 	// Stamp created + modified at birth (both equal), so a node authored through
 	// okfctl starts life with an accurate, computed timestamp rather than a
 	// hand-maintained one. created is immutable from here on; modified advances
-	// on every subsequent okfctl write. (Corpus form: RFC3339 UTC.)
-	birth := nowUTC().Format(timestampLayout)
+	// on every subsequent okfctl write. Stamped in the author's LOCAL offset (via
+	// stampValue) so the recorded calendar day matches git's author-local commit
+	// day — see timestamps.go/nowUTC for why UTC here trips the drift check.
+	birth := stampValue(nowUTC())
 	appendKV("created", birth)
 	appendKV("modified", birth)
 	// Stub the template's fields. Required fields get a "TODO" placeholder so the
