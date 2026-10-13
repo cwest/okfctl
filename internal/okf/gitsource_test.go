@@ -125,3 +125,141 @@ func TestIsGitWorkTree_FalseOutsideRepo(t *testing.T) {
 		t.Fatalf("IsGitWorkTree true for a non-repo dir")
 	}
 }
+
+// A fresh clone is a checkout of its own source (positive control), including
+// when the source is spelled with the other path separator.
+func TestIsCheckoutOf_TrueForCloneOfSource(t *testing.T) {
+	root := t.TempDir()
+	bare := seedBareSource(t, root, "index.md", "seed\n")
+	dst := filepath.Join(root, "cloned")
+	if err := Clone(bare, dst); err != nil {
+		t.Fatalf("Clone: %v", err)
+	}
+	for _, src := range []string{bare, filepath.ToSlash(bare), bare + string(filepath.Separator)} {
+		if !IsCheckoutOf(dst, src) {
+			t.Errorf("IsCheckoutOf(clone, %q) = false, want true", src)
+		}
+	}
+}
+
+// A subdirectory of a checkout is inside a work tree but is not itself a
+// checkout: fast-forwarding it would pull the enclosing repo.
+func TestIsCheckoutOf_FalseForSubdirOfCheckout(t *testing.T) {
+	root := t.TempDir()
+	bare := seedBareSource(t, root, "index.md", "seed\n")
+	dst := filepath.Join(root, "cloned")
+	if err := Clone(bare, dst); err != nil {
+		t.Fatalf("Clone: %v", err)
+	}
+	sub := filepath.Join(dst, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if !IsGitWorkTree(sub) {
+		t.Fatalf("precondition: subdir should be inside the work tree")
+	}
+	if IsCheckoutOf(sub, bare) {
+		t.Fatalf("IsCheckoutOf(subdir of checkout, its origin) = true, want false")
+	}
+}
+
+// A checkout of a different origin is a work tree top level but not a
+// checkout of this source.
+func TestIsCheckoutOf_FalseForDifferentOrigin(t *testing.T) {
+	root := t.TempDir()
+	bare := seedBareSource(t, root, "index.md", "seed\n")
+	dst := filepath.Join(root, "cloned")
+	if err := Clone(bare, dst); err != nil {
+		t.Fatalf("Clone: %v", err)
+	}
+	other := filepath.Join(root, "other.git")
+	if IsCheckoutOf(dst, other) {
+		t.Fatalf("IsCheckoutOf(checkout of src.git, other.git) = true, want false")
+	}
+	if IsCheckoutOf(dst, "https://example.com/acme/kb.git") {
+		t.Fatalf("IsCheckoutOf(local checkout, remote URL) = true, want false")
+	}
+}
+
+// A repo with no origin remote is not a checkout of any source.
+func TestIsCheckoutOf_FalseWithoutOrigin(t *testing.T) {
+	if !GitAvailable() {
+		t.Skip("git not available")
+	}
+	dir := t.TempDir()
+	gitRun(t, dir, "init", "-q")
+	if IsCheckoutOf(dir, dir) {
+		t.Fatalf("IsCheckoutOf(repo without origin) = true, want false")
+	}
+	if IsCheckoutOf(filepath.Join(dir, "missing"), dir) {
+		t.Fatalf("IsCheckoutOf(missing dir) = true, want false")
+	}
+}
+
+func TestIsLocalSource(t *testing.T) {
+	cases := map[string]bool{
+		"/srv/kb.git":                true,
+		"./kb":                       true,
+		"../kb":                      true,
+		"kb":                         true,
+		`C:\repos\docs`:              true,
+		"C:/repos/docs":              true,
+		`\\server\share\repo`:        true,
+		"file:///srv/kb.git":         true,
+		"./dir:with-colon":           true,
+		"https://github.com/acme/kb": false,
+		"ssh://git@host/acme/kb.git": false,
+		"git@github.com:acme/kb.git": false,
+		"host:acme/kb.git":           false,
+	}
+	for s, want := range cases {
+		if got := IsLocalSource(s); got != want {
+			t.Errorf("IsLocalSource(%q) = %v, want %v", s, got, want)
+		}
+	}
+}
+
+func TestNormalizeSourceURL_RemoteEquivalences(t *testing.T) {
+	same := [][2]string{
+		{"https://github.com/acme/kb.git", "https://github.com/acme/kb"},
+		{"https://github.com/acme/kb/", "HTTPS://GitHub.com/acme/kb.git"},
+		{"git@github.com:acme/kb.git", "git@GITHUB.com:acme/kb"},
+	}
+	for _, p := range same {
+		if a, b := NormalizeSourceURL(p[0], ""), NormalizeSourceURL(p[1], ""); a != b {
+			t.Errorf("NormalizeSourceURL(%q)=%q != NormalizeSourceURL(%q)=%q", p[0], a, p[1], b)
+		}
+	}
+	// Negative control: the path stays case-sensitive and distinct repos stay
+	// distinct.
+	differ := [][2]string{
+		{"https://github.com/acme/kb", "https://github.com/acme/KB"},
+		{"https://github.com/acme/kb", "https://github.com/acme/other"},
+		{"https://github.com/acme/kb", "git@github.com:acme/kb"},
+	}
+	for _, p := range differ {
+		if a, b := NormalizeSourceURL(p[0], ""), NormalizeSourceURL(p[1], ""); a == b {
+			t.Errorf("NormalizeSourceURL(%q) == NormalizeSourceURL(%q) = %q, want distinct", p[0], p[1], a)
+		}
+	}
+}
+
+func TestHasWindowsPathPrefix(t *testing.T) {
+	cases := map[string]bool{
+		`C:\repos\docs`:       true,
+		"c:/repos/docs":       true,
+		`\\server\share\repo`: true,
+		`\single\backslash`:   false,
+		"C:":                  false,
+		"C:repos":             false,
+		"knowledge":           false,
+		"/srv/kb":             false,
+		"git@host:kb":         false,
+		"1:/x":                false,
+	}
+	for s, want := range cases {
+		if got := HasWindowsPathPrefix(s); got != want {
+			t.Errorf("HasWindowsPathPrefix(%q) = %v, want %v", s, got, want)
+		}
+	}
+}
