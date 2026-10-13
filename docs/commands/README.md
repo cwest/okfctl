@@ -408,6 +408,8 @@ lint surfaces judgment-worthy curation findings, not spec-floor violations (use 
 
 A broken-link finding reports an internal .md link that resolves to no node when a node with the same basename exists elsewhere — a moved or mistyped path (a defect), distinct from a genuinely unwritten concept (a coverage gap, which analyze reports advisorily and lint stays quiet on).
 
+tag-hygiene reports two or more `tags` spellings that fold to one canonical form (case, trimmed, a single trailing 's', and — for tags — separator-insensitive so run-book, run_book and runbook are one value). Like type-hygiene, it never rejects a value: it only reports spellings that fold together, so a curator can pick one. It never flags two genuinely distinct tags.
+
 --semantic adds similarity-driven checks (similar-but-unlinked pairs, nodes with no semantic neighbors) by reading the index built by 'okfctl-search index build'. Core only reads that index, so no embedding model is needed to lint.
 
 ```

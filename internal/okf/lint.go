@@ -27,7 +27,7 @@ import (
 // validate Finding (a spec-floor violation), a lint finding is curation
 // guidance — never a format failure.
 type LintFinding struct {
-	Check   string `json:"check"` // "orphan" | "missing-xref" | "coverage-gap" | "type-hygiene" | "broken-link" | "status-lifecycle" | "spec-version"
+	Check   string `json:"check"` // "orphan" | "missing-xref" | "coverage-gap" | "type-hygiene" | "tag-hygiene" | "broken-link" | "status-lifecycle" | "spec-version"
 	Path    string `json:"path"`  // node path the finding is about ("" for bundle-level findings)
 	Message string `json:"message"`
 }
@@ -56,6 +56,7 @@ func Lint(b *Bundle, opts LintOptions) []LintFinding {
 	findings = append(findings, lintBrokenLinks(b)...)
 	findings = append(findings, lintCoverageGaps(b, threshold)...)
 	findings = append(findings, lintTypeHygiene(b)...)
+	findings = append(findings, lintTagHygiene(b)...)
 	findings = append(findings, lintStatusLifecycle(b)...)
 	findings = append(findings, lintSpecVersion(b)...)
 
@@ -655,12 +656,108 @@ func lintTypeHygiene(b *Bundle) []LintFinding {
 	return out
 }
 
-// canonType folds a type value to case-insensitive + singular (drop a single
-// trailing 's') for near-duplicate grouping.
-func canonType(s string) string {
+// lintTagHygiene warns when two or more distinct `tags` values fold to the same
+// canonical form, which usually signals accidental drift on the other §4.1
+// cross-cutting field every consumer routes and filters on. The `--tag` scope
+// filter and the /api/v1/search `tag` parameter match exactly and
+// case-sensitively, so one tag spelled three ways is three disjoint result sets;
+// this surfaces that drift the same way type-hygiene does for `type`.
+//
+// The fold is the shared canonTag: the base fold (case, trim, single trailing
+// 's') plus tag-only separator-insensitivity (-, _, space). Anti-taxonomy stands
+// (PRD §7.4): it flags only spellings that fold to ONE value, never two genuinely
+// distinct values, and it is a warning class — never a validate rejection. The
+// message lists each variant with its per-node count, variants sorted.
+func lintTagHygiene(b *Bundle) []LintFinding {
+	// canonical -> raw tag value -> set of node paths carrying it.
+	groups := map[string]map[string]map[string]bool{}
+	for _, n := range b.Nodes {
+		seen := map[string]bool{} // dedupe a repeated tag within one node
+		for _, raw := range n.Tags() {
+			raw = strings.TrimSpace(raw)
+			if raw == "" || seen[raw] {
+				continue
+			}
+			seen[raw] = true
+			c := canonTag(raw)
+			if c == "" {
+				continue
+			}
+			if groups[c] == nil {
+				groups[c] = map[string]map[string]bool{}
+			}
+			if groups[c][raw] == nil {
+				groups[c][raw] = map[string]bool{}
+			}
+			groups[c][raw][n.Path] = true
+		}
+	}
+
+	var out []LintFinding
+	canons := make([]string, 0, len(groups))
+	for c := range groups {
+		canons = append(canons, c)
+	}
+	sort.Strings(canons)
+	for _, c := range canons {
+		if len(groups[c]) < 2 {
+			continue
+		}
+		variants := make([]string, 0, len(groups[c]))
+		for v := range groups[c] {
+			variants = append(variants, v)
+		}
+		sort.Strings(variants)
+		parts := make([]string, 0, len(variants))
+		for _, v := range variants {
+			n := len(groups[c][v])
+			parts = append(parts, fmt.Sprintf("%s (%d %s)", v, n, pluralNodes(n)))
+		}
+		out = append(out, LintFinding{
+			Check:   "tag-hygiene",
+			Path:    "",
+			Message: fmt.Sprintf("tag-hygiene: near-duplicate tag values likely refer to one tag: %s", strings.Join(parts, ", ")),
+		})
+	}
+	return out
+}
+
+// pluralNodes returns "node" for a count of 1, "nodes" otherwise.
+func pluralNodes(n int) string {
+	if n == 1 {
+		return "node"
+	}
+	return "nodes"
+}
+
+// canonFold is the shared base fold: case-insensitive, trimmed, and singular
+// (drop a single trailing 's'). It is the one place `type` and `tags`
+// near-duplicate grouping agree on, so the tool can never apply two different
+// folds to the same kind of §4.1 value. It is separator-SENSITIVE by design —
+// separator-insensitivity is a tag-only layer (see canonTag) and must not leak
+// into the type path.
+func canonFold(s string) string {
 	c := strings.ToLower(strings.TrimSpace(s))
 	if len(c) > 1 && strings.HasSuffix(c, "s") {
 		c = c[:len(c)-1]
 	}
 	return c
 }
+
+// canonType folds a `type` value for near-duplicate grouping. It is exactly the
+// shared base fold (case + trim + single trailing 's'); it deliberately does NOT
+// add tag's separator rule, so type-hygiene behavior is unchanged by the shared
+// extraction.
+func canonType(s string) string { return canonFold(s) }
+
+// tagSeparators are the intra-tag separators (§4.1 tags are free-form): a hyphen,
+// underscore, or space. Two tags that differ only in how a compound is joined
+// (home-lab vs homelab, run book vs runbook) are one value spelled two ways.
+var tagSeparators = strings.NewReplacer("-", "", "_", "", " ", "")
+
+// canonTag folds a `tags` value: the shared base fold, then separator-insensitive
+// (-, _, space collapsed). The base fold runs first so a trailing 's' is dropped
+// before separators are removed (design-patterns -> design-pattern ->
+// designpattern), matching design-pattern's fold. Tags get this extra layer;
+// types do not.
+func canonTag(s string) string { return tagSeparators.Replace(canonFold(s)) }
