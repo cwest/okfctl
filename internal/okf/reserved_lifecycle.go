@@ -614,14 +614,34 @@ func AppendLog(root, message string) error {
 	p := filepath.Join(root, "log.md")
 	existing, err := os.ReadFile(p) //nolint:gosec // G304: reading the user's own bundle log.md
 	if err != nil {
-		// Create a fresh §9 log with the default title.
+		// Create a fresh §9 log with the default title. A new file is always LF.
 		out := logHeader + "## " + today + "\n* " + message + "\n"
 		return os.WriteFile(p, []byte(out), 0o644) //nolint:gosec // G306: log.md is shareable bundle content; 0o644 is intended
 	}
 
-	lg := parseLog(string(existing))
-	lg.addEntry(today, message)
-	return os.WriteFile(p, []byte(lg.render()), 0o644) //nolint:gosec // G306: log.md is shareable bundle content; 0o644 is intended
+	// Normalize on read (issue #185, applied to log.md): a CRLF-checked-out log
+	// (Windows, core.autocrlf=true) leaves a trailing \r on every line when
+	// parseLog splits on "\n". That \r leaks into the verbatim preamble and
+	// entries and defeats the $-anchored legacy-bullet regex, so a fold would
+	// strand the bullet or capture the \r into its message. Folding CRLF->LF
+	// before the parse keeps the log model purely LF, so the render below is
+	// clean and the re-ending choice is the ONLY place endings are decided.
+	rendered := func() string {
+		lg := parseLog(normalizeEOL(string(existing)))
+		lg.addEntry(today, message)
+		return lg.render()
+	}()
+	// Preserve on write (issue #185): the render is LF, but if the log.md already
+	// on disk is dominantly CRLF, write the whole file back in CRLF so a Windows
+	// checkout sees no mixed-ending corruption and git sees no whole-file churn.
+	// A new file (handled above) or a mixed-/lone-CR file stays LF. The choice
+	// depends only on this one file, so it is deterministic on any machine and
+	// leaves LF/Linux behavior unchanged.
+	out := rendered
+	if usesCRLF(string(existing)) {
+		out = strings.ReplaceAll(rendered, "\n", "\r\n")
+	}
+	return os.WriteFile(p, []byte(out), 0o644) //nolint:gosec // G306: log.md is shareable bundle content; 0o644 is intended
 }
 
 // ReadLog returns the log.md body (empty string if the file is absent).
