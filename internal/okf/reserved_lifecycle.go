@@ -24,6 +24,32 @@ import (
 	"strings"
 )
 
+// normalizeEOL folds CRLF to LF so a CRLF-checked-out reserved file (Windows
+// with core.autocrlf=true) parses and compares identically to its LF form. It
+// is the "normalize on read" half of okfctl's index line-ending policy: an
+// index.md is normalized before regex matching (preservedSubdirDescriptions) and
+// before the staleness comparison (IndexInSync), so a line-ending-only
+// difference is never mistaken for content drift (issue #185). A lone CR not
+// part of a CRLF pair is left alone — only the \r\n pair is folded.
+func normalizeEOL(s string) string {
+	return strings.ReplaceAll(s, "\r\n", "\n")
+}
+
+// usesCRLF reports whether a reserved file is dominantly CRLF: true only when
+// EVERY line break in it is CRLF (every \n is preceded by \r). It is the
+// "preserve on write" half of the policy — WriteIndex writes its render back in
+// the ending the on-disk file already used, so an up-to-date CRLF index stays
+// CRLF (zero churn, issue #185) while a new file or a mixed-ending file is
+// written LF. The choice depends only on that one file, so it is deterministic
+// on any machine. A file with no line break at all is not CRLF.
+func usesCRLF(s string) bool {
+	nl := strings.Count(s, "\n")
+	if nl == 0 {
+		return false
+	}
+	return strings.Count(s, "\r\n") == nl
+}
+
 // neighborhood returns the top-level directory of a bundle-relative slash path,
 // or "" for a root-level node (rendered under a "(root)" group).
 func neighborhood(rel string) string {
@@ -320,7 +346,14 @@ func preservedSubdirDescriptions(b *Bundle, dir string, opts IndexShapeOptions) 
 	if !ok || idx == nil {
 		return out
 	}
-	for _, line := range strings.Split(idx.Body, "\n") {
+	// Normalize line endings before splitting (OKF §8 parse path; issue #185):
+	// a CRLF-checked-out index leaves a trailing \r on every line, which stops
+	// the $-anchored subdirBulletRE / toolShapeSuffixRE from matching the
+	// tool-owned shape suffix — the stale suffix would then be captured into the
+	// curator description and doubled on the next build. Folding CRLF->LF here
+	// (normalize on read) fixes that at the same seam that keeps the description
+	// curator-owned/verbatim.
+	for _, line := range strings.Split(normalizeEOL(idx.Body), "\n") {
 		m := subdirBulletRE.FindStringSubmatch(line)
 		if m == nil {
 			continue
@@ -464,7 +497,18 @@ func WriteIndexWithOptions(b *Bundle, opts IndexShapeOptions) error {
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil { //nolint:gosec // G301: shareable bundle content dir; 0o755 is intended
 			return err
 		}
-		if err := os.WriteFile(p, []byte(RenderDirIndexWithOptions(b, dir, opts)), 0o644); err != nil { //nolint:gosec // G306: a bundle index file is shareable content; 0o644 is intended
+		rendered := RenderDirIndexWithOptions(b, dir, opts)
+		// Preserve on write (issue #185): the render is produced LF, but if the
+		// index.md already on disk is dominantly CRLF (a Windows checkout), write
+		// the render back in CRLF so an up-to-date index stays byte-identical and
+		// git sees no whole-file line-ending churn. A new file, or one with mixed
+		// endings, is written LF. The choice depends only on this one file, so it
+		// is deterministic on any machine and leaves LF/Linux behavior unchanged.
+		out := rendered
+		if existing, rerr := os.ReadFile(p); rerr == nil && usesCRLF(string(existing)) { //nolint:gosec // G304: reading the tool's own generated index file
+			out = strings.ReplaceAll(rendered, "\n", "\r\n")
+		}
+		if err := os.WriteFile(p, []byte(out), 0o644); err != nil { //nolint:gosec // G306: a bundle index file is shareable content; 0o644 is intended
 			return err
 		}
 	}
@@ -507,7 +551,12 @@ func IndexInSyncWithOptions(b *Bundle, opts IndexShapeOptions) (bool, string) {
 		if err != nil {
 			return false, fmt.Sprintf("%s is missing or unreadable; run `okfctl index build`", filepath.ToSlash(rel(b.Root, p)))
 		}
-		if string(onDisk) != RenderDirIndexWithOptions(b, dir, opts) {
+		// Compare CONTENT, not bytes (issue #185): a CRLF-checked-out index
+		// (Windows, core.autocrlf=true) differs from the LF render only in line
+		// endings. Normalize on read so a line-ending-only difference is not
+		// reported as drift — any other difference is still drift, so genuine
+		// staleness is still caught.
+		if normalizeEOL(string(onDisk)) != RenderDirIndexWithOptions(b, dir, opts) {
 			return false, fmt.Sprintf("%s is out of date; run `okfctl index build` to regenerate", filepath.ToSlash(rel(b.Root, p)))
 		}
 	}
