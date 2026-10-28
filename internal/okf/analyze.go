@@ -604,28 +604,59 @@ func analyzeConnectivity(b *Bundle) ConnectivityReport {
 }
 
 func analyzeClusters(b *Bundle, opts AnalyzeOptions) []ClusterFinding {
-	byTag := map[string][]string{}
+	// Adopt lint's shared, bundle-scoped tag fold (newTagFolder: case- and
+	// separator-insensitive plus a vocabulary-aware plural merge) so analyze and
+	// lint agree on when two spellings are one tag. Group by canonical key;
+	// within a key, keep the DISTINCT node set (a node tagged both `wine` and
+	// `Wine` counts once) and the lower-cased variants so the reported label is a
+	// real spelling and matches main's output for a case-only cluster (wine, not
+	// Wine — uppercase would otherwise sort first and change text + --json).
+	fold := newTagFolder(b)
+	type cluster struct {
+		nodes    map[string]bool
+		variants map[string]bool
+	}
+	byKey := map[string]*cluster{}
 	for _, p := range sortedNodePaths(b) {
 		for _, tag := range nodeTags(b.Nodes[p]) {
-			key := strings.ToLower(strings.TrimSpace(tag))
+			key := fold(tag)
 			if key == "" {
 				continue
 			}
-			byTag[key] = append(byTag[key], p)
+			c := byKey[key]
+			if c == nil {
+				c = &cluster{nodes: map[string]bool{}, variants: map[string]bool{}}
+				byKey[key] = c
+			}
+			c.nodes[p] = true
+			c.variants[strings.ToLower(strings.TrimSpace(tag))] = true
 		}
 	}
 	var out []ClusterFinding
-	tags := make([]string, 0, len(byTag))
-	for t := range byTag {
-		tags = append(tags, t)
+	keys := make([]string, 0, len(byKey))
+	for k := range byKey {
+		keys = append(keys, k)
 	}
-	sort.Strings(tags)
-	for _, t := range tags {
-		members := byTag[t]
-		if len(members) >= opts.ClusterMin {
-			sort.Strings(members)
-			out = append(out, ClusterFinding{Tag: t, Nodes: members})
+	sort.Strings(keys)
+	for _, k := range keys {
+		c := byKey[k]
+		if len(c.nodes) < opts.ClusterMin {
+			continue
 		}
+		members := make([]string, 0, len(c.nodes))
+		for p := range c.nodes {
+			members = append(members, p)
+		}
+		sort.Strings(members)
+		// Report the lexicographically-first lower-cased variant as the cluster
+		// tag: a real spelling from the corpus, deterministic across runs, and
+		// matching main's lower-cased label for a case-only cluster.
+		variants := make([]string, 0, len(c.variants))
+		for v := range c.variants {
+			variants = append(variants, v)
+		}
+		sort.Strings(variants)
+		out = append(out, ClusterFinding{Tag: variants[0], Nodes: members})
 	}
 	return out
 }
