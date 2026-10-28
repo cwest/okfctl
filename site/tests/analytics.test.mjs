@@ -37,7 +37,6 @@ import { readFile, readdir, stat, mkdtemp, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -100,7 +99,14 @@ test("negative control: with PUBLIC_GA_MEASUREMENT_ID unset, ZERO pages carry th
 // --- Positive control: a fresh production build WITH the id set. ---
 
 test("positive control: with PUBLIC_GA_MEASUREMENT_ID set, the homepage, a docs page, and 404 all carry the gtag tag", async () => {
-  const outDir = await mkdtemp(join(tmpdir(), "okfctl-ga-"));
+  // Build into a temp dir ON THE REPO'S OWN FILESYSTEM, not the OS tmpdir.
+  // astro's ssrMoveAssets moves prerendered assets into --outDir with a bare
+  // fs.rename, which throws EXDEV when --outDir is on a different device than the
+  // build's .astro/ staging dir. On CI the OS tmpdir (/tmp) and the checkout
+  // (/home/runner/work) are different filesystems; keeping the out dir under
+  // siteRoot guarantees same-device so the rename stays a rename, not a
+  // cross-device copy. The .ga-test- prefix is git-ignored (site/.gitignore).
+  const outDir = await mkdtemp(join(siteRoot, ".ga-test-"));
   try {
     await execFileP("npx", ["astro", "build", "--outDir", outDir], {
       cwd: siteRoot,

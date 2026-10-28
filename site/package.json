@@ -16,13 +16,18 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/starlight": "0.42.3",
+    "@astrojs/starlight": "0.42.6",
     "@astrojs/starlight-tailwind": "5.0.0",
     "@tailwindcss/vite": "4.3.3",
-    "astro": "7.3.4",
+    "astro": "7.3.8",
     "tailwindcss": "4.3.3"
   },
   "devDependencies": {
     "@resvg/resvg-js": "2.6.2"
+  },
+  "overrides": {
+    "zod": "4.6.7",
+    "undici": "8.12.3",
+    "postcss-selector-parser": "6.1.5"
   }
 }
