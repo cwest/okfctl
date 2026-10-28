@@ -23,10 +23,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// nowUTCcmd is the cmd-layer clock (real UTC wall time). It exists as a var so
-// timestamp-dependent command behavior stays consistent with the model's clock
-// seam; production reads real time.
-var nowUTCcmd = func() time.Time { return time.Now().UTC() }
+// nowUTCcmd is the cmd-layer clock. It exists as a var so timestamp-dependent
+// command behavior stays consistent with the model's clock seam (okf.nowUTC) and
+// so tests can pin it. The name is historical: it returns real LOCAL wall time
+// (time.Now()), NOT a UTC-normalized instant. The local offset is load-bearing —
+// `node edit` passes this to okf.TouchModifiedFile, which stamps modified in the
+// author's local offset so the recorded calendar day matches git's author-local
+// commit day (see internal/okf/timestamps.go/nowUTC for why UTC trips drift).
+var nowUTCcmd = func() time.Time { return time.Now() }
 
 // bundleRel converts an absolute node path (as returned by okf.NewNode) into a
 // bundle-relative slash path rooted at dir.

@@ -3,6 +3,12 @@ dist/
 .astro/
 node_modules/
 
+# Scratch out-dir for the GA positive-control test (tests/analytics.test.mjs).
+# Built on the repo's own filesystem (not the OS tmpdir) so astro's cross-device
+# fs.rename in ssrMoveAssets does not throw EXDEV on CI; removed in the test's
+# finally block, ignored here in case a crashed run leaves one behind.
+.ga-test-*/
+
 # Templated content copied in from ../docs at build time by
 # scripts/prepare-content.mjs. Regenerated every build; never edited by hand,
 # never committed (committing it would let it drift from the source docs).

@@ -24,14 +24,33 @@ import (
 // string; accept both. Returns ok=false when the value is absent or unparseable
 // (a malformed timestamp is not this check's concern — the floor validator owns
 // format failures; here it simply means "no reliable modified to compare").
+//
+// It normalizes to UTC: its callers that do duration/day math (freshness,
+// IsStale, Generated.At) treat the value as an INSTANT, for which the recorded
+// offset is irrelevant. The drift check is the exception — it must judge the
+// value in its OWN recorded calendar day — and uses frontmatterTimeLocal instead.
 func frontmatterTime(v any) (time.Time, bool) {
+	if t, ok := frontmatterTimeLocal(v); ok {
+		return t.UTC(), true
+	}
+	return time.Time{}, false
+}
+
+// frontmatterTimeLocal reads a frontmatter timestamp value PRESERVING its own
+// recorded location, rather than normalizing to UTC. The drift check compares
+// calendar days each in its own frame (sameCalendarDay, §5: "an explicit UTC
+// offset"), so an evening-local value like 2026-10-09T22:30:00-04:00 must keep
+// its -04:00 offset — forcing UTC would roll it to 2026-10-10 and manufacture a
+// disagreement with git's author-local commit day. A bare date (2006-01-02)
+// parses at UTC midnight, which is its own recorded frame and correct as-is.
+func frontmatterTimeLocal(v any) (time.Time, bool) {
 	switch t := v.(type) {
 	case time.Time:
-		return t.UTC(), true
+		return t, true
 	case string:
 		for _, layout := range []string{time.RFC3339, "2006-01-02"} {
 			if ts, err := time.Parse(layout, t); err == nil {
-				return ts.UTC(), true
+				return ts, true
 			}
 		}
 	}

@@ -77,7 +77,7 @@ func scanDrift(b *Bundle) []driftPair {
 		if n.Frontmatter == nil {
 			continue
 		}
-		mod, ok := frontmatterTime(n.Frontmatter["modified"])
+		mod, ok := frontmatterTimeLocal(n.Frontmatter["modified"])
 		if !ok {
 			continue // no reliable modified to compare
 		}

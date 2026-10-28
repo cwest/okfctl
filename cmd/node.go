@@ -29,7 +29,7 @@ import (
 func newNodeCmd() *cobra.Command {
 	node := &cobra.Command{Use: "node", Short: "Author and inspect nodes"}
 
-	var typ, title, dir string
+	var typ, title, dir, templatesFrom string
 	newC := &cobra.Command{
 		Use:   "new <path>",
 		Short: "Create a conformant node (type required, PRD §7)",
@@ -38,23 +38,34 @@ func newNodeCmd() *cobra.Command {
 			"itself is open per PRD §7.4, so any string is accepted). The presence requirement is the " +
 			"spec floor (OKF §4.1 / §11: every frontmatter block carries a non-empty type). If a type " +
 			"template governs the " +
-			"given type, the node is scaffolded from it (PRD §9.3); otherwise a plain conformant " +
+			"given type, the node is scaffolded from it (PRD §9.3); the template may be local or " +
+			"referenced from a separate bundle (the .okf `templates:` key, or --templates-from which " +
+			"overrides it, §9.2). Otherwise a plain conformant " +
 			"node is written. Creation is recorded in log.md and index.md is regenerated, so a new " +
 			"node is never an audit gap. It doesn't open an editor — use `okfctl node edit` for that.",
 		Example: "  # Create a node of an open type\n" +
 			"  okfctl node new concepts/revenue --type Concept --title Revenue\n\n" +
 			"  # Create in a bundle elsewhere\n" +
-			"  okfctl node new concepts/revenue --type Concept --bundle ./bundles/knowledge",
+			"  okfctl node new concepts/revenue --type Concept --bundle ./bundles/knowledge\n\n" +
+			"  # Scaffold from a referenced template bundle, overriding the .okf reference\n" +
+			"  okfctl node new runbooks/deploy --type Playbook --templates-from ../okf-type-templates",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if typ == "" {
 				return fmt.Errorf("--type is required (OKF §4.1 / §11: every node needs a non-empty type)")
 			}
 			// If a template governs this type, scaffold from it (§9.3); otherwise
-			// create a plain conformant node (unchanged path).
+			// create a plain conformant node (unchanged path). Templates resolve
+			// through the §9.2 reference overlay: a referenced bundle folded in,
+			// local Type Template nodes overlaid (local wins). A broken reference
+			// is a hard error — the author asked for the overlay via the key/flag.
 			created := ""
 			if b, err := okf.Load(dir); err == nil {
-				if t, ok := okf.Templates(b)[typ]; ok {
+				rt, rerr := okf.ResolveTemplates(b, templatesFrom)
+				if rerr != nil {
+					return rerr
+				}
+				if t, ok := rt.ByType[typ]; ok {
 					p, err := okf.NewNodeFromTemplate(dir, args[0], typ, title, t)
 					if err != nil {
 						return err
@@ -84,6 +95,7 @@ func newNodeCmd() *cobra.Command {
 	newC.Flags().StringVar(&typ, "type", "", "type to assign the new node (required; any non-empty value, PRD §7.4)")
 	newC.Flags().StringVar(&title, "title", "", "title for the new node (omitted from frontmatter when empty)")
 	newC.Flags().StringVar(&dir, "bundle", ".", "bundle directory to operate on")
+	newC.Flags().StringVar(&templatesFrom, "templates-from", "", templatesFromFlagUsage)
 	node.AddCommand(newC)
 
 	var showBundle string

@@ -23,6 +23,7 @@ import (
 
 func newValidateCmd() *cobra.Command {
 	var templates, strict bool
+	var templatesFrom string
 	var noIgnore *bool
 	c := &cobra.Command{
 		Use:   "validate [bundle-dir]",
@@ -31,7 +32,9 @@ func newValidateCmd() *cobra.Command {
 			"It also reports git drift: a node whose frontmatter `modified` contradicts " +
 			"its git last-commit date (read-only — it never rewrites the file, and " +
 			"degrades to nothing outside a git repo). With --templates it runs the opt-in " +
-			"team overlay (§9.4) as well, reporting template drift. All drift is " +
+			"team overlay (§9.4) as well, reporting template drift; templates may be " +
+			"referenced from a separate bundle via the .okf `templates:` key or " +
+			"--templates-from (§9.2). All drift is " +
 			"advisory by default (exit 0); pass --strict to exit non-zero on any drift. " +
 			"Floor violations always fail regardless of --strict.",
 		Example: "  # Check the spec floor for the bundle in the current directory\n" +
@@ -39,7 +42,9 @@ func newValidateCmd() *cobra.Command {
 			"  # Check a bundle elsewhere\n" +
 			"  okfctl validate ./bundles/knowledge\n\n" +
 			"  # Also run the opt-in team template overlay, failing CI on any drift\n" +
-			"  okfctl validate --templates --strict ./bundles/knowledge",
+			"  okfctl validate --templates --strict ./bundles/knowledge\n\n" +
+			"  # Overlay templates from a specific bundle, overriding the .okf reference\n" +
+			"  okfctl validate --templates --templates-from ../okf-type-templates ./bundles/knowledge",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."
@@ -58,7 +63,15 @@ func newValidateCmd() *cobra.Command {
 
 			var drift []okf.DriftFinding
 			if templates {
-				drift = okf.TemplateDrift(b)
+				// Resolve the effective templates (§9.2): a referenced bundle
+				// (--templates-from, or the .okf `templates:` key) folded in,
+				// local Type Template nodes overlaid. A broken reference is a
+				// hard error here — the overlay was explicitly requested.
+				rt, rerr := okf.ResolveTemplates(b, templatesFrom)
+				if rerr != nil {
+					return rerr
+				}
+				drift = okf.TemplateDriftWith(b, rt.ByType)
 				for _, d := range drift {
 					fmt.Fprintf(out, "warning %s: %s\n", d.Path, d.Message)
 				}
@@ -95,6 +108,7 @@ func newValidateCmd() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&templates, "templates", false, "also run the opt-in type-template overlay (§9.4), reporting drift as warnings")
+	c.Flags().StringVar(&templatesFrom, "templates-from", "", templatesFromFlagUsage)
 	c.Flags().BoolVar(&strict, "strict", false, "exit non-zero on any drift (git drift and, with --templates, template drift); default: advisory, exit 0")
 	noIgnore = addNoIgnoreFlag(c)
 	return c

@@ -24,12 +24,17 @@ import (
 )
 
 // TouchModifiedFile refreshes the frontmatter `modified` field of the node at
-// abs to `at` (RFC3339 UTC), writing the file back in place. It is order- and
-// body-preserving: the frontmatter block is round-tripped through a yaml.Node
-// so existing keys keep their order and the Markdown body is preserved verbatim.
-// `created` is never rewritten (only modified is touched); a node without a
-// `modified` key gains one appended to the end of its frontmatter, and one
-// without frontmatter at all gains a minimal block. It never fabricates created.
+// abs to `at`, writing the file back in place. It is order- and body-preserving:
+// the frontmatter block is round-tripped through a yaml.Node so existing keys
+// keep their order and the Markdown body is preserved verbatim. `created` is
+// never rewritten (only modified is touched); a node without a `modified` key
+// gains one appended to the end of its frontmatter, and one without frontmatter
+// at all gains a minimal block. It never fabricates created.
+//
+// `at` is stamped in its OWN location (via stampValue, RFC3339) — NOT forced to
+// UTC — so an okfctl-mediated edit records the author's local calendar day and
+// agrees with git's author-local commit day (drift.go §5). Forcing UTC here was
+// the evening false-positive class (timestamps.go/nowUTC).
 //
 // This is the single, order-preserving writer for a timestamp refresh — it edits
 // the frontmatter block only, so it cannot drop the body the way rewriting a
@@ -40,7 +45,7 @@ func TouchModifiedFile(abs string, at time.Time) error {
 	if err != nil {
 		return fmt.Errorf("read %s: %w", abs, err)
 	}
-	stamp := at.UTC().Format(timestampLayout)
+	stamp := stampValue(at)
 
 	yamlBlock, rawAfter, ok := splitFrontmatterRaw(raw)
 	if !ok {
