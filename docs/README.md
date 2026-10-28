@@ -37,5 +37,5 @@ Start here:
 
 okfctl consumes the Open Knowledge Format; it doesn't author it. The
 authoritative source is the upstream
-[OKF v0.2 specification](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md).
+[OKF v0.2 specification](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md).
 Confirm the version line (`**Version 0.2**`) before citing a section number—§-numbering shifted between v0.1 and v0.2.

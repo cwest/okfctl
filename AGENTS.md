@@ -17,15 +17,21 @@ what the code happens to do today.**
 The authoritative source is:
 
 ```
-https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
-raw: https://raw.githubusercontent.com/GoogleCloudPlatform/knowledge-catalog/main/okf/SPEC.md
+https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md
+raw: https://raw.githubusercontent.com/GoogleCloudPlatform/open-knowledge-format/main/SPEC.md
 ```
 
-**This trap is live and it has already caught us.** The obvious-looking source—`openknowledge-sh/openknowledge`, `Wiki/SPEC.md`—is a *pinned mirror*, and it is
-**stale at v0.1** while upstream is at **v0.2**. Its own frontmatter names the real
-upstream in a `resource:` key. Anyone who greps for "the spec," finds that file,
-and builds against it will conform to a superseded version and be confident about
-it. Always fetch upstream and check the version line before citing a section
+**This trap is live and it has already caught us.** Two stale sources look
+authoritative and are not. The spec now lives in its own repo,
+`GoogleCloudPlatform/open-knowledge-format`; the former home at
+`GoogleCloudPlatform/knowledge-catalog/okf/SPEC.md` is a **frozen snapshot** that
+no longer tracks upstream—anyone who cites it will pin to whatever it held at
+freeze time. The older `openknowledge-sh/openknowledge`, `Wiki/SPEC.md` is a
+*pinned mirror* **stale at v0.1** while upstream is at **v0.2**; its own
+frontmatter names the real upstream in a `resource:` key. Anyone who greps for
+"the spec," finds either stale copy, and builds against it will conform to a
+superseded version and be confident about it. Always fetch upstream
+(`open-knowledge-format`) and check the version line before citing a section
 number—§-numbering *shifted between v0.1 and v0.2* (v0.1 had 11 sections, v0.2
 has 13; index files moved from §6 to §8, conformance from §9 to §11, versioning
 from §11 to §12).
@@ -33,7 +39,7 @@ from §11 to §12).
 Confirm the version before you cite anything:
 
 ```sh
-curl -sL https://raw.githubusercontent.com/GoogleCloudPlatform/knowledge-catalog/main/okf/SPEC.md \
+curl -sL https://raw.githubusercontent.com/GoogleCloudPlatform/open-knowledge-format/main/SPEC.md \
   | head -5    # expect: **Version 0.2**
 ```
 

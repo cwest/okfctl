@@ -6,7 +6,7 @@ Thanks for your interest in contributing.
 ## The one rule that governs everything
 
 `okfctl` is a **consumer of a specification it doesn't own**. The
-[Open Knowledge Format spec](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+[Open Knowledge Format spec](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)
 is the authority; this tool conforms to it. Where the spec defines behavior, the
 spec wins—over convenience, over a maintainer's preference, over what the code
 happens to do today.
