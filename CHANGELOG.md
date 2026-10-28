@@ -48,9 +48,10 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ### Build
 
-- The Go toolchain was bumped from 1.26.6 to 1.26.9 to pick up patched
-  standard-library fixes for seven disclosed vulnerabilities (GO-2026-6603,
-  -6607, -6608, -6611, -6612, -6613, -6617), clearing `govulncheck` in CI.
+- The Go toolchain was bumped from 1.26.6 to 1.26.10 to pick up patched
+  standard-library fixes for disclosed vulnerabilities (GO-2026-6603, -6607,
+  -6608, -6611, -6612, -6613, -6617, and the crypto/x509 certificate-verification
+  fix GO-2026-6809), clearing `govulncheck` in CI.
 
 ## [0.4.0] - 2026-08-19
 
