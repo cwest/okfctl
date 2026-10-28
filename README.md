@@ -11,7 +11,7 @@ from the tree, provenance goes stale, and no one notices until the corpus is
 already a maze.
 
 `okfctl` is the tool that keeps it honest. It authors and maintains
-[Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+[Open Knowledge Format](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)
 (OKF) bundles—a curated tree of Markdown "nodes" with a link graph, reserved
 `index.md`/`log.md` files, and frontmatter provenance—and it checks the whole
 thing against the spec so drift surfaces as a finding instead of a surprise.
@@ -82,7 +82,7 @@ building from source all live in the [install guide](docs/install.md).
 ## The spec is the authority
 
 OKF is a specification `okfctl` consumes; it doesn't author it. The
-[Open Knowledge Format spec](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+[Open Knowledge Format spec](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)
 decides behavior, and where it does, it wins. `okfctl` enforces the spec *floor*
 for everyone and keeps anything stricter behind an explicit opt-in overlay
 (`--templates`, §9.4), so an unknown `type` or a future frontmatter key still
@@ -168,7 +168,7 @@ version is the release tag, reported by `okfctl version`.
 - **Per-command help**—`okfctl <cmd> --help` is authoritative and always
   matches the binary.
 - **The spec**—the authoritative
-  [OKF v0.2 specification](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md).
+  [OKF v0.2 specification](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md).
 - **For contributors**—[`docs/PRD.md`](docs/PRD.md), the
   [ADRs](docs/adr/README.md), and the dated
   [plans](docs/plans/2026-07-22-roadmap.md)/[specs](docs/specs/) that record how
