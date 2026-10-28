@@ -76,8 +76,15 @@ func newConnectCmd() *cobra.Command {
 
 			out := cmd.OutOrStdout()
 
-			// Existing checkout of the source: fast-forward it.
-			if okf.IsGitWorkTree(dir) {
+			// Existing checkout of THIS source: fast-forward it. The destination
+			// must be the top level of a checkout whose origin is this source —
+			// a mere subdirectory of an unrelated repo, or a checkout of a
+			// different origin, must NOT be pulled (issue #193).
+			isCheckout, err := okf.IsCheckoutOf(dir, url)
+			if err != nil {
+				return err
+			}
+			if isCheckout {
 				if err := okf.PullFastForward(dir); err != nil {
 					return err
 				}
@@ -85,7 +92,9 @@ func newConnectCmd() *cobra.Command {
 				return nil
 			}
 
-			// A non-empty, non-repo directory must not be clobbered.
+			// A non-empty directory that is not a checkout of this source must
+			// not be clobbered — this covers a subdirectory of another repo, a
+			// checkout of a different origin, and a plain non-repo directory.
 			if nonEmpty, err := dirIsNonEmpty(dir); err != nil {
 				return err
 			} else if nonEmpty {
@@ -103,7 +112,9 @@ func newConnectCmd() *cobra.Command {
 
 // looksLikeGitURL reports whether s is plausibly a git URL rather than a bare
 // (mistyped) remote name: a scheme (https://, git://, ssh://, file://), scp-like
-// syntax (user@host:path), or an absolute/relative path to a local repo.
+// syntax (user@host:path), an absolute/relative POSIX path, a Windows
+// drive-letter path (C:\… or C:/…), or a Windows UNC path (\\host\share). git
+// clones every one of these, so connect must treat them as URLs (issue #193).
 func looksLikeGitURL(s string) bool {
 	if strings.Contains(s, "://") {
 		return true
@@ -112,9 +123,28 @@ func looksLikeGitURL(s string) bool {
 		return true // scp-like: git@github.com:owner/repo.git
 	}
 	if strings.HasPrefix(s, "/") || strings.HasPrefix(s, ".") || strings.HasPrefix(s, "~") {
-		return true // local path (a local bare repo is a valid source)
+		return true // POSIX local path (a local bare repo is a valid source)
+	}
+	if isWindowsDrivePath(s) {
+		return true // C:\repos\docs or C:/repos/docs
+	}
+	if strings.HasPrefix(s, `\\`) && len(s) > 2 {
+		return true // UNC path: \\server\share\repo
 	}
 	return false
+}
+
+// isWindowsDrivePath reports whether s is a Windows drive-letter path such as
+// `C:\repos\docs` or `C:/repos/docs`. A bare drive letter (`C:`) with nothing
+// after the separator is not a path. A single letter is required so a scp-like
+// `host:path` (already handled above) is not mistaken for a drive.
+func isWindowsDrivePath(s string) bool {
+	if len(s) < 3 {
+		return false // need "X:" plus at least one separator char
+	}
+	c := s[0]
+	isLetter := (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+	return isLetter && s[1] == ':' && (s[2] == '\\' || s[2] == '/')
 }
 
 // defaultDirForURL derives a destination directory name from a git URL's final

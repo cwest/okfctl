@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/cwest/okfctl/internal/okf"
@@ -147,4 +148,165 @@ func TestConnect_UnknownNameAndNoSlashErrors(t *testing.T) {
 	if _, err := runOKF(t, "connect", "definitely-not-registered", filepath.Join(t.TempDir(), "d")); err == nil {
 		t.Fatalf("connect with an unknown bareword source must error")
 	}
+}
+
+// TestLooksLikeGitURL covers schemes, scp-like syntax, local paths, Windows
+// drive-letter and UNC paths (accepted), and barewords / bare drive letters
+// (rejected). Windows paths git-clones, so connect must treat them as URLs
+// (issue #193, bug 2).
+func TestLooksLikeGitURL(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		// Schemes and scp-like syntax (unchanged behavior).
+		{"https://github.com/acme/kb.git", true},
+		{"git://host/repo.git", true},
+		{"ssh://git@host/repo.git", true},
+		{"file:///srv/repo.git", true},
+		{"git@github.com:owner/repo.git", true},
+		// POSIX local paths (unchanged).
+		{"/srv/repo", true},
+		{"./kb", true},
+		{"~/repo", true},
+		// Windows drive-letter paths (new): both separators.
+		{`C:\repos\docs`, true},
+		{"C:/repos/docs", true},
+		{`D:\a`, true},
+		{"Z:/a", true},
+		// Windows UNC paths (new).
+		{`\\server\share\repo`, true},
+		{`\\srv\share\r`, true},
+		// Rejections — a bare word is still a mistyped remote name, not a URL.
+		{"knowledge", false},
+		{"foo", false},
+		{"", false},
+		// A bare drive letter with nothing after the colon is not a path.
+		{"C:", false},
+		// A single backslash is not a UNC path.
+		{`\only-one`, false},
+	}
+	for _, tc := range cases {
+		if got := looksLikeGitURL(tc.in); got != tc.want {
+			t.Errorf("looksLikeGitURL(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestConnect_SubdirOfAnotherRepoLeftUntouched is the serious-bug control from
+// issue #193: connecting a source INTO a subdirectory of an unrelated repo must
+// refuse (clear error, non-zero exit) and must NOT fast-forward the enclosing
+// repo. We prove the enclosing repo's HEAD is unchanged.
+func TestConnect_SubdirOfAnotherRepoLeftUntouched(t *testing.T) {
+	root := t.TempDir()
+	src := seedBareBundleSource(t, root)
+	t.Setenv("OKFCTL_CONFIG_HOME", t.TempDir())
+
+	// An unrelated "other" repo with a committed subdir.
+	other := filepath.Join(root, "other")
+	if err := os.MkdirAll(other, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git(t, other, "init", "-q", "-b", "main")
+	git(t, other, "config", "commit.gpgsign", "false")
+	sub := filepath.Join(other, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "keep.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, other, "add", "-A")
+	git(t, other, "commit", "-qm", "seed other")
+	before := gitHEAD(t, other)
+
+	// Connecting the source into other/sub must be refused, not fast-forwarded.
+	_, err := runOKF(t, "connect", src, sub)
+	if err == nil {
+		t.Fatalf("connect into a subdir of another repo must error")
+	}
+	if !strings.Contains(err.Error(), "refusing to overwrite") {
+		t.Fatalf("expected a refuse-to-overwrite error, got: %v", err)
+	}
+	if after := gitHEAD(t, other); after != before {
+		t.Fatalf("enclosing repo HEAD moved: before=%s after=%s", before, after)
+	}
+}
+
+// TestConnect_DifferentOriginCheckoutLeftUntouched: a destination that is a
+// genuine top-level checkout but of a DIFFERENT origin must be refused, not
+// fast-forwarded (issue #193, bug 1, second half).
+func TestConnect_DifferentOriginCheckoutLeftUntouched(t *testing.T) {
+	root := t.TempDir()
+	srcA := seedBareBundleSource(t, mustMkdirCmd(t, root, "a"))
+	srcB := seedBareBundleSource(t, mustMkdirCmd(t, root, "b"))
+	t.Setenv("OKFCTL_CONFIG_HOME", t.TempDir())
+
+	// Clone srcA into dst, then try to connect srcB into it.
+	dst := filepath.Join(root, "checkout-a")
+	if _, err := runOKF(t, "connect", srcA, dst); err != nil {
+		t.Fatalf("seed connect of srcA: %v", err)
+	}
+	before := gitHEAD(t, dst)
+
+	_, err := runOKF(t, "connect", srcB, dst)
+	if err == nil {
+		t.Fatalf("connect of a different origin into an existing checkout must error")
+	}
+	if !strings.Contains(err.Error(), "refusing to overwrite") {
+		t.Fatalf("expected a refuse-to-overwrite error, got: %v", err)
+	}
+	if after := gitHEAD(t, dst); after != before {
+		t.Fatalf("existing checkout HEAD moved: before=%s after=%s", before, after)
+	}
+}
+
+// TestConnect_SameSourceStillFastForwards guards the kept behavior: a genuine
+// same-source checkout is still fast-forwarded on a second connect.
+func TestConnect_SameSourceStillFastForwards(t *testing.T) {
+	root := t.TempDir()
+	bare := seedBareBundleSource(t, root)
+	t.Setenv("OKFCTL_CONFIG_HOME", t.TempDir())
+
+	dst := filepath.Join(root, "kb")
+	if _, err := runOKF(t, "connect", bare, dst); err != nil {
+		t.Fatalf("first connect: %v", err)
+	}
+
+	// Advance the source with a new node via a scratch clone.
+	adv := filepath.Join(root, "adv")
+	git(t, root, "clone", "-q", bare, adv)
+	git(t, adv, "config", "commit.gpgsign", "false")
+	if err := os.WriteFile(filepath.Join(adv, "ff.md"), []byte("---\ntype: Concept\n---\n\n# FF\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, adv, "add", "-A")
+	git(t, adv, "commit", "-qm", "advance")
+	git(t, adv, "push", "-q", "origin", "main")
+
+	if _, err := runOKF(t, "connect", bare, dst); err != nil {
+		t.Fatalf("second connect (same-source ff): %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "ff.md")); err != nil {
+		t.Fatalf("same-source fast-forward did not pull new node: %v", err)
+	}
+}
+
+func mustMkdirCmd(t *testing.T, root, name string) string {
+	t.Helper()
+	d := filepath.Join(root, name)
+	if err := os.MkdirAll(d, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
+func gitHEAD(t *testing.T, dir string) string {
+	t.Helper()
+	c := exec.Command("git", "-C", dir, "rev-parse", "HEAD")
+	out, err := c.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git rev-parse HEAD in %s: %v\n%s", dir, err, out)
+	}
+	return strings.TrimSpace(string(out))
 }
