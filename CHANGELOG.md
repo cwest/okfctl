@@ -48,6 +48,9 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ### Build
 
+- The Go toolchain was bumped from 1.26.10 to 1.26.11 to pick up the patched
+  `net/http` standard-library fix for GO-2026-6859 (an HTTP/1 server crash from a
+  `MaxBytesReader` header race), clearing `govulncheck` in CI.
 - The Go toolchain was bumped from 1.26.6 to 1.26.10 to pick up patched
   standard-library fixes for disclosed vulnerabilities (GO-2026-6603, -6607,
   -6608, -6611, -6612, -6613, -6617, and the crypto/x509 certificate-verification
