@@ -218,13 +218,40 @@ func rootFrontmatter(b *Bundle) string {
 }
 
 // dirHeading returns the top `# ` heading for a directory's index. The root
-// index is titled "Knowledge Base"; a nested index is titled after its own
-// directory (Title-cased base name).
+// index defaults to "Knowledge Base"; a nested index is titled after its own
+// directory (Title-cased base name). For the bundle root this is only the
+// FALLBACK — see rootHeading, which preserves a curator-authored on-disk title.
 func dirHeading(dir string) string {
 	if dir == "" {
 		return "# Knowledge Base\n"
 	}
 	return "# " + dirTitle(dir) + "\n"
+}
+
+// h1Re matches the first ATX H1 line (`# Title`) of an index body, capturing the
+// title text. Setext headings and deeper levels are not the bundle title.
+var h1Re = regexp.MustCompile(`(?m)^# (.+?)\s*$`)
+
+// rootHeading returns the top `# ` heading for the bundle-root index. The §8
+// section heading text is a human-facing title the producer owns, not a literal
+// the tool may mandate — so an on-disk root index.md's existing H1 is PRESERVED
+// verbatim, and the generic `# Knowledge Base` default (dirHeading("")) is only
+// the FALLBACK for a bundle with no root index yet.
+//
+// This is what makes `index build`/`index check` safe when a neighborhood
+// sub-directory is passed as the bundle arg (it loads as the root ""): its own
+// `# Domains` title survives instead of being silently rewritten to
+// `# Knowledge Base`. A first build on a fresh bundle, and the real corpus whose
+// root is already `# Knowledge Base`, both stay byte-identical.
+func rootHeading(b *Bundle) string {
+	if idx, ok := b.Reserved["index.md"]; ok && idx != nil {
+		if m := h1Re.FindStringSubmatch(normalizeEOL(idx.Body)); m != nil {
+			if title := strings.TrimSpace(m[1]); title != "" {
+				return "# " + title + "\n"
+			}
+		}
+	}
+	return dirHeading("")
 }
 
 // childDirsOf returns the sorted immediate content-bearing child directories of
@@ -410,8 +437,10 @@ func RenderDirIndexWithOptions(b *Bundle, dir string, opts IndexShapeOptions) st
 	var sb strings.Builder
 	if dir == "" {
 		sb.WriteString(rootFrontmatter(b))
+		sb.WriteString(rootHeading(b))
+	} else {
+		sb.WriteString(dirHeading(dir))
 	}
-	sb.WriteString(dirHeading(dir))
 
 	kids := childDirsOf(b, dir)
 	concepts := conceptsIn(b, dir)

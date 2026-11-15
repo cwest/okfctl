@@ -17,6 +17,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -72,5 +73,98 @@ func TestIndexCheck_HandCorruptedExitsNonZero(t *testing.T) {
 	}
 	if _, err := runOKF(t, "index", "check", dir); err == nil {
 		t.Fatal("index check must exit nonzero on a hand-corrupted index")
+	}
+}
+
+// TestIndexBuild_SubDirDoesNotRewriteNeighborhoodHeading is card step 3: running
+// `index build <neighborhood-subdir>` (the sub-directory passed as the bundle
+// arg, so it loads as the root "") must NOT overwrite the neighborhood's own H1
+// (`# Domains`) with the generic root default (`# Knowledge Base`). Before the
+// fix this silently corrupted the index: `git diff` showed `-# Domains` /
+// `+# Knowledge Base`.
+func TestIndexBuild_SubDirDoesNotRewriteNeighborhoodHeading(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := runOKF(t, "bundle", "init", dir); err != nil {
+		t.Fatal(err)
+	}
+	// A `domains` neighborhood: node new auto-maintains domains/index.md with a
+	// neighborhood-named H1 (`# Domains`), mirroring the real cwest/knowledge-base.
+	if _, err := runOKF(t, "node", "new", "domains/foo.md", "--type", "Reference", "--title", "Foo", "--bundle", dir); err != nil {
+		t.Fatal(err)
+	}
+	neighborhood := filepath.Join(dir, "domains")
+	idxPath := filepath.Join(neighborhood, "index.md")
+
+	before, err := os.ReadFile(idxPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(before), "# Domains\n") {
+		t.Fatalf("precondition: domains/index.md must start with `# Domains`; got:\n%s", before)
+	}
+
+	// Build against the SUB-DIRECTORY (the footgun scope).
+	if _, err := runOKF(t, "index", "build", neighborhood); err != nil {
+		t.Fatalf("index build on a neighborhood sub-dir: %v", err)
+	}
+
+	after, err := os.ReadFile(idxPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(after), "# Knowledge Base") {
+		t.Errorf("sub-dir build corrupted the neighborhood H1 to `# Knowledge Base`; got:\n%s", after)
+	}
+	if !strings.HasPrefix(string(after), "# Domains\n") {
+		t.Errorf("sub-dir build must preserve the `# Domains` H1; got:\n%s", after)
+	}
+}
+
+// TestIndexCheck_SubDirNoFalsePositive is card step 2: after a correct
+// root-scope build, `index check <neighborhood-subdir>` must not false-positive
+// against the correct on-disk neighborhood index. The on-disk `# Domains` is
+// right, so a sub-scope check of it must pass (exit 0).
+func TestIndexCheck_SubDirNoFalsePositive(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := runOKF(t, "bundle", "init", dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runOKF(t, "node", "new", "domains/foo.md", "--type", "Reference", "--title", "Foo", "--bundle", dir); err != nil {
+		t.Fatal(err)
+	}
+	// Authoritative build at bundle-root scope (the CI gate's scope).
+	if _, err := runOKF(t, "index", "build", dir); err != nil {
+		t.Fatalf("root-scope index build: %v", err)
+	}
+	// The on-disk domains/index.md is now correct; a sub-scope check must agree.
+	if _, err := runOKF(t, "index", "check", filepath.Join(dir, "domains")); err != nil {
+		t.Fatalf("index check on a correct neighborhood sub-dir must pass (no false positive): %v", err)
+	}
+}
+
+// TestIndexBuildThenCheck_RootScopeUnchanged is the bundle-root control: the
+// documented happy path (`index build <root>` then `index check <root>`) stays
+// green, so the fix does not regress root-scope behavior.
+func TestIndexBuildThenCheck_RootScopeUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := runOKF(t, "bundle", "init", dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runOKF(t, "node", "new", "domains/foo.md", "--type", "Reference", "--title", "Foo", "--bundle", dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runOKF(t, "index", "build", dir); err != nil {
+		t.Fatalf("root-scope index build: %v", err)
+	}
+	if _, err := runOKF(t, "index", "check", dir); err != nil {
+		t.Fatalf("root-scope index check should pass right after build: %v", err)
+	}
+	// Root index keeps the generic `# Knowledge Base` title.
+	root, err := os.ReadFile(filepath.Join(dir, "index.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(root), "# Knowledge Base") {
+		t.Errorf("root index must keep `# Knowledge Base`; got:\n%s", root)
 	}
 }
