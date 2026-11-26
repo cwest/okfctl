@@ -31,6 +31,11 @@ import (
 // first-non-empty-wins would require extra state and no caller needs it).
 func readOkfSidecar(root string) map[string]string {
 	out := map[string]string{}
+	// §3.2 rule 5 / §11.2: a .okf symlinked out of the bundle root is not read;
+	// Load records it in Bundle.EscapedSymlinks.
+	if escapesBundleRoot(root, filepath.Join(root, ".okf")) {
+		return out
+	}
 	// root is the user's bundle root; reading its .okf sidecar is intended.
 	data, err := os.ReadFile(filepath.Join(root, ".okf")) //nolint:gosec // G304: reading the user's own bundle sidecar
 	if err != nil {
