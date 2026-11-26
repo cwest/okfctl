@@ -222,21 +222,54 @@ func (n *Node) Epistemic() (string, bool) {
 	return scalarString(v), true
 }
 
-// StaleAfter returns the absolute stale-after date (§5.5, YYYY-MM-DD). ok is
-// false when the field is absent or unparseable.
+// StaleAfter returns the absolute stale-after instant (§5.5; RFC 3339 date-time
+// or full-date, §5). ok is false when the field is absent or unparseable; use
+// StaleAfterMalformed to tell the two apart.
 func (n *Node) StaleAfter() (time.Time, bool) {
 	return frontmatterTime(n.Frontmatter["stale_after"])
 }
 
-// IsStale reports whether the node is stale as of `today` (§5.5): stale when
-// today >= stale_after. A node with no (or unparseable) stale_after is never
-// stale.
-func (n *Node) IsStale(today time.Time) bool {
-	sa, ok := n.StaleAfter()
-	if !ok {
+// hasStaleAfter reports whether the node carries a non-empty stale_after. Per
+// §5.5 and §11.2 rule 1, a null value, an empty string, and an empty list are
+// the same as an absent key.
+func (n *Node) hasStaleAfter() bool {
+	v, ok := n.Frontmatter["stale_after"]
+	if !ok || v == nil {
 		return false
 	}
-	return !today.Before(sa) // today >= stale_after
+	switch t := v.(type) {
+	case string:
+		return strings.TrimSpace(t) != ""
+	case []any:
+		return len(t) > 0
+	}
+	return true
+}
+
+// StaleAfterMalformed reports whether the node carries a stale_after value that
+// does not parse as an RFC 3339 timestamp (§5). §5.5: a consumer SHOULD show
+// such a value as malformed.
+func (n *Node) StaleAfterMalformed() bool {
+	if !n.hasStaleAfter() {
+		return false
+	}
+	_, ok := n.StaleAfter()
+	return !ok
+}
+
+// IsStale reports whether the node is stale as of `now` (§5.5): stale when
+// now >= stale_after. A node with no stale_after (absent, null, or empty) is
+// never stale. A stale_after that does not parse is reported stale, because
+// §5.5 and §11.2 say a consumer MUST NOT treat an unparseable value as fresh.
+func (n *Node) IsStale(now time.Time) bool {
+	if !n.hasStaleAfter() {
+		return false
+	}
+	sa, ok := n.StaleAfter()
+	if !ok {
+		return true // §5.5: unparseable is never fresh
+	}
+	return !now.Before(sa) // now >= stale_after
 }
 
 // SourceCitations returns how many provenance entries a node carries (§13.1

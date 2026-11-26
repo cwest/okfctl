@@ -26,7 +26,7 @@ import (
 
 func newAnalyzeCmd() *cobra.Command {
 	var jsonOut bool
-	var staleDays int
+	var agingDays int
 	var timeSensitiveFraction float64
 	var thinLines int
 	var clusterMin int
@@ -37,9 +37,9 @@ func newAnalyzeCmd() *cobra.Command {
 		Short: "Report where a bundle is weak (freshness, gaps, connectivity, clusters, structure)",
 		Long: "analyze is a proactive curation REPORT, not a gate. Where lint answers " +
 			"\"is this corpus broken?\" (a CI gate: --strict exits non-zero), analyze answers " +
-			"\"where is this corpus weak?\" across five dimensions — coverage gaps, freshness/" +
-			"staleness, connectivity, tag-cluster synthesis candidates, and structure. It never " +
-			"mutates the bundle.\n\n" +
+			"\"where is this corpus weak?\" across five dimensions — coverage gaps, freshness " +
+			"(staleness from stale_after, plus an aging advisory), connectivity, tag-cluster " +
+			"synthesis candidates, and structure. It never mutates the bundle.\n\n" +
 			"Report semantics: analyze exits 0 whenever the analysis runs successfully, regardless " +
 			"of how many findings it produces. The exit code reflects whether the analysis " +
 			"succeeded, not whether the corpus is perfect. There's deliberately no --strict flag; " +
@@ -62,7 +62,7 @@ func newAnalyzeCmd() *cobra.Command {
 				return err
 			}
 			rep := okf.Analyze(b, okf.AnalyzeOptions{
-				StaleDays:             staleDays,
+				AgingDays:             agingDays,
 				TimeSensitiveFraction: timeSensitiveFraction,
 				ThinLines:             thinLines,
 				ClusterMin:            clusterMin,
@@ -81,8 +81,10 @@ func newAnalyzeCmd() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&jsonOut, "json", false, "emit machine-readable JSON instead of the human report")
-	c.Flags().IntVar(&staleDays, "stale-days", 0, "age (days) past which a node's freshness basis (verified/generated/modified/created) is flagged stale (default 180)")
-	c.Flags().Float64Var(&timeSensitiveFraction, "time-sensitive-fraction", 0, "flag a time-sensitive node once its age >= fraction*stale-days (default 0.5); undated marked nodes are always flagged")
+	c.Flags().IntVar(&agingDays, "aging-days", 0, "age (days) past which a node's review basis (verified/generated/modified/created) is listed as aging (default 180); advisory only, staleness comes from stale_after")
+	c.Flags().IntVar(&agingDays, "stale-days", 0, "deprecated alias for --aging-days")
+	_ = c.Flags().MarkDeprecated("stale-days", "use --aging-days; staleness now comes only from stale_after (OKF §5.5)")
+	c.Flags().Float64Var(&timeSensitiveFraction, "time-sensitive-fraction", 0, "flag a time-sensitive node once its age >= fraction*aging-days (default 0.5); undated marked nodes are always flagged")
 	c.Flags().IntVar(&thinLines, "thin-lines", 0, "body line count below which a node is thin (default 15)")
 	c.Flags().IntVar(&clusterMin, "cluster-min", 0, "min nodes sharing a tag to flag a synthesis cluster (default 3)")
 	c.Flags().IntVar(&coverageThreshold, "coverage-threshold", 0, "min distinct nodes mentioning a term to report a coverage gap (default 3)")
@@ -98,8 +100,8 @@ func writeAnalyzeHuman(w io.Writer, rep okf.AnalyzeReport) {
 
 	fmt.Fprintln(w, "# OKF Corpus Analysis")
 	fmt.Fprintln(w)
-	fmt.Fprintf(w, "%d node(s), %d internal link(s). Stale threshold: %dd.\n",
-		rep.Summary.Nodes, rep.Summary.TotalInternalLinks, rep.Summary.StaleThresholdDays)
+	fmt.Fprintf(w, "%d node(s), %d internal link(s). Aging threshold: %dd.\n",
+		rep.Summary.Nodes, rep.Summary.TotalInternalLinks, rep.Summary.AgingThresholdDays)
 
 	section := func(title string, n int, body func()) {
 		total += n
@@ -153,14 +155,25 @@ func writeAnalyzeHuman(w io.Writer, rep okf.AnalyzeReport) {
 	}
 	fmt.Fprintf(w, "  (%d node(s) with no epistemic key)\n", rep.Epistemic.Untagged)
 
-	// Freshness.
+	// Freshness. Staleness is decided only by stale_after (OKF §5.5, §11.2);
+	// the age-based list is an advisory and is labeled so it never claims a
+	// node is stale.
 	fr := rep.Freshness
-	section("Freshness — stale / undated nodes (revalidate)", len(fr.Stale), func() {
-		for _, s := range fr.Stale {
-			fmt.Fprintf(w, "  - %s (age: %s, basis: %s)\n", s.Path, ageStr(s.AgeDays), s.Basis)
+	section("Stale — past stale_after or malformed stale_after (§5.5)", len(fr.StaleAfter), func() {
+		for _, s := range fr.StaleAfter {
+			if s.Malformed {
+				fmt.Fprintf(w, "  - %s (stale_after: %q is malformed; never fresh)\n", s.Path, s.StaleAfter)
+				continue
+			}
+			fmt.Fprintf(w, "  - %s (stale_after: %s)\n", s.Path, s.StaleAfter)
 		}
 	})
-	section("Freshness — time-sensitive bodies aged past the gate (re-verify claims)", len(fr.TimeSensitive), func() {
+	section(fmt.Sprintf("Aging — not reviewed in %d days, or undated (advisory, not staleness)", rep.Summary.AgingThresholdDays), len(fr.Aging), func() {
+		for _, a := range fr.Aging {
+			fmt.Fprintf(w, "  - %s (age: %s, basis: %s)\n", a.Path, ageStr(a.AgeDays), a.Basis)
+		}
+	})
+	section("Time-sensitive — marked bodies aged past the gate (re-verify claims)", len(fr.TimeSensitive), func() {
 		for _, t := range fr.TimeSensitive {
 			fmt.Fprintf(w, "  - %s (age: %s, markers: %s)\n", t.Path, ageStr(t.AgeDays), strings.Join(t.Markers, ", "))
 		}
