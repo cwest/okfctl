@@ -17,47 +17,65 @@ what the code happens to do today.**
 The authoritative source is:
 
 ```
-https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md
-raw: https://raw.githubusercontent.com/GoogleCloudPlatform/open-knowledge-format/main/SPEC.md
+https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md
+raw: https://raw.githubusercontent.com/open-knowledge-format/open-knowledge-format/main/SPEC.md
 ```
 
-**This trap is live and it has already caught us.** Two stale sources look
-authoritative and are not. The spec now lives in its own repo,
-`GoogleCloudPlatform/open-knowledge-format`; the former home at
-`GoogleCloudPlatform/knowledge-catalog/okf/SPEC.md` is a **frozen snapshot** that
-no longer tracks upstream—anyone who cites it will pin to whatever it held at
-freeze time. The older `openknowledge-sh/openknowledge`, `Wiki/SPEC.md` is a
-*pinned mirror* **stale at v0.1** while upstream is at **v0.2**; its own
-frontmatter names the real upstream in a `resource:` key. Anyone who greps for
-"the spec," finds either stale copy, and builds against it will conform to a
-superseded version and be confident about it. Always fetch upstream
-(`open-knowledge-format`) and check the version line before citing a section
-number—§-numbering *shifted between v0.1 and v0.2* (v0.1 had 11 sections, v0.2
-has 13; index files moved from §6 to §8, conformance from §9 to §11, versioning
-from §11 to §12).
+**This trap is live and it has already caught us more than once.** Three stale
+sources look authoritative and are not:
+
+- `GoogleCloudPlatform/open-knowledge-format` is **deprecated**. Its README
+  carries a deprecation banner pointing at
+  `open-knowledge-format/open-knowledge-format`, and its `SPEC.md` is frozen at
+  **v0.2**. Links to it from before the move are history, not a source.
+- `GoogleCloudPlatform/knowledge-catalog/okf/SPEC.md`, the home before that, is a
+  **frozen v0.2 snapshot** that no longer tracks upstream.
+- `openknowledge-sh/openknowledge`, `Wiki/SPEC.md` is a *pinned mirror*
+  **stale at v0.1**; its own frontmatter names an earlier upstream in a
+  `resource:` key.
+
+Anyone who greps for "the spec," finds a stale copy, and builds against it will
+conform to a superseded version and be confident about it. Always fetch upstream
+(`open-knowledge-format/open-knowledge-format`) and check the version line before
+citing a section number. §-numbering *shifted between v0.1 and v0.2* (v0.1 had 11
+sections, v0.2 has 13; index files moved from §6 to §8, conformance from §9 to
+§11, versioning from §11 to §12). v0.3 keeps the v0.2 top-level numbering, adds
+subsections (§3.2, §6.4, §8.1, §11.1–§11.2, §12.1–§12.2), and moves the v0.1→v0.2
+change list to Appendix B; §13 is now "Changes from v0.2."
 
 Confirm the version before you cite anything:
 
 ```sh
-curl -sL https://raw.githubusercontent.com/GoogleCloudPlatform/open-knowledge-format/main/SPEC.md \
-  | head -5    # expect: **Version 0.2**
+curl -sL https://raw.githubusercontent.com/open-knowledge-format/open-knowledge-format/main/SPEC.md \
+  | head -5    # expect: **Version 0.3**
 ```
 
-### Version state—v0.2 across the board
+### Version state—upstream is v0.3, the tool still targets v0.2
 
 | Where | Version |
 |---|---|
-| Upstream spec | **0.2** |
+| Upstream spec | **0.3** |
 | `SpecVersion` (`internal/okf/reserved.go`) | `0.2` |
-| A real corpus's bundle-root `index.md` `okf_version` | `0.2` |
+| A real corpus's bundle-root `index.md` `okf_version` | none declared (no `.okf`, no root frontmatter); okfctl reads it as `0.2` |
 
-The tool, the corpus, and the spec are all v0.2. v0.2 is a minor bump
-(§13) with two deliberate breaking renames: `timestamp` → `generated.at`, and the
-body `# Citations` list → frontmatter `sources`. Consumers MAY fall back to the
-legacy forms, so v0.1 bundles stay readable—a flip of the DEFAULT for new
-bundles, not the floor for existing ones. The v0.1 fallbacks in `internal/okf`
-(legacy `timestamp` for `generated.at`, legacy body `# Citations` for `sources`)
-are load-bearing and MUST stay.
+Upstream shipped v0.3; the tool and the corpus are still v0.2 while the move
+lands in steps. The per-item map of what v0.3 changes and where okfctl stands is
+[`docs/specs/2026-11-26-okf-v0.3-gap-analysis.md`](docs/specs/2026-11-26-okf-v0.3-gap-analysis.md);
+read it before touching anything v0.3 §13 lists. Cite v0.3 sections for new
+behavior.
+
+v0.3 (§13.1) has two breaking changes: a link or path field without a leading `/`
+resolves from the directory of its file, and only *current* verification events
+count toward the trust tier. A bundle that declares `okf_version` 0.2 or earlier,
+or no version, MAY fall back to bundle-root resolution (§12.1, §6.2).
+
+v0.2 was a minor bump (now v0.3 Appendix B) with two deliberate breaking renames:
+`timestamp` → `generated.at`, and the body `# Citations` list → frontmatter
+`sources`. Consumers MAY fall back to the legacy forms, so v0.1 bundles stay
+readable—a flip of the DEFAULT for new bundles, not the floor for existing ones.
+The v0.1 fallbacks in `internal/okf` (legacy `timestamp` for `generated.at`,
+legacy body `# Citations` for `sources`) are load-bearing and MUST stay; v0.3
+§12.1 keeps them.
 
 A bundle declares its own target via `okf_version` in the `.okf` sidecar; the tool
 reads it rather than assuming. Per §12, a consumer that does not understand a
