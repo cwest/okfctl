@@ -81,3 +81,39 @@ func TestConformance_ValidateFlagsSpecViolatingIndex_CLI(t *testing.T) {
 		t.Errorf("validate output must name the offending index.md; got:\n%s", out)
 	}
 }
+
+// TestConformance_Section8_1_RootMetadataSurvivesCLI drives the v0.3 §8.1
+// repro through the real CLI: a root index with title, description, license,
+// and an x- extension key validates (exit 0), `index build` keeps the block
+// byte-for-byte, and `index check` and `validate` stay clean afterwards.
+func TestConformance_Section8_1_RootMetadataSurvivesCLI(t *testing.T) {
+	dir := t.TempDir()
+	const fm = "---\n" +
+		"okf_version: \"0.3\"\n" +
+		"title: Acme retail analytics\n" +
+		"description: Tables and metrics for Acme retail.\n" +
+		"license: CC-BY-4.0\n" +
+		"x-acme-owner: team:data-platform\n" +
+		"---\n"
+	if err := os.MkdirAll(filepath.Join(dir, "notes"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "index.md"), []byte(fm+"\n# Acme\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "notes", "note.md"), []byte("---\ntype: Reference\ntitle: Note\n---\n\n# Note\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"validate", dir}, {"index", "build", dir}, {"index", "check", dir}, {"validate", dir}} {
+		if out, err := runOKF(t, args...); err != nil {
+			t.Fatalf("`okfctl %s` must exit 0; err=%v out=%q", strings.Join(args, " "), err, out)
+		}
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "index.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(raw), fm) {
+		t.Errorf("§8.1: index build must keep the root frontmatter byte-for-byte; got:\n%s", raw)
+	}
+}

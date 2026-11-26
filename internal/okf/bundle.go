@@ -188,15 +188,19 @@ func Load(root string, opts ...LoadOption) (*Bundle, error) {
 		if err != nil {
 			return err
 		}
+		var raw string
+		if IsReservedPath(rel) {
+			raw = rawFrontmatterBlock(src)
+		}
 		fm, body, present, ferr := ParseFrontmatterDetailed(src)
 		if ferr != nil {
 			// Preserve the node with nil frontmatter so validate can report it.
 			// A malformed block was physically present, so record that.
-			n := &Node{Path: rel, Frontmatter: nil, Body: string(src), HasFrontmatterBlock: true}
+			n := &Node{Path: rel, Frontmatter: nil, Body: string(src), HasFrontmatterBlock: true, RawFrontmatter: raw}
 			b.place(rel, n)
 			return nil
 		}
-		n := &Node{Path: rel, Frontmatter: fm, Body: body, HasFrontmatterBlock: present}
+		n := &Node{Path: rel, Frontmatter: fm, Body: body, HasFrontmatterBlock: present, RawFrontmatter: raw}
 		b.place(rel, n)
 		return nil
 	})

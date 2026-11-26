@@ -206,7 +206,7 @@ Corpora imported from tools where a **directory is a concept** — Obsidian fold
 notes, Hugo `_index.md`, Jekyll collections, most wikis — put the concept's
 frontmatter and body in each directory's `index.md`. OKF models `index.md`
 differently: it is a generated navigation surface (§8), and only the bundle-root
-index may carry frontmatter (the §12 `okf_version` marker). So every non-root
+index may carry frontmatter (§8.1 bundle metadata). So every non-root
 `index.md` with frontmatter fails `validate`, and on first contact that can be
 hundreds of identical findings.
 

@@ -202,15 +202,29 @@ func scalarString(v any) string {
 	}
 }
 
-// rootFrontmatter emits the bundle-root index frontmatter block. Per OKF §8 an
-// index.md contains no frontmatter, with a single §12 carve-out: the bundle-root
-// index MAY carry a frontmatter block containing okf_version — "the only place
-// frontmatter is permitted in an index.md" — and nothing else. So this emits an
-// okf_version-only block when the marker-compatibility contract says the key
-// should be present (see bundleRootOkfVersion), and "" otherwise. `type: Index`
-// is never emitted. The value is quoted so the marker is an unambiguous YAML
-// string regardless of how it was declared.
+// rootFrontmatter emits the bundle-root index frontmatter block (OKF v0.3
+// §8.1). A nested index carries none (§8).
+//
+//  1. If the on-disk bundle-root index.md already has a frontmatter block, that
+//     block is returned BYTE-FOR-BYTE: §8.1 says a producer that regenerates
+//     index.md MUST keep the existing root frontmatter, and §4 says it SHOULD
+//     NOT re-serialize values it did not change. The block is not merged with
+//     the .okf sidecar — injecting a key would modify frontmatter okfctl does
+//     not own. A block that fails to parse is kept too: dropping it would
+//     destroy curator content, and validate already reports it. Line endings
+//     are normalized to LF here because the render is
+//     LF; WriteIndex restores CRLF for a CRLF file, so a CRLF block still
+//     round-trips verbatim.
+//  2. Otherwise an okf_version-only block is emitted when the
+//     marker-compatibility contract says the key should be present (see
+//     bundleRootOkfVersion), and "" otherwise. The value is quoted so the
+//     marker is an unambiguous YAML string (§4, §8.1).
+//
+// `type: Index` is never emitted.
 func rootFrontmatter(b *Bundle) string {
+	if idx, ok := b.Reserved["index.md"]; ok && idx != nil && idx.RawFrontmatter != "" {
+		return normalizeEOL(idx.RawFrontmatter) + "\n"
+	}
 	if v, ok := bundleRootOkfVersion(b); ok {
 		return fmt.Sprintf("---\nokf_version: %q\n---\n\n", v)
 	}
@@ -416,8 +430,9 @@ func preservedSubdirDescriptions(b *Bundle, dir string, opts IndexShapeOptions) 
 // "Subdirectories" section, and the concept nodes living directly in it (linked
 // by base name) under a "Concepts" section, each carrying the linked concept's
 // description from frontmatter. Links are relative to dir itself, never
-// bundle-relative. Only the bundle-root index carries frontmatter (the §12
-// okf_version carve-out); every nested index carries none. Output is byte-stable
+// bundle-relative. Only the bundle-root index carries frontmatter (§8.1 bundle
+// metadata, kept verbatim; see rootFrontmatter); every nested index carries
+// none. Output is byte-stable
 // (all ordering via sort) and passes Validate.
 //
 // Subdirectory entries additionally carry the tool-owned shape suffix (see

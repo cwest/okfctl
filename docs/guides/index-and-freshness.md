@@ -5,8 +5,11 @@
 Per OKF SPEC §8, one `index.md` is emitted in **each** directory that holds
 concepts or subdirectories, enumerating only that directory's own contents with
 **dir-relative** links and each concept's `description`. Only the bundle-root
-index carries frontmatter (the §12 `okf_version` marker); every nested index
-carries none.
+index carries frontmatter; every nested index carries none. The root block holds
+bundle metadata (OKF v0.3 §8.1): `okf_version`, `title`, `description`,
+`license`, and any extension keys such as `x-acme-owner`. `index build` keeps an
+existing root block byte-for-byte. When the root index has no block, `index
+build` emits an `okf_version`-only block from the `.okf` sidecar.
 
 - `okfctl index build [dir]` regenerates the reserved `index.md` files from the
   current bundle. Orphaned indexes left in a now-empty directory are pruned.

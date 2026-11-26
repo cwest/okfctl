@@ -29,8 +29,8 @@ type Finding struct {
 // Validate enforces the OKF spec floor (PRD §6.2, §7.1):
 //   - frontmatter must be parseable (nil frontmatter == parse failure);
 //   - every concept node has a non-empty `type` (§7 rule 2);
-//   - reserved index.md files carry no frontmatter, with the single §12
-//     carve-out for an okf_version-only block on the bundle-root index.
+//   - reserved index.md files carry no frontmatter, except the bundle-root
+//     index, which MAY carry §8.1 bundle metadata and extension keys.
 //
 // It never enforces a taxonomy of type VALUES (§7.4): unknown types pass.
 // It returns findings; an empty slice means the bundle passes the floor.
@@ -63,20 +63,18 @@ func Validate(b *Bundle) []Finding {
 	return out
 }
 
-// validateReserved enforces the §8/§12 frontmatter rule on reserved index.md
-// files. Log files are prose and carry no frontmatter constraint at the floor,
-// so only index.md is checked here. Findings are emitted in sorted path order
-// to keep validate's output stable for diffing.
+// validateReserved enforces the §8/§8.1 frontmatter rule on reserved index.md
+// files and the §9 rule on log.md. Findings are emitted in sorted path order to
+// keep validate's output stable for diffing.
 //
-// The rule per file:
+// The index rule per file (OKF v0.3):
 //   - index.md with no frontmatter block: conformant (§8).
-//   - bundle-root index.md ("index.md"): MAY carry a frontmatter block, but it
-//     must contain the okf_version key and NOTHING else (§12's version-only
-//     carve-out). Any other key, or okf_version absent from a present block,
-//     is a violation.
+//   - bundle-root index.md ("index.md"): MAY carry a frontmatter block of
+//     bundle metadata — okf_version, title, description, license, all
+//     optional — plus extension keys (§8.1, §4.1). Only a concept key the spec
+//     defines (type, tags, status, ...) is a violation; see conceptOnlyKeys.
 //   - any non-root index.md (e.g. wine/index.md): NO frontmatter is permitted
-//     at all — §12's carve-out is bundle-root-only, so any frontmatter block
-//     there is a violation.
+//     at all (§8) — §8.1 is bundle-root-only.
 func validateReserved(b *Bundle) []Finding {
 	paths := make([]string, 0, len(b.Reserved))
 	for path := range b.Reserved {
@@ -97,10 +95,11 @@ func validateReserved(b *Bundle) []Finding {
 	return out
 }
 
-// validateReservedIndex enforces the §8/§12 frontmatter rule on a reserved
-// index.md. A present-but-empty frontmatter block (`---\n---`) is a violation,
-// not "no block": HasFrontmatterBlock distinguishes the two even though both
-// parse to an empty map.
+// validateReservedIndex enforces the §8/§8.1 frontmatter rule on a reserved
+// index.md. On a non-root index a present-but-empty block (`---\n---`) is a
+// violation, not "no block": HasFrontmatterBlock distinguishes the two even
+// though both parse to an empty map. On the bundle-root index an empty block is
+// conformant, because every §8.1 key is optional.
 func validateReservedIndex(path string, n *Node) []Finding {
 	var out []Finding
 	if n.Frontmatter == nil {
@@ -110,32 +109,56 @@ func validateReservedIndex(path string, n *Node) []Finding {
 		return out // §8: no frontmatter block — conformant.
 	}
 	if path != "index.md" {
-		// §12's carve-out is bundle-root-only; a non-root index may carry no
-		// frontmatter block at all (empty or keyed).
-		return append(out, Finding{Path: path, Message: "index files contain no frontmatter (§8); frontmatter is permitted only on the bundle-root index and only for okf_version (§12)"})
+		// §8.1 bundle metadata is bundle-root-only; a non-root index may carry
+		// no frontmatter block at all (empty or keyed).
+		return append(out, Finding{Path: path, Message: "index files contain no frontmatter (§8); only the bundle-root index may carry frontmatter (§8.1)"})
 	}
-	// Bundle-root index: a present block must be exactly {okf_version}. An empty
-	// block has no okf_version, so it is caught by extraIndexKeys returning no
-	// extras AND okf_version being absent.
-	if _, ok := n.Frontmatter["okf_version"]; !ok {
-		out = append(out, Finding{Path: path, Message: "bundle-root index frontmatter must contain okf_version (§12); found an empty or okf_version-absent block"})
-	}
-	for _, key := range extraIndexKeys(n.Frontmatter) {
-		out = append(out, Finding{Path: path, Message: "bundle-root index frontmatter may contain only okf_version (§12); found disallowed key: " + key})
+	// Bundle-root index (v0.3 §8.1): every key is optional, so an empty block
+	// or one without okf_version is conformant. Only a concept key the spec
+	// defines is out of place here.
+	for _, key := range conceptKeysOnRootIndex(n.Frontmatter) {
+		out = append(out, Finding{Path: path, Message: "bundle-root index frontmatter carries bundle metadata (okf_version, title, description, license) and extension keys only (§8.1); found concept key: " + key})
 	}
 	return out
 }
 
-// extraIndexKeys returns the sorted frontmatter keys of a bundle-root index
-// that are NOT the sanctioned okf_version carve-out (§12). An empty result
-// means the block is conformant.
-func extraIndexKeys(fm map[string]any) []string {
-	var extra []string
+// conceptOnlyKeys are the top-level frontmatter keys OKF v0.3 defines for
+// concepts (§4.1, §5, §10) that are not also bundle-metadata keys (§8.1).
+// title and description are defined for both, so they are absent here. On the
+// bundle-root index these keys are neither §8.1 metadata nor extension keys —
+// an extension key is one "this specification does not define" (§2) — so
+// validate flags them. Every other key passes: §4.1 and §11.2 forbid rejecting
+// keys the consumer does not know, and the x- prefix is only a SHOULD (§4.1).
+// v0.1's legacy `timestamp` (Appendix B) is not defined by v0.3, so it is
+// deliberately absent and passes as an extension key.
+var conceptOnlyKeys = map[string]bool{
+	"type":          true, // §4.1
+	"resource":      true, // §4.1
+	"tags":          true, // §4.1
+	"sources":       true, // §5.1
+	"usage_window":  true, // §5.1
+	"generated":     true, // §5.2
+	"verified":      true, // §5.2
+	"status":        true, // §5.4
+	"superseded_by": true, // §5.4
+	"stale_after":   true, // §5.5
+	"runtime":       true, // §10.2
+	"parameters":    true, // §10.2
+	"computation":   true, // §10.2
+	"executor":      true, // §10.2
+	"attester":      true, // §10.2
+}
+
+// conceptKeysOnRootIndex returns, sorted, the frontmatter keys of a bundle-root
+// index that are concept keys rather than §8.1 bundle metadata or extension
+// keys. An empty result means the block is conformant.
+func conceptKeysOnRootIndex(fm map[string]any) []string {
+	var bad []string
 	for k := range fm {
-		if k != "okf_version" {
-			extra = append(extra, k)
+		if conceptOnlyKeys[k] {
+			bad = append(bad, k)
 		}
 	}
-	sort.Strings(extra)
-	return extra
+	sort.Strings(bad)
+	return bad
 }
