@@ -18,7 +18,7 @@ entry below.
 
 Report where a bundle is weak (freshness, gaps, connectivity, clusters, structure)
 
-analyze is a proactive curation REPORT, not a gate. Where lint answers "is this corpus broken?" (a CI gate: --strict exits non-zero), analyze answers "where is this corpus weak?" across five dimensions — coverage gaps, freshness/staleness, connectivity, tag-cluster synthesis candidates, and structure. It never mutates the bundle.
+analyze is a proactive curation REPORT, not a gate. Where lint answers "is this corpus broken?" (a CI gate: --strict exits non-zero), analyze answers "where is this corpus weak?" across five dimensions — coverage gaps, freshness (staleness from stale_after, plus an aging advisory), connectivity, tag-cluster synthesis candidates, and structure. It never mutates the bundle.
 
 Report semantics: analyze exits 0 whenever the analysis runs successfully, regardless of how many findings it produces. The exit code reflects whether the analysis succeeded, not whether the corpus is perfect. There's deliberately no --strict flag; use lint --strict for a gate.
 
@@ -44,13 +44,13 @@ Example:
 Flags:
 
 ```
+      --aging-days int                  age (days) past which a node's review basis (verified/generated/modified/created) is listed as aging (default 180); advisory only, staleness comes from stale_after
       --cluster-min int                 min nodes sharing a tag to flag a synthesis cluster (default 3)
       --coverage-threshold int          min distinct nodes mentioning a term to report a coverage gap (default 3)
       --json                            emit machine-readable JSON instead of the human report
       --no-ignore                       walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
-      --stale-days int                  age (days) past which a node's freshness basis (verified/generated/modified/created) is flagged stale (default 180)
       --thin-lines int                  body line count below which a node is thin (default 15)
-      --time-sensitive-fraction float   flag a time-sensitive node once its age >= fraction*stale-days (default 0.5); undated marked nodes are always flagged
+      --time-sensitive-fraction float   flag a time-sensitive node once its age >= fraction*aging-days (default 0.5); undated marked nodes are always flagged
 ```
 
 

@@ -53,26 +53,26 @@ func verDocMulti(title, created, modified, olderAt, newerAt, body string) string
 }
 
 // A recently-`modified` node whose CONTENT was last `verified` long ago is
-// STALE: the §5.2 verification instant is the freshness basis, so a mechanical
+// AGING: the §5.2 verification instant is the freshness basis, so a mechanical
 // reformat that only bumped `modified` no longer masks aged claims. This is the
 // core defect fix — a corpus-wide `modified:` touch must not disarm freshness.
 func TestAnalyze_Freshness_VerifiedBeatsModified(t *testing.T) {
 	pinClock(t, fixedNow)
-	// modified 2026-07-20 is fresh (6d); verified 2025-01-01 is > 180d -> stale.
+	// modified 2026-07-20 is fresh (6d); verified 2025-01-01 is > 180d -> aging.
 	n := verDoc("V", "2024-06-01T00:00:00Z", "2026-07-20T00:00:00Z", "2025-01-01T00:00:00Z", "Body.")
 	b := mkLintBundle(t, map[string]string{
 		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [V](v.md)\n",
 		"v.md":     n,
 	})
 	rep := Analyze(b, DefaultAnalyzeOptions())
-	if len(rep.Freshness.Stale) != 1 || rep.Freshness.Stale[0].Path != "v.md" {
-		t.Fatalf("want v.md stale via verified.at (not masked by fresh modified), got %+v", rep.Freshness.Stale)
+	if len(rep.Freshness.Aging) != 1 || rep.Freshness.Aging[0].Path != "v.md" {
+		t.Fatalf("want v.md aging via verified.at (not masked by fresh modified), got %+v", rep.Freshness.Aging)
 	}
-	if got := rep.Freshness.Stale[0].Basis; got != "2025-01-01" {
+	if got := rep.Freshness.Aging[0].Basis; got != "2025-01-01" {
 		t.Fatalf("want basis 2025-01-01 (the verified date), got %q", got)
 	}
-	if rep.Freshness.Stale[0].AgeDays == nil || *rep.Freshness.Stale[0].AgeDays < 180 {
-		t.Fatalf("want age >= 180 from verified.at, got %+v", rep.Freshness.Stale[0])
+	if rep.Freshness.Aging[0].AgeDays == nil || *rep.Freshness.Aging[0].AgeDays < 180 {
+		t.Fatalf("want age >= 180 from verified.at, got %+v", rep.Freshness.Aging[0])
 	}
 }
 
@@ -81,7 +81,7 @@ func TestAnalyze_Freshness_VerifiedBeatsModified(t *testing.T) {
 // the max `at` across the §5.2 event list, not the first entry.
 func TestAnalyze_Freshness_LatestVerifiedWins(t *testing.T) {
 	pinClock(t, fixedNow)
-	// modified is old (would be stale) but the newer verified event is 6d fresh.
+	// modified is old (would be aging) but the newer verified event is 6d fresh.
 	n := verDocMulti("M", "2024-01-01T00:00:00Z", "2024-06-01T00:00:00Z",
 		"2024-06-01T00:00:00Z", "2026-07-20T00:00:00Z", "Body.")
 	b := mkLintBundle(t, map[string]string{
@@ -89,14 +89,14 @@ func TestAnalyze_Freshness_LatestVerifiedWins(t *testing.T) {
 		"m.md":     n,
 	})
 	rep := Analyze(b, DefaultAnalyzeOptions())
-	if len(rep.Freshness.Stale) != 0 {
-		t.Fatalf("want no stale (latest verified 2026-07-20 is fresh), got %+v", rep.Freshness.Stale)
+	if len(rep.Freshness.Aging) != 0 {
+		t.Fatalf("want no aging (latest verified 2026-07-20 is fresh), got %+v", rep.Freshness.Aging)
 	}
 }
 
 // When `verified` is absent the basis falls back to generated.at -> modified ->
 // created exactly as before: a node with no verified but a fresh modified is NOT
-// stale. Guards that the new precedence is additive, not a replacement.
+// aging. Guards that the new precedence is additive, not a replacement.
 func TestAnalyze_Freshness_NoVerifiedFallsBackToModified(t *testing.T) {
 	pinClock(t, fixedNow)
 	n := verDoc("F", "2024-01-01T00:00:00Z", "2026-07-20T00:00:00Z", "", "Body.")
@@ -105,8 +105,8 @@ func TestAnalyze_Freshness_NoVerifiedFallsBackToModified(t *testing.T) {
 		"f.md":     n,
 	})
 	rep := Analyze(b, DefaultAnalyzeOptions())
-	if len(rep.Freshness.Stale) != 0 {
-		t.Fatalf("want no stale (fresh modified, no verified), got %+v", rep.Freshness.Stale)
+	if len(rep.Freshness.Aging) != 0 {
+		t.Fatalf("want no aging (fresh modified, no verified), got %+v", rep.Freshness.Aging)
 	}
 }
 
@@ -148,14 +148,14 @@ func verGenDoc(title, generatedAt, verifiedAt, body string) string {
 // modified -> created.
 func TestAnalyze_Freshness_VerifiedBeatsGenerated_Section5_2(t *testing.T) {
 	pinClock(t, fixedNow)
-	// generated 2024-01-01 (old); verified 2026-07-20 (6d fresh) -> not stale.
+	// generated 2024-01-01 (old); verified 2026-07-20 (6d fresh) -> not aging.
 	n := verGenDoc("VG", "2024-01-01T00:00:00Z", "2026-07-20T00:00:00Z", "Body.")
 	b := mkLintBundle(t, map[string]string{
 		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [VG](vg.md)\n",
 		"vg.md":    n,
 	})
 	rep := Analyze(b, DefaultAnalyzeOptions())
-	if len(rep.Freshness.Stale) != 0 {
-		t.Fatalf("want no stale (verified 2026-07-20 beats old generated.at), got %+v", rep.Freshness.Stale)
+	if len(rep.Freshness.Aging) != 0 {
+		t.Fatalf("want no aging (verified 2026-07-20 beats old generated.at), got %+v", rep.Freshness.Aging)
 	}
 }

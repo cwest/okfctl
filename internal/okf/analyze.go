@@ -27,10 +27,12 @@ import (
 // AnalyzeOptions configures the proactive curation report. Zero values are
 // filled with defaults by DefaultAnalyzeOptions / the command layer.
 type AnalyzeOptions struct {
-	// StaleDays: age (days) past which a node's freshness basis date is stale.
-	StaleDays int
+	// AgingDays: age (days) past which a node's freshness basis date puts it in
+	// the aging advisory. This is NOT staleness: only stale_after decides that
+	// (§5.2, §5.5, §11.2).
+	AgingDays int
 	// TimeSensitiveFraction: a time-sensitive node surfaces once its age is
-	// >= TimeSensitiveFraction * StaleDays; undated marked nodes always surface.
+	// >= TimeSensitiveFraction * AgingDays; undated marked nodes always surface.
 	TimeSensitiveFraction float64
 	// ThinLines: body line count (blank lines excluded) below which a node is
 	// "thin".
@@ -42,11 +44,11 @@ type AnalyzeOptions struct {
 }
 
 // DefaultAnalyzeOptions returns the report defaults, mirroring the reference
-// okf_analyze.py: 180-day staleness, 0.5 time-sensitive fraction, 15-line thin
-// threshold, 3-node cluster minimum.
+// okf_analyze.py: 180-day aging advisory, 0.5 time-sensitive fraction, 15-line
+// thin threshold, 3-node cluster minimum.
 func DefaultAnalyzeOptions() AnalyzeOptions {
 	return AnalyzeOptions{
-		StaleDays:             180,
+		AgingDays:             180,
 		TimeSensitiveFraction: 0.5,
 		ThinLines:             15,
 		ClusterMin:            3,
@@ -56,8 +58,8 @@ func DefaultAnalyzeOptions() AnalyzeOptions {
 
 func (o AnalyzeOptions) withDefaults() AnalyzeOptions {
 	d := DefaultAnalyzeOptions()
-	if o.StaleDays <= 0 {
-		o.StaleDays = d.StaleDays
+	if o.AgingDays <= 0 {
+		o.AgingDays = d.AgingDays
 	}
 	if o.TimeSensitiveFraction <= 0 {
 		o.TimeSensitiveFraction = d.TimeSensitiveFraction
@@ -91,6 +93,10 @@ type AnalyzeReport struct {
 type AnalyzeSummary struct {
 	Nodes              int `json:"nodes"`
 	TotalInternalLinks int `json:"total_internal_links"`
+	AgingThresholdDays int `json:"aging_threshold_days"`
+	// Deprecated: StaleThresholdDays mirrors AgingThresholdDays for one release.
+	// The threshold never decided staleness (§5.5, §11.2); read
+	// aging_threshold_days instead.
 	StaleThresholdDays int `json:"stale_threshold_days"`
 }
 
@@ -139,13 +145,32 @@ type ThinNode struct {
 
 // FreshnessReport groups the freshness findings.
 type FreshnessReport struct {
-	Stale         []StaleNode         `json:"stale"`
+	// StaleAfter lists concepts that are stale per §5.5 (now >= stale_after) or
+	// whose stale_after does not parse (never fresh, §5.5). This is the only
+	// staleness signal (§11.2).
+	StaleAfter []StaleAfterNode `json:"stale_after"`
+	// Aging is an advisory: concepts whose freshness basis date is older than
+	// the aging threshold, or that carry no basis date. It does not claim
+	// staleness (§5.2: "Only stale_after (§5.5) decides freshness").
+	Aging []AgingNode `json:"aging"`
+	// Deprecated: Stale mirrors Aging for one release under its old key. It
+	// is the age heuristic, not §5.5 staleness; read aging or stale_after.
+	Stale         []AgingNode         `json:"stale"`
 	TimeSensitive []TimeSensitiveNode `json:"time_sensitive"`
 }
 
-// StaleNode is a node whose freshness basis date is older than the threshold,
-// or that carries no basis date at all (AgeDays nil, Basis "(none)").
-type StaleNode struct {
+// StaleAfterNode is a concept that is stale per §5.5. StaleAfter is the value
+// compared (a date or RFC 3339 instant), or the raw value when Malformed.
+type StaleAfterNode struct {
+	Path       string `json:"path"`
+	StaleAfter string `json:"stale_after"`
+	Malformed  bool   `json:"malformed"`
+}
+
+// AgingNode is a node whose freshness basis date is older than the aging
+// threshold, or that carries no basis date at all (AgeDays nil, Basis
+// "(none)").
+type AgingNode struct {
 	Path    string `json:"path"`
 	AgeDays *int   `json:"age_days"`
 	Basis   string `json:"basis"` // the date string compared, or "(none)"
@@ -244,8 +269,14 @@ func (r *AnalyzeReport) normalizeSlices() {
 	if r.Epistemic.Distribution == nil {
 		r.Epistemic.Distribution = []EpistemicCount{}
 	}
+	if r.Freshness.StaleAfter == nil {
+		r.Freshness.StaleAfter = []StaleAfterNode{}
+	}
+	if r.Freshness.Aging == nil {
+		r.Freshness.Aging = []AgingNode{}
+	}
 	if r.Freshness.Stale == nil {
-		r.Freshness.Stale = []StaleNode{}
+		r.Freshness.Stale = []AgingNode{}
 	}
 	if r.Freshness.TimeSensitive == nil {
 		r.Freshness.TimeSensitive = []TimeSensitiveNode{}
@@ -275,7 +306,8 @@ func analyzeSummary(b *Bundle, opts AnalyzeOptions) AnalyzeSummary {
 	return AnalyzeSummary{
 		Nodes:              len(b.Nodes),
 		TotalInternalLinks: total,
-		StaleThresholdDays: opts.StaleDays,
+		AgingThresholdDays: opts.AgingDays,
+		StaleThresholdDays: opts.AgingDays, // deprecated alias
 	}
 }
 
@@ -458,20 +490,37 @@ func citationCount(body string) int {
 func analyzeFreshness(b *Bundle, opts AnalyzeOptions) FreshnessReport {
 	out := FreshnessReport{}
 	now := nowUTC()
-	gate := opts.TimeSensitiveFraction * float64(opts.StaleDays)
+	gate := opts.TimeSensitiveFraction * float64(opts.AgingDays)
 	for _, p := range sortedNodePaths(b) {
 		n := b.Nodes[p]
+		// Staleness comes only from stale_after (§5.5; §11.2 "SHOULD calculate
+		// staleness only from stale_after"). IsStale already reports an
+		// unparseable value as not fresh (§5.5 MUST NOT treat it as fresh), and
+		// the finding flags it malformed so the curator sees why (§5.5 SHOULD).
+		if n.IsStale(now) {
+			sn := StaleAfterNode{Path: p, Malformed: n.StaleAfterMalformed()}
+			if sn.Malformed {
+				sn.StaleAfter = scalarString(n.Frontmatter["stale_after"])
+			} else {
+				sn.StaleAfter = frontmatterTimeString(n.Frontmatter["stale_after"])
+			}
+			out.StaleAfter = append(out.StaleAfter, sn)
+		}
+		// Aging is an advisory, NOT staleness: the age of the node's freshness
+		// basis date past a threshold, a nudge to re-review. §5.2: "Only
+		// stale_after (§5.5) decides freshness," so this list never claims a
+		// node is stale.
 		basisStr, basisTime, dated := freshnessBasis(n)
 		var agePtr *int
 		if dated {
 			age := int(now.Sub(basisTime).Hours() / 24)
 			agePtr = &age
-			if age > opts.StaleDays {
-				out.Stale = append(out.Stale, StaleNode{Path: p, AgeDays: agePtr, Basis: basisStr})
+			if age > opts.AgingDays {
+				out.Aging = append(out.Aging, AgingNode{Path: p, AgeDays: agePtr, Basis: basisStr})
 			}
 		} else {
-			// No basis date -> can't assess freshness; flag softly.
-			out.Stale = append(out.Stale, StaleNode{Path: p, AgeDays: nil, Basis: "(none)"})
+			// No basis date -> can't tell when it was last reviewed; flag softly.
+			out.Aging = append(out.Aging, AgingNode{Path: p, AgeDays: nil, Basis: "(none)"})
 		}
 		// Time-sensitive: marker present AND (undated OR aged past the gate).
 		// Route through proseBody so a marker that appears only inside a link URL
@@ -485,6 +534,10 @@ func analyzeFreshness(b *Bundle, opts AnalyzeOptions) FreshnessReport {
 			}
 		}
 	}
+	// Deprecated alias: `freshness.stale` keeps its prior age-heuristic meaning
+	// for one release so an existing --json consumer is not silently handed a
+	// different list. Read `aging` (same content) or `stale_after` (§5.5).
+	out.Stale = out.Aging
 	return out
 }
 

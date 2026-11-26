@@ -235,9 +235,9 @@ func TestAnalyze_Epistemic_SurfacesValueDistribution(t *testing.T) {
 
 // --- Freshness -------------------------------------------------------------
 
-func TestAnalyze_Freshness_StaleByModified(t *testing.T) {
+func TestAnalyze_Freshness_AgingByModified(t *testing.T) {
 	pinClock(t, fixedNow)
-	// modified 2025-01-01 is > 180 days before 2026-07-26 -> stale.
+	// modified 2025-01-01 is > 180 days before 2026-07-26 -> aging.
 	old := tsDoc("Concept", "Old", nil, "2025-01-01T00:00:00Z", "2025-01-01T00:00:00Z", "Body.")
 	fresh := tsDoc("Concept", "Fresh", nil, "2026-07-01T00:00:00Z", "2026-07-20T00:00:00Z", "Body.")
 	b := mkLintBundle(t, map[string]string{
@@ -246,25 +246,25 @@ func TestAnalyze_Freshness_StaleByModified(t *testing.T) {
 		"fresh.md": fresh,
 	})
 	rep := Analyze(b, DefaultAnalyzeOptions())
-	if len(rep.Freshness.Stale) != 1 || rep.Freshness.Stale[0].Path != "old.md" {
-		t.Fatalf("want old.md stale only, got %+v", rep.Freshness.Stale)
+	if len(rep.Freshness.Aging) != 1 || rep.Freshness.Aging[0].Path != "old.md" {
+		t.Fatalf("want old.md aging only, got %+v", rep.Freshness.Aging)
 	}
-	if rep.Freshness.Stale[0].AgeDays == nil || *rep.Freshness.Stale[0].AgeDays < 180 {
-		t.Fatalf("want age >= 180, got %+v", rep.Freshness.Stale[0])
+	if rep.Freshness.Aging[0].AgeDays == nil || *rep.Freshness.Aging[0].AgeDays < 180 {
+		t.Fatalf("want age >= 180, got %+v", rep.Freshness.Aging[0])
 	}
 }
 
 func TestAnalyze_Freshness_ModifiedFallsBackToCreated(t *testing.T) {
 	pinClock(t, fixedNow)
-	// No modified; created is old -> stale via created fallback.
+	// No modified; created is old -> aging via created fallback.
 	n := tsDoc("Concept", "C", nil, "2024-01-01T00:00:00Z", "", "Body.")
 	b := mkLintBundle(t, map[string]string{
 		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [C](c.md)\n",
 		"c.md":     n,
 	})
 	rep := Analyze(b, DefaultAnalyzeOptions())
-	if len(rep.Freshness.Stale) != 1 || rep.Freshness.Stale[0].Path != "c.md" {
-		t.Fatalf("want c.md stale via created fallback, got %+v", rep.Freshness.Stale)
+	if len(rep.Freshness.Aging) != 1 || rep.Freshness.Aging[0].Path != "c.md" {
+		t.Fatalf("want c.md aging via created fallback, got %+v", rep.Freshness.Aging)
 	}
 }
 
@@ -276,11 +276,11 @@ func TestAnalyze_Freshness_UndatedFlaggedSoftly(t *testing.T) {
 		"u.md":     n,
 	})
 	rep := Analyze(b, DefaultAnalyzeOptions())
-	if len(rep.Freshness.Stale) != 1 || rep.Freshness.Stale[0].Path != "u.md" {
-		t.Fatalf("want u.md flagged undated, got %+v", rep.Freshness.Stale)
+	if len(rep.Freshness.Aging) != 1 || rep.Freshness.Aging[0].Path != "u.md" {
+		t.Fatalf("want u.md flagged undated, got %+v", rep.Freshness.Aging)
 	}
-	if rep.Freshness.Stale[0].AgeDays != nil {
-		t.Fatalf("want nil age for undated, got %v", *rep.Freshness.Stale[0].AgeDays)
+	if rep.Freshness.Aging[0].AgeDays != nil {
+		t.Fatalf("want nil age for undated, got %v", *rep.Freshness.Aging[0].AgeDays)
 	}
 }
 
@@ -325,21 +325,21 @@ func genDoc(title, generatedAt, timestamp, body string) string {
 // spec-conformant bundle the fix targets.
 func TestAnalyze_Freshness_ResolvesGeneratedAt_Section5_2(t *testing.T) {
 	pinClock(t, fixedNow)
-	// generated.at 2025-01-01 is > 180 days before 2026-07-26 -> stale, dated.
+	// generated.at 2025-01-01 is > 180 days before 2026-07-26 -> aging, dated.
 	n := genDoc("G", "2025-01-01T00:00:00Z", "", "Body.")
 	b := mkLintBundle(t, map[string]string{
 		"index.md": "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [G](g.md)\n",
 		"g.md":     n,
 	})
 	rep := Analyze(b, DefaultAnalyzeOptions())
-	if len(rep.Freshness.Stale) != 1 || rep.Freshness.Stale[0].Path != "g.md" {
-		t.Fatalf("want g.md stale via generated.at, got %+v", rep.Freshness.Stale)
+	if len(rep.Freshness.Aging) != 1 || rep.Freshness.Aging[0].Path != "g.md" {
+		t.Fatalf("want g.md aging via generated.at, got %+v", rep.Freshness.Aging)
 	}
-	if rep.Freshness.Stale[0].Basis == "(none)" {
-		t.Fatalf("want a resolved basis, got (none): %+v", rep.Freshness.Stale[0])
+	if rep.Freshness.Aging[0].Basis == "(none)" {
+		t.Fatalf("want a resolved basis, got (none): %+v", rep.Freshness.Aging[0])
 	}
-	if rep.Freshness.Stale[0].AgeDays == nil || *rep.Freshness.Stale[0].AgeDays < 180 {
-		t.Fatalf("want age >= 180 from generated.at, got %+v", rep.Freshness.Stale[0])
+	if rep.Freshness.Aging[0].AgeDays == nil || *rep.Freshness.Aging[0].AgeDays < 180 {
+		t.Fatalf("want age >= 180 from generated.at, got %+v", rep.Freshness.Aging[0])
 	}
 }
 
@@ -353,14 +353,14 @@ func TestAnalyze_Freshness_ResolvesLegacyTimestamp_Section13_1(t *testing.T) {
 		"t.md":     n,
 	})
 	rep := Analyze(b, DefaultAnalyzeOptions())
-	if len(rep.Freshness.Stale) != 1 || rep.Freshness.Stale[0].Path != "t.md" {
-		t.Fatalf("want t.md stale via legacy timestamp, got %+v", rep.Freshness.Stale)
+	if len(rep.Freshness.Aging) != 1 || rep.Freshness.Aging[0].Path != "t.md" {
+		t.Fatalf("want t.md aging via legacy timestamp, got %+v", rep.Freshness.Aging)
 	}
-	if rep.Freshness.Stale[0].Basis == "(none)" {
-		t.Fatalf("want a resolved basis, got (none): %+v", rep.Freshness.Stale[0])
+	if rep.Freshness.Aging[0].Basis == "(none)" {
+		t.Fatalf("want a resolved basis, got (none): %+v", rep.Freshness.Aging[0])
 	}
-	if rep.Freshness.Stale[0].AgeDays == nil {
-		t.Fatalf("want a non-nil age from timestamp, got %+v", rep.Freshness.Stale[0])
+	if rep.Freshness.Aging[0].AgeDays == nil {
+		t.Fatalf("want a non-nil age from timestamp, got %+v", rep.Freshness.Aging[0])
 	}
 }
 
@@ -368,7 +368,7 @@ func TestAnalyze_Freshness_ResolvesLegacyTimestamp_Section13_1(t *testing.T) {
 // okfctl-native modified/created compatibility fields when both are present.
 func TestAnalyze_Freshness_GeneratedAtBeatsModified_Section5_2(t *testing.T) {
 	pinClock(t, fixedNow)
-	// generated.at is OLD (stale); modified is FRESH. If precedence were wrong
+	// generated.at is OLD (aging); modified is FRESH. If precedence were wrong
 	// (modified first) the node would read fresh and not surface.
 	n := "---\ntype: Concept\ntitle: P\n" +
 		"generated: { by: reference_agent/gemini-2.5-pro, at: 2025-01-01T00:00:00Z }\n" +
@@ -378,11 +378,11 @@ func TestAnalyze_Freshness_GeneratedAtBeatsModified_Section5_2(t *testing.T) {
 		"p.md":     n,
 	})
 	rep := Analyze(b, DefaultAnalyzeOptions())
-	if len(rep.Freshness.Stale) != 1 || rep.Freshness.Stale[0].Path != "p.md" {
-		t.Fatalf("want p.md stale via generated.at precedence, got %+v", rep.Freshness.Stale)
+	if len(rep.Freshness.Aging) != 1 || rep.Freshness.Aging[0].Path != "p.md" {
+		t.Fatalf("want p.md aging via generated.at precedence, got %+v", rep.Freshness.Aging)
 	}
-	if rep.Freshness.Stale[0].AgeDays == nil || *rep.Freshness.Stale[0].AgeDays < 180 {
-		t.Fatalf("want age >= 180 from generated.at, not modified, got %+v", rep.Freshness.Stale[0])
+	if rep.Freshness.Aging[0].AgeDays == nil || *rep.Freshness.Aging[0].AgeDays < 180 {
+		t.Fatalf("want age >= 180 from generated.at, not modified, got %+v", rep.Freshness.Aging[0])
 	}
 }
 
@@ -396,11 +396,11 @@ func TestAnalyze_Freshness_ModifiedStillResolves(t *testing.T) {
 		"m.md":     n,
 	})
 	rep := Analyze(b, DefaultAnalyzeOptions())
-	if len(rep.Freshness.Stale) != 1 || rep.Freshness.Stale[0].Path != "m.md" {
-		t.Fatalf("want m.md stale via modified, got %+v", rep.Freshness.Stale)
+	if len(rep.Freshness.Aging) != 1 || rep.Freshness.Aging[0].Path != "m.md" {
+		t.Fatalf("want m.md aging via modified, got %+v", rep.Freshness.Aging)
 	}
-	if rep.Freshness.Stale[0].Basis == "(none)" {
-		t.Fatalf("want a resolved basis from modified, got (none): %+v", rep.Freshness.Stale[0])
+	if rep.Freshness.Aging[0].Basis == "(none)" {
+		t.Fatalf("want a resolved basis from modified, got (none): %+v", rep.Freshness.Aging[0])
 	}
 }
 
@@ -417,14 +417,14 @@ func TestAnalyze_Freshness_EmptyGeneratedIsUndated(t *testing.T) {
 		"e.md":     n,
 	})
 	rep := Analyze(b, DefaultAnalyzeOptions())
-	if len(rep.Freshness.Stale) != 1 || rep.Freshness.Stale[0].Path != "e.md" {
-		t.Fatalf("want e.md flagged undated, got %+v", rep.Freshness.Stale)
+	if len(rep.Freshness.Aging) != 1 || rep.Freshness.Aging[0].Path != "e.md" {
+		t.Fatalf("want e.md flagged undated, got %+v", rep.Freshness.Aging)
 	}
-	if rep.Freshness.Stale[0].AgeDays != nil {
-		t.Fatalf("want nil age for undated node, got %v", *rep.Freshness.Stale[0].AgeDays)
+	if rep.Freshness.Aging[0].AgeDays != nil {
+		t.Fatalf("want nil age for undated node, got %v", *rep.Freshness.Aging[0].AgeDays)
 	}
-	if rep.Freshness.Stale[0].Basis != "(none)" {
-		t.Fatalf("want basis (none) for empty generated, got %q", rep.Freshness.Stale[0].Basis)
+	if rep.Freshness.Aging[0].Basis != "(none)" {
+		t.Fatalf("want basis (none) for empty generated, got %q", rep.Freshness.Aging[0].Basis)
 	}
 }
 
@@ -546,6 +546,9 @@ func TestAnalyze_EmptyDimensionsAreEmptySlicesNotNil(t *testing.T) {
 	if rep.Freshness.Stale == nil {
 		t.Fatalf("Freshness.Stale must be a non-nil slice for JSON stability")
 	}
+	if rep.Freshness.StaleAfter == nil || rep.Freshness.Aging == nil {
+		t.Fatalf("Freshness.StaleAfter and Freshness.Aging must be non-nil slices")
+	}
 	if rep.Freshness.TimeSensitive == nil {
 		t.Fatalf("Freshness.TimeSensitive must be a non-nil slice")
 	}
@@ -578,8 +581,8 @@ func TestAnalyze_SummaryCountsNodes(t *testing.T) {
 	if rep.Summary.Nodes != 1 {
 		t.Fatalf("want 1 node in summary, got %d", rep.Summary.Nodes)
 	}
-	if rep.Summary.StaleThresholdDays != 180 {
-		t.Fatalf("want default stale threshold 180 in summary, got %d", rep.Summary.StaleThresholdDays)
+	if rep.Summary.AgingThresholdDays != 180 {
+		t.Fatalf("want default aging threshold 180 in summary, got %d", rep.Summary.AgingThresholdDays)
 	}
 }
 

@@ -26,8 +26,23 @@ tagged release, goreleaser generates the release notes from the commit log
   reference that cannot be loaded is a hard error naming the path (plain
   `validate` without `--templates` never consults the key). (#182)
 
+### Deprecated
+
+- `analyze --json` keys `freshness.stale` and `summary.stale_threshold_days`
+  still carry the age-heuristic values under their old names for one release;
+  read `freshness.aging` and `summary.aging_threshold_days` instead. The
+  `--stale-days` flag is a deprecated alias of `--aging-days`.
+
 ### Fixed
 
+- `analyze` now reports staleness only from `stale_after` (OKF v0.3 §5.5,
+  §11.2). A new "Stale" section and `freshness.stale_after` JSON list name each
+  concept whose `stale_after` has passed, plus each concept whose `stale_after`
+  does not parse, flagged `malformed` (an unparseable value is never fresh). The
+  old age-based list no longer claims staleness: it is now the "Aging" advisory
+  (`freshness.aging`, `summary.aging_threshold_days`, `--aging-days`).
+  `Node.IsStale` now reports an unparseable `stale_after` as not fresh, and a
+  null or empty value as absent.
 - `validate` now enforces OKF v0.2 §9 on every reserved `log.md` at any depth:
   each `## ` date heading must be a valid ISO-8601 `YYYY-MM-DD` (rejecting
   impossible dates like `2025-13-45` and non-dates like `last Tuesday`),

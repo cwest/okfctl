@@ -323,6 +323,53 @@ func TestStaleAfter_AbsentIsNeverStale_Section5_5(t *testing.T) {
 	}
 }
 
+// §5.5: "A consumer MUST NOT treat a stale_after value that it cannot parse as
+// fresh." IsStale reports not-fresh (true) for an unparseable value, and
+// StaleAfterMalformed flags it so a consumer can show it as malformed.
+func TestIsStale_UnparseableIsNeverFresh_Section5_5(t *testing.T) {
+	for _, src := range []string{
+		"stale_after: next quarter\n",
+		"stale_after: \"2026-09-23T00:00:00\"\n", // §5: no offset is invalid
+		"stale_after: 42\n",
+	} {
+		n := &Node{Frontmatter: fmFromYAML(t, src)}
+		if !n.StaleAfterMalformed() {
+			t.Errorf("%q: StaleAfterMalformed() = false, want true", src)
+		}
+		if !n.IsStale(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("%q: IsStale() = false, want true (unparseable is never fresh)", src)
+		}
+	}
+}
+
+// §11.2 rule 1: null, empty string, and empty list are the same as absent—
+// never malformed, never stale.
+func TestIsStale_EmptyOrNullIsAbsent_Section11_2(t *testing.T) {
+	for _, src := range []string{"stale_after: \"\"\n", "stale_after: null\n", "stale_after:\n", "stale_after: []\n"} {
+		n := &Node{Frontmatter: fmFromYAML(t, src)}
+		if n.StaleAfterMalformed() {
+			t.Errorf("%q: StaleAfterMalformed() = true, want false", src)
+		}
+		if n.IsStale(time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("%q: IsStale() = true, want false (absent)", src)
+		}
+	}
+}
+
+// §5: the date-time form is accepted alongside the date-only form.
+func TestIsStale_DateTimeForm_Section5_5(t *testing.T) {
+	n := &Node{Frontmatter: fmFromYAML(t, "stale_after: \"2026-09-23T12:00:00Z\"\n")}
+	if n.IsStale(time.Date(2026, 9, 23, 11, 59, 0, 0, time.UTC)) {
+		t.Error("IsStale one minute before stale_after = true, want false")
+	}
+	if !n.IsStale(time.Date(2026, 9, 23, 12, 0, 0, 0, time.UTC)) {
+		t.Error("IsStale at stale_after = false, want true")
+	}
+	if n.StaleAfterMalformed() {
+		t.Error("StaleAfterMalformed() = true for a valid date-time")
+	}
+}
+
 // --- §13.1 sources / # Citations fallback ------------------------------------
 
 func TestSourceCitations_UsesFrontmatterSources_Section13_1(t *testing.T) {
