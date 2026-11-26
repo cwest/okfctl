@@ -38,8 +38,14 @@ checks — see `okf-semantic-search`.
 
 ## validate — conformance
 
-Spec-floor validation checks that every node carries a non-empty `type` (OKF §7).
-Unknown type *values* are allowed — OKF is anti-taxonomy at the floor.
+Spec-floor validation checks that every concept's frontmatter parses as a YAML
+mapping and that reserved `index.md`/`log.md` files follow OKF §8/§9. Unknown
+type *values* are allowed — OKF is anti-taxonomy at the floor.
+
+A `.md` file with no frontmatter or no `type` (a `README.md`, an `AGENTS.md`) is
+not a concept (OKF v0.3 §3.2): every command skips it, and `validate` prints a
+**warning** for it without failing. Files and directories whose names start with
+`.` are not part of the bundle at all.
 
 ```sh
 $ okfctl validate mykb
@@ -49,11 +55,21 @@ OK: bundle conforms to the OKF spec floor
 A floor violation always fails (exit 1), regardless of any flag:
 
 ```sh
-$ okfctl validate mykb        # a node with an empty `type:`
-FAIL concepts/bad.md: missing or empty required field: type
+$ okfctl validate mykb        # a node whose frontmatter does not parse
+FAIL concepts/bad.md: unparseable frontmatter
 okfctl: 1 conformance finding(s)
 $ echo $?
 1
+```
+
+A type-less `.md` warns and still exits 0:
+
+```sh
+$ okfctl validate mykb
+warning concepts/README.md: not a concept (no frontmatter); skipped, does not affect conformance (OKF v0.3 §3.2)
+OK: bundle conforms to the OKF spec floor
+$ echo $?
+0
 ```
 
 ### Type-template overlay (`--templates`)
@@ -207,8 +223,10 @@ pair it with `okfctl validate . --templates --strict` and `okfctl index check .`
    corpus full of findings.
 
 4. **Using `lint` to catch format errors.** `lint` is curation guidance, never
-   conformance. Spec-floor violations (missing/empty `type`) surface only in
-   `validate`, which fails on them regardless of flags.
+   conformance. Spec-floor violations (unparseable frontmatter, malformed
+   reserved files) surface only in `validate`, which fails on them regardless of
+   flags. A `.md` with no `type` is not a floor violation: it is not a concept,
+   and `validate` only warns about it.
 
 5. **Confusing `--templates` warnings with floor failures.** Template drift is
    advisory (exit 0) unless `--strict`; a genuine spec-floor violation fails

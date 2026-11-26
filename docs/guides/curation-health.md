@@ -110,12 +110,21 @@ drop a spot-check worksheet on the touched nodes. A periodic
 
 Every command that walks a bundle (`validate`, `lint`, `analyze`, `search`,
 `graph export`, `index build`/`check`) prunes vendored and derived directories
-by default—a Python virtualenv (`.venv`), `node_modules`, a `vendor/` tree, or
+by default—a Python virtualenv (`venv`), `node_modules`, a `vendor/` tree, or
 a build-output dir (`dist`, `build`, `target`, …) sitting under the bundle root
 holds `.md` files nobody authored as knowledge, and walking them pollutes every
 report. The prune is by directory **base name** at any depth (see
 `DefaultSkipDirs`), applied once in the loader so all commands share identical
 scope, and it never touches the bundle root itself.
+
+Two other exclusions come from the spec, not from this list (OKF v0.3 §3.2):
+
+- Files and directories whose names start with `.` (`.git`, `.venv`,
+  `.draft.md`, `.hidden/`) are not part of the bundle. They are never read,
+  `--no-ignore` does not bring them back, and they are not announced.
+- A `.md` file with no frontmatter or no `type` (a `README.md`, an
+  `AGENTS.md`) is not a concept. It is not a graph, lint, index, or search
+  subject, and `validate` prints a warning for it without failing.
 
 Two guardrails keep this from silently eating your work:
 

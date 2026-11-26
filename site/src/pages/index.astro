@@ -432,9 +432,9 @@ const goInstallCmd = version.tag
 <span class="ok">OK: bundle conforms to the OKF spec floor</span></pre></div>
 
               <div role="tabpanel" id="t-val" aria-labelledby="tab-val" tabindex="0" hidden><pre>
-<span class="cm"># a node whose frontmatter lost its required `type`</span>
+<span class="cm"># a node whose frontmatter no longer parses as YAML</span>
 <span class="p">$</span> <span class="c">okfctl validate</span> <span class="f">mykb</span>
-<span class="bad">FAIL concepts/aging.md: missing or empty required field: type</span>
+<span class="bad">FAIL concepts/aging.md: unparseable frontmatter</span>
 <span class="bad">okfctl: 1 conformance finding(s)</span>
 
 <span class="p">$</span> <span class="c">echo</span> $?

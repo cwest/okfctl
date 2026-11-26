@@ -73,6 +73,17 @@ tagged release, goreleaser generates the release notes from the commit log
   entry with no `resource`. The entry is still ignored as provenance, but no
   longer silently (§11.2 rule 3). Like every lint finding it fails only under
   `--strict`; `validate` is unaffected.
+- okfctl now finds concepts the way OKF v0.3 §3.2 says. A `.md` file with no
+  frontmatter or no `type` (a `README.md`, an `AGENTS.md`) is not a concept: it
+  no longer fails `validate`, which prints a warning for it and exits 0, and it is
+  no longer a graph, lint, index, or search subject. Links and `sources` that
+  point at such a file still resolve, and `node mv` keeps their links working.
+  Files and directories whose names start with `.` (`.draft.md`, `.hidden/`) are
+  not part of the bundle: they are never read, with or without `--no-ignore`, and
+  `node new`/`node mv` refuse to write a concept there. A frontmatter block that
+  does not parse still fails `validate` (§11.1). `node edit` refuses an edit that
+  leaves the node without a `type`, because the node would silently stop being a
+  concept.
 - `validate` now enforces OKF v0.2 §9 on every reserved `log.md` at any depth:
   each `## ` date heading must be a valid ISO-8601 `YYYY-MM-DD` (rejecting
   impossible dates like `2025-13-45` and non-dates like `last Tuesday`),
