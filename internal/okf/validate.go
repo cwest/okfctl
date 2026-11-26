@@ -26,11 +26,18 @@ type Finding struct {
 	Message string
 }
 
-// Validate enforces the OKF spec floor (PRD §6.2, §7.1):
-//   - frontmatter must be parseable (nil frontmatter == parse failure);
-//   - every concept node has a non-empty `type` (§7 rule 2);
+// Validate enforces the OKF spec floor (PRD §6.2, §7.1; OKF v0.3 §11.1):
+//   - a concept's frontmatter block must parse as a YAML mapping (nil
+//     frontmatter == parse failure, §11.1 rule 1);
+//   - every concept node has a non-empty `type` (§4.1). Load only puts a .md in
+//     Nodes when it has one (§3.2 rule 1), so this holds for loaded bundles and
+//     guards hand-built ones;
 //   - reserved index.md files carry no frontmatter, except the bundle-root
 //     index, which MAY carry §8.1 bundle metadata and extension keys.
+//
+// A .md with no frontmatter or no `type` is not a concept and does not affect
+// conformance (§3.2 rule 2, §11.1): it is reported by ValidateWarnings, never
+// here.
 //
 // It never enforces a taxonomy of type VALUES (§7.4): unknown types pass.
 // It returns findings; an empty slice means the bundle passes the floor.
@@ -44,12 +51,7 @@ func Validate(b *Bundle) []Finding {
 	// Iterate node paths in sorted order so findings are deterministic: this is a
 	// conformance tool whose output is diffed, and Go map iteration order is
 	// randomized. (The node list already sorts at cmd/node.go.)
-	paths := make([]string, 0, len(b.Nodes))
-	for path := range b.Nodes {
-		paths = append(paths, path)
-	}
-	sort.Strings(paths)
-	for _, path := range paths {
+	for _, path := range sortedPaths(b.Nodes) {
 		n := b.Nodes[path]
 		if n.Frontmatter == nil {
 			out = append(out, Finding{Path: path, Message: "unparseable frontmatter"})
@@ -61,6 +63,37 @@ func Validate(b *Bundle) []Finding {
 	}
 	out = append(out, validateReserved(b)...)
 	return out
+}
+
+// ValidateWarnings returns the non-failing findings OKF v0.3 §3.2 rule 2 asks
+// validators for: one per .md file that is not a concept because it has no
+// frontmatter or no non-empty `type`. Such a file is skipped by every consumer
+// and does not make the bundle non-conformant, so these never fail validate.
+// Sorted by path for stable, diffable output.
+func ValidateWarnings(b *Bundle) []Finding {
+	var out []Finding
+	for _, path := range sortedPaths(b.NonConcepts) {
+		n := b.NonConcepts[path]
+		reason := "frontmatter has no non-empty type"
+		if !n.HasFrontmatterBlock {
+			reason = "no frontmatter"
+		}
+		out = append(out, Finding{
+			Path:    path,
+			Message: "not a concept (" + reason + "); skipped, does not affect conformance (OKF v0.3 §3.2)",
+		})
+	}
+	return out
+}
+
+// sortedPaths returns the keys of a node map in sorted order.
+func sortedPaths(m map[string]*Node) []string {
+	paths := make([]string, 0, len(m))
+	for path := range m {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
 }
 
 // validateReserved enforces the §8/§8.1 frontmatter rule on reserved index.md

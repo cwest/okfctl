@@ -43,47 +43,44 @@ func IsReservedPath(rel string) bool {
 // output) directories whose .md files nobody authored as knowledge: a Python
 // virtualenv or a build-output tree sitting under the bundle root would
 // otherwise become part of the graph. The set is matched by directory BASE NAME
-// at any depth, so tool/.venv and web/node_modules are both skipped. It is a
+// at any depth, so tool/venv and web/node_modules are both skipped. It is a
 // default, not a policy: --no-ignore (WithNoIgnore) restores the full walk, and
 // the skip is never silent (Bundle.SkippedDirs records what was pruned so the
 // caller can announce it). The bundle root itself is never skipped even if its
 // own base name matches.
+//
+// Dot directories (.git, .venv, .cache, ...) are not listed: OKF v0.3 §3.2
+// rule 4 says files and directories whose names start with "." are not part of
+// the bundle at all, so the walk always prunes them (IsDotPath), --no-ignore
+// cannot bring them back, and they are not announced as a recoverable skip.
 //
 // This deliberately does NOT consult .gitignore (couples curation scope to
 // version-control scope, two different questions) and is a built-in default
 // rather than a required .okfctlignore (the tool must be usable on a real tree
 // with no config); a project-level ignore file composes cleanly on top later.
 var DefaultSkipDirs = map[string]bool{
-	".git":          true,
-	".hg":           true,
-	".svn":          true,
-	".okfctl":       true, // the tool's own index/state dir
 	"node_modules":  true,
-	".venv":         true,
 	"venv":          true,
 	"env":           true,
 	"__pycache__":   true,
-	".mypy_cache":   true,
-	".pytest_cache": true,
-	".tox":          true,
-	".ruff_cache":   true,
 	"site-packages": true,
 	"vendor":        true,
 	"target":        true, // Rust/JVM build output
 	"dist":          true,
 	"build":         true,
-	".next":         true,
-	".cache":        true,
-	".idea":         true,
-	".vscode":       true,
 }
 
 // Bundle is a loaded OKF bundle: concept nodes keyed by bundle-relative path,
 // plus the reserved files, plus the derived link graph.
 type Bundle struct {
-	Root     string
-	Nodes    map[string]*Node // concept nodes only (excludes reserved)
-	Reserved map[string]*Node // index.md, log.md
+	Root  string
+	Nodes map[string]*Node // concept nodes only (excludes reserved and non-concepts)
+	// NonConcepts holds the non-reserved .md files that are not concepts under
+	// OKF v0.3 §3.2 rule 2: no frontmatter, or no non-empty `type`. Consumers
+	// skip them (they are not graph, lint, index, or search subjects) and they
+	// do not affect conformance; ValidateWarnings reports them.
+	NonConcepts map[string]*Node
+	Reserved    map[string]*Node // index.md, log.md
 	// OkfVersion is the version okfctl reads the bundle as: the declared
 	// okf_version, or SpecVersion when the bundle declares none.
 	OkfVersion string
@@ -134,25 +131,35 @@ func WithNoIgnore() LoadOption {
 
 var mdLinkRe = regexp.MustCompile(`\[[^\]]*\]\(([^)]+)\)`)
 
-// Load walks root, parses every .md file, and builds the in-memory graph.
+// Load walks root, classifies every file per OKF v0.3 §3.2 (ClassifyPath,
+// ClassifyMarkdown), and builds the in-memory graph from the concepts.
 //
-// By default the walk prunes vendored and derived directories (DefaultSkipDirs)
-// so content nobody authored as knowledge never enters the graph; pass
-// WithNoIgnore to restore the full walk. Applying the skip once here means every
-// consumer (lint, analyze, validate, search, graph, index) inherits identical
-// scope — divergent per-command scope would be its own bug class.
+//   - Dot-paths are not part of the bundle (§3.2 rule 4): pruned, never read.
+//   - Assets (non-.md files, §3.2 rule 3) are never read.
+//   - index.md / log.md go to Reserved (§3.1).
+//   - A .md with a non-empty `type` is a concept and goes to Nodes (rule 1).
+//   - A .md with no frontmatter or no `type` goes to NonConcepts (rule 2).
+//   - A .md whose frontmatter block does not parse stays in Nodes with nil
+//     Frontmatter so Validate reports it (§11.1 rule 1).
+//
+// By default the walk also prunes vendored and derived directories
+// (DefaultSkipDirs) so content nobody authored as knowledge never enters the
+// graph; pass WithNoIgnore to restore the full walk. Classifying once here means
+// every consumer (lint, analyze, validate, search, graph, index) inherits
+// identical scope; divergent per-command scope would be its own bug class.
 func Load(root string, opts ...LoadOption) (*Bundle, error) {
 	cfg := loadConfig{}
 	for _, o := range opts {
 		o(&cfg)
 	}
 	b := &Bundle{
-		Root:     root,
-		Nodes:    map[string]*Node{},
-		Reserved: map[string]*Node{},
-		edges:    map[string][]string{},
-		files:    map[string]bool{},
-		dirs:     map[string]bool{},
+		Root:        root,
+		Nodes:       map[string]*Node{},
+		NonConcepts: map[string]*Node{},
+		Reserved:    map[string]*Node{},
+		edges:       map[string][]string{},
+		files:       map[string]bool{},
+		dirs:        map[string]bool{},
 	}
 	// §3.2 rule 5 / §11.2: a consumer reads only files under the bundle root
 	// and does not follow a symbolic link out of it. The boundary is the root's
@@ -167,40 +174,9 @@ func Load(root string, opts ...LoadOption) (*Bundle, error) {
 		if err != nil {
 			return err
 		}
-		// WalkDir never descends a symlinked directory, so a symlink entry is
-		// the only way a walked path can leave the root. Resolve it and skip
-		// it when it lands outside. Only entries Load would otherwise act on
-		// are recorded: .md files and directories (assets are never read).
-		if p != root && d.Type()&fs.ModeSymlink != 0 {
-			if out, isDir := symlinkEscapes(realRoot, p); out && (isDir || strings.HasSuffix(d.Name(), ".md")) {
-				if rel, relErr := filepath.Rel(root, p); relErr == nil {
-					escaped[filepath.ToSlash(rel)] = true
-				}
-				return nil
-			}
-		}
-		if d.IsDir() {
-			// Prune vendored/derived subtrees before descending. The bundle
-			// root is never a skip candidate (p == root), even if its own base
-			// name matches — we skip subtrees, not the bundle itself.
-			if !cfg.noIgnore && p != root && DefaultSkipDirs[d.Name()] {
-				rel, relErr := filepath.Rel(root, p)
-				if relErr == nil {
-					skipped[filepath.ToSlash(rel)] = true
-				}
-				return fs.SkipDir
-			}
-			if p != root {
-				if rel, relErr := filepath.Rel(root, p); relErr == nil {
-					b.dirs[filepath.ToSlash(rel)] = true
-				}
-			}
-			return nil
-		}
-		if !strings.HasSuffix(d.Name(), ".md") {
-			if rel, relErr := filepath.Rel(root, p); relErr == nil {
-				b.files[filepath.ToSlash(rel)] = true
-			}
+		if p == root {
+			// The bundle root is never a dot-path or skip candidate, even if its
+			// own base name matches: rules apply to names under the root.
 			return nil
 		}
 		rel, err := filepath.Rel(root, p)
@@ -208,32 +184,63 @@ func Load(root string, opts ...LoadOption) (*Bundle, error) {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
+		kind := ClassifyPath(rel)
+		if kind == KindExcluded {
+			// §3.2 rule 4: a dot-path is not part of the bundle.
+			if d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		// WalkDir never descends a symlinked directory, so a symlink entry is
+		// the only way a walked path can leave the root. Resolve it and skip
+		// it when it lands outside. Only entries Load would otherwise act on
+		// are recorded: .md files and directories (assets are never read).
+		if d.Type()&fs.ModeSymlink != 0 {
+			if out, isDir := symlinkEscapes(realRoot, p); out && (isDir || kind != KindAsset) {
+				escaped[rel] = true
+				return nil
+			}
+		}
+		if d.IsDir() {
+			// Prune vendored/derived subtrees before descending.
+			if !cfg.noIgnore && DefaultSkipDirs[d.Name()] {
+				skipped[rel] = true
+				return fs.SkipDir
+			}
+			b.dirs[rel] = true
+			return nil
+		}
+		if kind == KindAsset {
+			// §3.2 rule 3: an asset is never read, but it MAY be a link or
+			// path-field target, so the §6 resolver must know it exists.
+			b.files[rel] = true
+			return nil
+		}
 		// p is a bundle file discovered by walking the user's bundle root;
 		// reading the user's own bundle is the loader's purpose.
 		src, err := os.ReadFile(p) //nolint:gosec // G304: reading a file from the user's own bundle root
 		if err != nil {
 			return err
 		}
-		var raw string
-		if IsReservedPath(rel) {
-			raw = rawFrontmatterBlock(src)
-		}
-		fm, body, present, ferr := ParseFrontmatterDetailed(src)
-		if ferr != nil {
-			// Preserve the node with nil frontmatter so validate can report it.
-			// A malformed block was physically present, so record that.
-			n := &Node{Path: rel, Frontmatter: nil, Body: string(src), HasFrontmatterBlock: true, RawFrontmatter: raw}
-			b.place(rel, n)
+		if kind == KindReserved {
+			b.Reserved[rel] = reservedNode(rel, src)
 			return nil
 		}
-		if !IsReservedPath(rel) {
+		c := ClassifyMarkdown(src)
+		if c.Frontmatter != nil {
 			// OKF v0.3 §11.2: normalize null/empty/single-item values once, here,
 			// so every reader and command sees the same value. Reserved files are
 			// governed by §8/§9/§12 and keep their raw frontmatter.
-			normalizeConsumerValues(fm)
+			normalizeConsumerValues(c.Frontmatter)
 		}
-		n := &Node{Path: rel, Frontmatter: fm, Body: body, HasFrontmatterBlock: present, RawFrontmatter: raw}
-		b.place(rel, n)
+		n := &Node{Path: rel, Frontmatter: c.Frontmatter, Body: c.Body, HasFrontmatterBlock: c.HasBlock}
+		switch c.Kind {
+		case KindNonConcept:
+			b.NonConcepts[rel] = n
+		default: // KindConcept, or KindMalformed (nil Frontmatter) for Validate
+			b.Nodes[rel] = n
+		}
 		return nil
 	})
 	if err != nil {
@@ -263,6 +270,18 @@ func Load(root string, opts ...LoadOption) (*Bundle, error) {
 	}
 	b.buildEdges()
 	return b, nil
+}
+
+// reservedNode parses a reserved file (§3.1). Its concept status never depends
+// on its frontmatter; an unparseable block keeps nil Frontmatter so the §8/§9
+// checks report it.
+func reservedNode(rel string, src []byte) *Node {
+	raw := rawFrontmatterBlock(src)
+	fm, body, present, err := ParseFrontmatterDetailed(src)
+	if err != nil {
+		return &Node{Path: rel, Frontmatter: nil, Body: string(src), HasFrontmatterBlock: true, RawFrontmatter: raw}
+	}
+	return &Node{Path: rel, Frontmatter: fm, Body: body, HasFrontmatterBlock: present, RawFrontmatter: raw}
 }
 
 // readOkfVersion returns the okf_version declared in the bundle's legacy .okf
@@ -339,14 +358,6 @@ func escapesBundleRoot(root, p string) bool {
 	return out
 }
 
-func (b *Bundle) place(rel string, n *Node) {
-	if IsReservedPath(rel) {
-		b.Reserved[rel] = n
-		return
-	}
-	b.Nodes[rel] = n
-}
-
 // buildEdges derives the bundle graph (§6.4) from each concept node. It has two
 // kinds of directed edges:
 //
@@ -382,6 +393,26 @@ func containsString(xs []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// hasMarkdown reports whether rel names a loaded non-reserved .md file: a
+// concept (or a malformed one kept for Validate) or a §3.2 rule 2 non-concept.
+func (b *Bundle) hasMarkdown(rel string) bool {
+	return b.Nodes[rel] != nil || b.NonConcepts[rel] != nil
+}
+
+// linkSources returns every loaded non-reserved .md file whose links okfctl's
+// writers must keep resolving: concepts plus §3.2 rule 2 non-concepts. It is a
+// fresh map; callers may not mutate the bundle through it.
+func (b *Bundle) linkSources() map[string]*Node {
+	out := make(map[string]*Node, len(b.Nodes)+len(b.NonConcepts))
+	for p, n := range b.Nodes {
+		out[p] = n
+	}
+	for p, n := range b.NonConcepts {
+		out[p] = n
+	}
+	return out
 }
 
 // OutboundLinks returns the in-bundle nodes that path links to.

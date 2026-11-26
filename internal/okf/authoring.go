@@ -49,6 +49,9 @@ func NewNodeFromTemplate(root, relPath, typ, title string, t Template) (string, 
 	if !strings.HasSuffix(relPath, ".md") {
 		relPath += ".md"
 	}
+	if IsDotPath(filepath.ToSlash(filepath.Clean(relPath))) {
+		return "", fmt.Errorf("node path is not part of the bundle: %s (a file or directory name starting with \".\" is excluded, OKF v0.3 §3.2)", relPath)
+	}
 	abs := filepath.Join(root, filepath.FromSlash(relPath))
 	rootAbs, err := filepath.Abs(root)
 	if err != nil {

@@ -34,17 +34,27 @@ func TestValidate_GoodBundlePasses(t *testing.T) {
 	}
 }
 
-func TestValidate_MissingTypeFails(t *testing.T) {
-	f := Validate(loadOrFail(t, "no-type"))
-	if !hasFindingFor(f, "orphan.md") {
-		t.Errorf("expected a missing-type finding for orphan.md, got %v", f)
+// OKF v0.3 §3.2 rule 2 / §11.1: a .md whose frontmatter has no `type` is not a
+// concept and does not affect conformance; validators SHOULD warn. (Under v0.2
+// §11 rule 2 this failed; v0.3 §13.2 relaxed it.)
+func TestValidate_V03S32_MissingTypeWarnsNotFails(t *testing.T) {
+	b := loadOrFail(t, "no-type")
+	if f := Validate(b); len(f) != 0 {
+		t.Errorf("§3.2: a type-less .md must not fail validate, got %v", f)
+	}
+	if !hasFindingFor(ValidateWarnings(b), "orphan.md") {
+		t.Errorf("§3.2: expected a non-concept warning for orphan.md, got %v", ValidateWarnings(b))
 	}
 }
 
-func TestValidate_EmptyTypeFails(t *testing.T) {
-	f := Validate(loadOrFail(t, "empty-type"))
-	if !hasFindingFor(f, "empty.md") {
-		t.Errorf("expected an empty-type finding for empty.md, got %v", f)
+// §11.2 rule 1: an empty-string `type` is the same as an absent one.
+func TestValidate_V03S32_EmptyTypeWarnsNotFails(t *testing.T) {
+	b := loadOrFail(t, "empty-type")
+	if f := Validate(b); len(f) != 0 {
+		t.Errorf("§3.2/§11.2: an empty-type .md must not fail validate, got %v", f)
+	}
+	if !hasFindingFor(ValidateWarnings(b), "empty.md") {
+		t.Errorf("§3.2: expected a non-concept warning for empty.md, got %v", ValidateWarnings(b))
 	}
 }
 

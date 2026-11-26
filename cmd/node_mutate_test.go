@@ -167,7 +167,9 @@ func TestNodeEdit_RunsEditorThenValidates(t *testing.T) {
 func TestNodeEdit_ReportsValidationFailure(t *testing.T) {
 	dir := t.TempDir()
 	writeRaw(t, dir, "a.md", nodeDoc("A")+"body\n")
-	// Editor overwrites the type with an empty value (spec-floor violation).
+	// Editor empties the type. The bundle still conforms (OKF v0.3 §3.2: the
+	// file is now a non-concept), but the edited node has silently dropped out
+	// of the bundle, so `node edit` must refuse to bless it.
 	ed := fakeEditor(t, dir, "", 0, "")
 	// Rewrite the script to CLOBBER the file with an invalid node.
 	bad := "#!/bin/sh\nprintf '%s' '---\\ntype:\\ntitle: A\\n---\\nbody\\n' > \"$1\"\nexit 0\n"
@@ -176,9 +178,25 @@ func TestNodeEdit_ReportsValidationFailure(t *testing.T) {
 	}
 	t.Setenv("OKFCTL_EDITOR", ed)
 
-	_, err := runOKF(t, "node", "edit", "a.md", "--bundle", dir)
+	out, err := runOKF(t, "node", "edit", "a.md", "--bundle", dir)
 	if err == nil {
-		t.Fatal("expected non-zero exit for spec-floor violation")
+		t.Fatal("expected non-zero exit when the edit drops the node's type")
+	}
+	if !strings.Contains(out, "no longer a concept") || !strings.Contains(out, "§3.2") {
+		t.Errorf("expected a §3.2 no-longer-a-concept message; out=%q", out)
+	}
+}
+
+// Negative control for the guard above: the bundle may hold OTHER type-less .md
+// files (a README.md); editing a real concept still succeeds.
+func TestNodeEdit_V03S32_OtherNonConceptsDoNotBlockEdit(t *testing.T) {
+	dir := t.TempDir()
+	writeRaw(t, dir, "a.md", nodeDoc("A")+"body\n")
+	writeRaw(t, dir, "README.md", "# About this bundle\n")
+	ed := fakeEditor(t, dir, "appended line", 0, "")
+	t.Setenv("OKFCTL_EDITOR", ed)
+	if out, err := runOKF(t, "node", "edit", "a.md", "--bundle", dir); err != nil {
+		t.Fatalf("editing a concept beside a README.md must succeed: %v\n%s", err, out)
 	}
 }
 

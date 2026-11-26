@@ -296,6 +296,15 @@ func newNodeCmd() *cobra.Command {
 				}
 				return fmt.Errorf("%d validation finding(s) after edit", len(findings))
 			}
+			// The bundle can still conform while the edited node has stopped
+			// being a concept: an emptied or removed `type` makes it a §3.2
+			// rule 2 non-concept that every consumer skips. An okfctl-mediated
+			// edit must not silently drop a node out of the bundle, so refuse
+			// to bless it (no timestamp refresh, no log entry, no index).
+			if _, ok := b.NonConcepts[p]; ok {
+				fmt.Fprintf(out, "%s: no longer a concept: it has no non-empty type, so every consumer skips it (OKF v0.3 §3.2)\n", p)
+				return fmt.Errorf("%s is no longer a concept after edit", p)
+			}
 			// The edit went through okfctl and left a valid bundle: refresh the
 			// node's modified timestamp (created is left untouched), record the
 			// edit in log.md, and regenerate index.md. This is how modified stays
