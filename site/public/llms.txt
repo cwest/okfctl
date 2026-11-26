@@ -18,7 +18,7 @@ reports on its health and link graph.
 
 ## Specification
 
-- [Open Knowledge Format spec (SPEC.md)](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md): The authoritative OKF specification, owned by Google (`GoogleCloudPlatform/open-knowledge-format`). Where the spec defines behavior, the spec wins.
+- [Open Knowledge Format spec (SPEC.md)](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md): The authoritative OKF specification (v0.3), maintained in `open-knowledge-format/open-knowledge-format`. The former `GoogleCloudPlatform/open-knowledge-format` repo is deprecated and frozen at v0.2. Where the spec defines behavior, the spec wins.
 
 ## Source
 

@@ -37,5 +37,10 @@ Start here:
 
 okfctl consumes the Open Knowledge Format; it doesn't author it. The
 authoritative source is the upstream
-[OKF v0.2 specification](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md).
-Confirm the version line (`**Version 0.2**`) before citing a section number—§-numbering shifted between v0.1 and v0.2.
+[OKF v0.3 specification](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md).
+Confirm the version line (`**Version 0.3**`) before citing a section number—§-numbering shifted between v0.1 and v0.2, and v0.3 adds subsections.
+Upstream is v0.3 while okfctl still targets v0.2; the
+[v0.3 gap analysis](specs/2026-11-26-okf-v0.3-gap-analysis.md) maps each v0.3
+change to okfctl's current behavior. The former
+`GoogleCloudPlatform/open-knowledge-format` repo is deprecated and frozen at
+v0.2; don't cite it.
