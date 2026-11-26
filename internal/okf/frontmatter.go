@@ -40,8 +40,18 @@ func ParseFrontmatterDetailed(src []byte) (fm map[string]any, body string, prese
 	if !ok {
 		return fm, string(src), false, nil
 	}
-	if uerr := yaml.Unmarshal(rest.yamlBlock, &fm); uerr != nil {
+	// Parse to a node tree first so §5 timestamp keys can be checked against
+	// their SOURCE text before decoding (demoteInvalidNativeTimestamps), then
+	// decode the tree into the map every reader uses.
+	var doc yaml.Node
+	if uerr := yaml.Unmarshal(rest.yamlBlock, &doc); uerr != nil {
 		return nil, "", true, uerr
+	}
+	if doc.Kind != 0 { // Kind 0: an empty block, which decodes to no keys.
+		demoteInvalidNativeTimestamps(&doc)
+		if derr := doc.Decode(&fm); derr != nil {
+			return nil, "", true, derr
+		}
 	}
 	// yaml.Unmarshal of a null document (a bare `!` tag, a literal `null`, or a
 	// block that reduces to null) into a map leaves fm nil and returns NO error.

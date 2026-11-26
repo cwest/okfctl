@@ -13,6 +13,17 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ### Added
 
+- `lint` applies the OKF v0.3 §5 frontmatter semantics through three new
+  advisory checks. `timestamp-form` reports a §5 timestamp key that is not an
+  RFC 3339 date-time with an offset or a full-date. That includes a date-time
+  without an offset, quoted or YAML-native. `verified-event` reports a
+  `verified` event missing `by` or `at`. `superseded-by` reports a
+  `superseded_by` that resolves to no concept, or that is set on a concept that
+  is not `deprecated`. None of them fails `validate`: v0.3 §11 keeps such a
+  bundle conformant.
+- `analyze` reports a §5.4 lifecycle section: the raw `status` distribution, and
+  the concepts that a filter to current knowledge excludes (any status that is
+  not stable, an unknown value included).
 - A knowledge bundle can now reference a separate type-template bundle instead of
   vendoring one. Declare it with a `templates: <path>` key in the bundle's `.okf`
   sidecar (resolved relative to the bundle root), or pass `--templates-from <dir>`
@@ -25,6 +36,18 @@ tagged release, goreleaser generates the release notes from the commit log
   build`, and `index check` are byte-identical with or without the key; a
   reference that cannot be loaded is a hard error naming the path (plain
   `validate` without `--templates` never consults the key). (#182)
+
+### Changed
+
+- The trust tier counts only *current* verification events: an event whose
+  `at` is equal to or later than `generated.at`, or any event when `generated`
+  is absent (OKF v0.3 §5.3, a breaking change from v0.2). A human sign-off made
+  before the last content change no longer makes a concept `human-reviewed`.
+  The tier can only go down, which is the safe direction.
+- A `verified` event without both `by` and `at` is ignored (v0.3 §5.2).
+- `status-lifecycle` states the v0.3 §5.4 meaning of an unknown status (not
+  stable, excluded from current knowledge) and no longer calls the value a
+  defect.
 
 ### Deprecated
 

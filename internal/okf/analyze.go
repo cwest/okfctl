@@ -82,6 +82,7 @@ type AnalyzeReport struct {
 	Summary      AnalyzeSummary     `json:"summary"`
 	Coverage     CoverageReport     `json:"coverage_gaps"`
 	Epistemic    EpistemicReport    `json:"epistemic"`
+	Lifecycle    LifecycleReport    `json:"lifecycle"`
 	Freshness    FreshnessReport    `json:"freshness"`
 	Connectivity ConnectivityReport `json:"connectivity"`
 	Clusters     []ClusterFinding   `json:"clusters"`
@@ -137,6 +138,31 @@ type EpistemicReport struct {
 type EpistemicCount struct {
 	Value string `json:"value"`
 	Count int    `json:"count"`
+}
+
+// LifecycleReport surfaces the §5.4 lifecycle. Distribution is the raw status
+// value per concept, absent counted as stable (§5.4/§11.2: show the raw value).
+// NotCurrent lists the concepts a filter to current knowledge excludes: every
+// concept that is not stable, which by §5.4 includes an unknown value.
+// Observational, like the epistemic distribution; it never gates.
+type LifecycleReport struct {
+	Distribution []StatusCount   `json:"distribution"`
+	NotCurrent   []LifecycleNode `json:"not_current"`
+}
+
+// StatusCount is one observed raw status value and how many concepts carry it.
+type StatusCount struct {
+	Value string `json:"value"`
+	Count int    `json:"count"`
+	Known bool   `json:"known"` // one of the §5.4 values
+}
+
+// LifecycleNode is a concept excluded from current knowledge (§5.4).
+type LifecycleNode struct {
+	Path         string `json:"path"`
+	Status       string `json:"status"`                  // raw value
+	Known        bool   `json:"known"`                   // one of the §5.4 values
+	SupersededBy string `json:"superseded_by,omitempty"` // §5.4 replacement path, as written
 }
 
 // ThinNode is a node whose body is below the thin-lines threshold.
@@ -236,6 +262,7 @@ func Analyze(b *Bundle, opts AnalyzeOptions) AnalyzeReport {
 	rep.Summary = analyzeSummary(b, opts)
 	rep.Coverage = analyzeCoverage(b, opts)
 	rep.Epistemic = analyzeEpistemic(b)
+	rep.Lifecycle = analyzeLifecycle(b)
 	rep.Freshness = analyzeFreshness(b, opts)
 	rep.Connectivity = analyzeConnectivity(b)
 	rep.Clusters = analyzeClusters(b, opts)
@@ -271,6 +298,12 @@ func (r *AnalyzeReport) normalizeSlices() {
 	}
 	if r.Freshness.Aging == nil {
 		r.Freshness.Aging = []AgingNode{}
+	}
+	if r.Lifecycle.Distribution == nil {
+		r.Lifecycle.Distribution = []StatusCount{}
+	}
+	if r.Lifecycle.NotCurrent == nil {
+		r.Lifecycle.NotCurrent = []LifecycleNode{}
 	}
 	if r.Freshness.Stale == nil {
 		r.Freshness.Stale = []AgingNode{}
@@ -369,6 +402,41 @@ func analyzeEpistemic(b *Bundle) EpistemicReport {
 		return dist[i].Value < dist[j].Value // then value ascending
 	})
 	return EpistemicReport{Distribution: dist, Untagged: untagged}
+}
+
+// analyzeLifecycle tallies the raw §5.4 status of every concept and lists the
+// concepts a filter to current knowledge excludes (status not stable; §5.4
+// counts an unknown value as not stable). Distribution is ordered by count
+// descending, then value ascending; NotCurrent is in path order.
+func analyzeLifecycle(b *Bundle) LifecycleReport {
+	counts := map[string]int{}
+	var rep LifecycleReport
+	for _, p := range sortedNodePaths(b) {
+		n := b.Nodes[p]
+		if n.Frontmatter == nil {
+			continue
+		}
+		st := n.Status()
+		counts[st]++
+		if n.IsStable() {
+			continue
+		}
+		ln := LifecycleNode{Path: p, Status: st, Known: n.StatusKnown()}
+		if s, ok := n.Frontmatter["superseded_by"].(string); ok {
+			ln.SupersededBy = strings.TrimSpace(s)
+		}
+		rep.NotCurrent = append(rep.NotCurrent, ln)
+	}
+	for v, c := range counts {
+		rep.Distribution = append(rep.Distribution, StatusCount{Value: v, Count: c, Known: LifecycleStatuses[v]})
+	}
+	sort.Slice(rep.Distribution, func(i, j int) bool {
+		if rep.Distribution[i].Count != rep.Distribution[j].Count {
+			return rep.Distribution[i].Count > rep.Distribution[j].Count
+		}
+		return rep.Distribution[i].Value < rep.Distribution[j].Value
+	})
+	return rep
 }
 
 // danglingTargets returns the sorted, de-duped set of link targets in a node
