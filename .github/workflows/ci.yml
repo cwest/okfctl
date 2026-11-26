@@ -32,6 +32,7 @@ jobs:
               - 'cmd/**'
               - '.github/workflows/ci.yml'
               - 'scripts/skill-command-contract.sh'
+              - 'site/public/install.sh'
             prose:
               - 'README.md'
               - 'CONTRIBUTING.md'
@@ -288,12 +289,15 @@ jobs:
         if: needs.changes.outputs.skills == 'true' || github.ref == 'refs/heads/main'
       - name: install the released binary from the public path
         if: needs.changes.outputs.skills == 'true' || github.ref == 'refs/heads/main'
-        # The public install path resolves the latest release, verifies the
+        # The public installer resolves the latest release, verifies the
         # archive against its checksums, and installs okfctl + okfctl-search.
+        # It runs from the checkout (the same file okfctl.dev serves from
+        # site/public/) so a PR that changes the installer tests its own copy
+        # rather than whatever was last deployed.
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.local/bin"
-          curl -sSL https://okfctl.dev/install.sh | OKFCTL_BIN_DIR="$HOME/.local/bin" sh
+          OKFCTL_BIN_DIR="$HOME/.local/bin" sh site/public/install.sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: run the skill-command contract (self-test + existence sweep + workflows)
         if: needs.changes.outputs.skills == 'true' || github.ref == 'refs/heads/main'

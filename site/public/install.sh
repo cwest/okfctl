@@ -26,6 +26,8 @@
 #   OKFCTL_VERSION   install a specific tag (e.g. v0.2.0). Default: latest.
 #   OKFCTL_BIN_DIR   install directory. Default: /usr/local/bin (falls back to
 #                    $HOME/.local/bin when /usr/local/bin is not writable).
+#   GITHUB_TOKEN     optional; sent to the GitHub API only if the latest tag
+#                    cannot be read from the github.com releases redirect.
 #
 # The install ABORTS on any checksum mismatch — a corrupted or tampered archive
 # is never installed.
@@ -45,9 +47,11 @@ need() {
 # A downloader (curl or wget) and a SHA-256 tool are mandatory; without the
 # latter we cannot verify the archive, and installing unverified is not allowed.
 if command -v curl >/dev/null 2>&1; then
+  DOWNLOADER="curl"
   DL="curl -fsSL"
   DL_O="curl -fsSL -o"
 elif command -v wget >/dev/null 2>&1; then
+  DOWNLOADER="wget"
   DL="wget -qO-"
   DL_O="wget -qO"
 else
@@ -82,15 +86,68 @@ case "$arch" in
 esac
 
 # --- resolve version ---------------------------------------------------------
+# The latest tag comes from the redirect that
+# https://github.com/<repo>/releases/latest answers with
+# (Location: .../releases/tag/<tag>). That page is not the REST API, so it is
+# not subject to the unauthenticated API rate limit that shared CI runners and
+# NAT'd networks routinely exhaust (a 403). Only if the redirect yields no tag
+# do we fall back to api.github.com, sending GITHUB_TOKEN when it is set.
+
+# tag_from_location prints the tag in a .../releases/tag/<tag> URL, or nothing.
+tag_from_location() {
+  loc="$(printf '%s' "$1" | tr -d '\r' | sed -E 's/[[:space:]]+$//')"
+  case "$loc" in
+    */releases/tag/?*) tag="${loc##*/releases/tag/}" ;;
+    *) return 0 ;;
+  esac
+  case "$tag" in
+    */* | *[[:space:]]*) return 0 ;;
+  esac
+  printf '%s' "$tag"
+}
+
+latest_from_redirect() {
+  url="https://github.com/${REPO}/releases/latest"
+  if [ "$DOWNLOADER" = "curl" ]; then
+    loc="$(curl -fsS -o /dev/null -w '%{redirect_url}' "$url" 2>/dev/null || true)"
+  else
+    # wget exits non-zero when it refuses to follow the redirect; the Location
+    # header is still printed by -S.
+    loc="$(
+      { wget -S --max-redirect=0 -O /dev/null "$url" 2>&1 || true; } \
+        | grep -i '^ *location:' | head -n1 | sed -E 's/^ *[Ll][Oo][Cc][Aa][Tt][Ii][Oo][Nn]: *//' \
+        || true
+    )"
+  fi
+  tag_from_location "$loc"
+}
+
+latest_from_api() {
+  api="https://api.github.com/repos/${REPO}/releases/latest"
+  {
+    if [ -n "${GITHUB_TOKEN:-}" ]; then
+      if [ "$DOWNLOADER" = "curl" ]; then
+        curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" "$api"
+      else
+        wget -qO- --header="Authorization: Bearer ${GITHUB_TOKEN}" "$api"
+      fi
+    else
+      $DL "$api"
+    fi
+  } 2>/dev/null \
+    | grep -m1 '"tag_name"' \
+    | sed -E 's/.*"tag_name" *: *"([^"]+)".*/\1/' \
+    || true
+}
+
 version="${OKFCTL_VERSION:-}"
 if [ -z "$version" ]; then
   info "resolving latest release"
-  # Follow the /releases/latest redirect to learn the tag without a GitHub token.
-  version="$(
-    $DL "https://api.github.com/repos/${REPO}/releases/latest" \
-      | grep -m1 '"tag_name"' \
-      | sed -E 's/.*"tag_name" *: *"([^"]+)".*/\1/'
-  )"
+  version="$(latest_from_redirect)"
+  if [ -z "$version" ]; then
+    info "release redirect gave no tag; asking the GitHub API"
+    version="$(latest_from_api)"
+  fi
   [ -n "$version" ] || err "could not determine the latest version; set OKFCTL_VERSION and retry"
 fi
 info "installing okfctl ${version} for ${os}/${arch}"
