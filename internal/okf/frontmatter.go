@@ -137,5 +137,17 @@ func splitFrontmatterRaw(src []byte) (yamlBlock, rawAfter []byte, ok bool) {
 	return yamlBuf.Bytes(), rest[consumed:], true
 }
 
+// rawFrontmatterBlock returns the leading frontmatter block of src verbatim:
+// the opening `---` line through the closing `---` line, including that line's
+// break. It returns "" when src has no block. The fence detection is
+// splitFrontmatterRaw's, so the block boundary always agrees with the parser.
+func rawFrontmatterBlock(src []byte) string {
+	_, rawAfter, ok := splitFrontmatterRaw(src)
+	if !ok {
+		return ""
+	}
+	return string(src[:len(src)-len(rawAfter)])
+}
+
 // ensure goldmark-meta stays pinned as a dependency for downstream rendering.
 var _ = gmmeta.Meta

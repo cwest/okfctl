@@ -29,7 +29,8 @@ Two filenames are reserved (§3.1):
 - **`index.md`**—a generated directory listing. Per §8 one is emitted in each
   directory that holds concepts or subdirectories. Regenerate with `okfctl index
   build`; verify with `okfctl index check`. Only the bundle-root index carries
-  frontmatter (the §12 `okf_version` marker).
+  frontmatter: §8.1 bundle metadata (`okf_version`, `title`, `description`,
+  `license`, extension keys), which `index build` keeps verbatim.
 - **`log.md`**—the bundle's change history. Append with `okfctl log append`;
   read with `okfctl log show`.
 

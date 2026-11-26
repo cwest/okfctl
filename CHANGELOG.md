@@ -43,6 +43,14 @@ tagged release, goreleaser generates the release notes from the commit log
   (`freshness.aging`, `summary.aging_threshold_days`, `--aging-days`).
   `Node.IsStale` now reports an unparseable `stale_after` as not fresh, and a
   null or empty value as absent.
+- `validate` now accepts OKF v0.3 §8.1 bundle metadata on the bundle-root
+  `index.md`: `title`, `description`, `license`, and extension keys (§4.1) next
+  to `okf_version`. Every key is optional, so a root block without
+  `okf_version` (or an empty one) also passes. A concept key the spec defines,
+  such as `type` or `tags`, is still flagged there, and a non-root `index.md`
+  still carries no frontmatter (§8). `index build` now keeps an existing root
+  frontmatter block byte-for-byte instead of rewriting it to `okf_version` only
+  (§8.1 MUST keep; §4 no re-serialization).
 - `validate` now enforces OKF v0.2 §9 on every reserved `log.md` at any depth:
   each `## ` date heading must be a valid ISO-8601 `YYYY-MM-DD` (rejecting
   impossible dates like `2025-13-45` and non-dates like `last Tuesday`),

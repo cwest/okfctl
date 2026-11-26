@@ -76,8 +76,8 @@ func TestValidate_RootIndexNoFrontmatterPasses(t *testing.T) {
 
 func TestValidate_RootIndexExtraFrontmatterKeyFlagged(t *testing.T) {
 	dir := t.TempDir()
-	// §12: okf_version is "the only place frontmatter is permitted" — a
-	// `type: Index` key alongside it exceeds the carve-out.
+	// §8.1: `type` is a concept key (§4.1), not bundle metadata or an
+	// extension key, so `type: Index` beside okf_version is still flagged.
 	writeReserved(t, dir, "index.md", "---\nokf_version: \"0.1\"\ntype: Index\n---\n\n# Knowledge Base\n")
 
 	b, err := Load(dir)
@@ -91,8 +91,8 @@ func TestValidate_RootIndexExtraFrontmatterKeyFlagged(t *testing.T) {
 
 func TestValidate_RootIndexTypeOnlyFlagged(t *testing.T) {
 	dir := t.TempDir()
-	// The exact shape the pre-fix generator emitted: `type: Index` and no
-	// okf_version. This is a §8/§12 violation and validate must flag it.
+	// The exact shape the pre-fix generator emitted: `type: Index`. `type` is
+	// a concept key (§4.1), not §8.1 bundle metadata, so validate flags it.
 	writeReserved(t, dir, "index.md", "---\ntype: Index\n---\n\n# Knowledge Base\n")
 
 	b, err := Load(dir)

@@ -457,8 +457,8 @@ func citationResource(item string) (string, bool) {
 }
 
 // bumpVersionMarkers sets the bundle's declared version to target in both the
-// .okf sidecar (§12) and the bundle-root index.md okf_version marker (§8/§12 —
-// the only place index frontmatter is permitted). Each is a no-op when already
+// .okf sidecar (§12) and the bundle-root index.md okf_version marker (§8.1 —
+// the only index whose frontmatter is permitted). Each is a no-op when already
 // at target (idempotence) or absent.
 func bumpVersionMarkers(root, target string) error {
 	if err := bumpOkfSidecar(root, target); err != nil {
@@ -500,8 +500,15 @@ func bumpOkfSidecar(root, target string) error {
 }
 
 // bumpRootIndexMarker rewrites the bundle-root index.md okf_version marker to
-// target, order-preserving and body-verbatim. Absent index or absent marker is
-// a no-op — this never invents a marker where the author had none.
+// target. Absent index or absent marker is a no-op — this never invents a
+// marker where the author had none.
+//
+// The rewrite is a splice, not a re-encode: only the bytes of the okf_version
+// value change, and every other byte of the file (comments, key order, quoting,
+// spacing, line endings, other keys) is kept. OKF v0.3 §8.1 says a producer
+// MUST keep the existing root frontmatter, and §4 says it SHOULD NOT
+// re-serialize values it did not change. The new value is double-quoted, as §4
+// recommends for number-like values.
 func bumpRootIndexMarker(root, target string) error {
 	abs := filepath.Join(root, "index.md")
 	if escapesBundleRoot(root, abs) { // §3.2 rule 5, §11.2
@@ -514,7 +521,7 @@ func bumpRootIndexMarker(root, target string) error {
 		}
 		return fmt.Errorf("read index.md: %w", err)
 	}
-	yamlBlock, rawAfter, ok := splitFrontmatterRaw(raw)
+	yamlBlock, _, ok := splitFrontmatterRaw(raw)
 	if !ok {
 		return nil // no frontmatter: nothing to bump
 	}
@@ -526,37 +533,76 @@ func bumpRootIndexMarker(root, target string) error {
 	if m == nil {
 		return nil
 	}
-	cur := findScalar(m, "okf_version")
-	if cur == "" || cur == target {
-		return nil // no marker to bump, or already at target (idempotent no-op)
-	}
-	setScalar(m, "okf_version", target)
-
-	var fmBuf bytes.Buffer
-	enc := yaml.NewEncoder(&fmBuf)
-	enc.SetIndent(2)
-	if err := enc.Encode(m); err != nil {
-		return fmt.Errorf("encode index.md frontmatter: %w", err)
-	}
-	_ = enc.Close()
-
-	var out bytes.Buffer
-	out.WriteString("---\n")
-	out.Write(fmBuf.Bytes())
-	out.WriteString("---\n")
-	out.Write(rawAfter)
-	if bytes.Equal(out.Bytes(), raw) {
-		return nil
-	}
-	return os.WriteFile(abs, out.Bytes(), 0o644) //nolint:gosec // G306: a bundle node is a shareable knowledge document; 0o644 is intended
-}
-
-// findScalar returns the scalar value of key in a mapping, or "".
-func findScalar(mapping *yaml.Node, key string) string {
-	for i := 0; i+1 < len(mapping.Content); i += 2 {
-		if mapping.Content[i].Value == key {
-			return mapping.Content[i+1].Value
+	var val *yaml.Node
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == "okf_version" {
+			val = m.Content[i+1]
 		}
 	}
-	return ""
+	if val == nil || val.Kind != yaml.ScalarNode || val.Value == "" || val.Value == target {
+		return nil // no marker to bump, or already at target (idempotent no-op)
+	}
+	out, err := spliceScalar(raw, val, `"`+target+`"`)
+	if err != nil {
+		return fmt.Errorf("rewrite index.md okf_version: %w", err)
+	}
+	if bytes.Equal(out, raw) {
+		return nil
+	}
+	return os.WriteFile(abs, out, 0o644) //nolint:gosec // G306: a bundle node is a shareable knowledge document; 0o644 is intended
+}
+
+// spliceScalar replaces the source text of a single-line flow scalar (plain,
+// single-quoted, or double-quoted) in a file that starts with a frontmatter
+// block, leaving every other byte as is. val must come from parsing that
+// block: its Line is 1-based within the block, so file line Line+1 holds it
+// (line 1 is the opening `---`), and its Column is 1-based in runes.
+func spliceScalar(raw []byte, val *yaml.Node, replacement string) ([]byte, error) {
+	if val.Style&(yaml.LiteralStyle|yaml.FoldedStyle) != 0 {
+		return nil, fmt.Errorf("block scalar at line %d is not supported", val.Line)
+	}
+	lines := bytes.SplitAfter(raw, []byte("\n"))
+	li := val.Line // 0-based index of file line val.Line+1
+	if li < 1 || li >= len(lines) {
+		return nil, fmt.Errorf("value line %d out of range", val.Line)
+	}
+	text := []rune(string(lines[li]))
+	start := val.Column - 1
+	if start < 0 || start >= len(text) {
+		return nil, fmt.Errorf("value column %d out of range", val.Column)
+	}
+	end := -1
+	switch {
+	case val.Style&yaml.DoubleQuotedStyle != 0:
+		for i := start + 1; i < len(text); i++ {
+			if text[i] == '\\' {
+				i++
+				continue
+			}
+			if text[i] == '"' {
+				end = i + 1
+				break
+			}
+		}
+	case val.Style&yaml.SingleQuotedStyle != 0:
+		for i := start + 1; i < len(text); i++ {
+			if text[i] == '\'' {
+				if i+1 < len(text) && text[i+1] == '\'' {
+					i++
+					continue
+				}
+				end = i + 1
+				break
+			}
+		}
+	default:
+		if n := len([]rune(val.Value)); start+n <= len(text) && string(text[start:start+n]) == val.Value {
+			end = start + n
+		}
+	}
+	if end < 0 {
+		return nil, fmt.Errorf("cannot locate the value on line %d", val.Line+1)
+	}
+	lines[li] = []byte(string(text[:start]) + replacement + string(text[end:]))
+	return bytes.Join(lines, nil), nil
 }

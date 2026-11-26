@@ -29,6 +29,14 @@ type Node struct {
 	// empty block (`---\n---`); this bit is the only way to tell them apart,
 	// which §8/§12 validation needs (a present empty block is a violation).
 	HasFrontmatterBlock bool
+	// RawFrontmatter is the frontmatter block exactly as it appears in the
+	// source, from the opening `---` through the closing fence line and its line
+	// break. It is set only for reserved files (index.md, log.md), and it is
+	// empty when no block is present. `index build` writes the bundle-root
+	// index's block back from these bytes: OKF v0.3 §8.1 says a producer that
+	// regenerates index.md MUST keep the existing root frontmatter, and §4 says
+	// it SHOULD NOT re-serialize values it did not change.
+	RawFrontmatter string
 }
 
 // Type returns the node's type value ("" if absent or not a string).

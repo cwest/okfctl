@@ -27,8 +27,8 @@ import (
 // AppendLog (log append) — and asserts every artifact it produces satisfies the
 // OKF spec floor that Validate enforces:
 //
-//   - §8:  index files carry no frontmatter (bundle-root exception: okf_version
-//          only).
+//   - §8:  index files carry no frontmatter (bundle-root exception: §8.1
+//          bundle metadata and extension keys, kept verbatim on rebuild).
 //   - §9:  log.md is a date-grouped list, newest-first, ISO-8601 date headings.
 //   - §12: okf_version marker semantics on the bundle-root index.
 //
@@ -152,8 +152,10 @@ func TestConformance_GeneratedBundleValidatesClean(t *testing.T) {
 }
 
 // assertGeneratedIndexSection8And12 checks the on-disk generated bundle-root
-// index against §8/§12: it either carries no frontmatter, or carries a
-// frontmatter block whose sole key is okf_version.
+// index for a bundle that had NO root frontmatter before the build: it either
+// carries no frontmatter, or a generated block whose sole key is okf_version
+// (§8.1 marker emitted from the .okf sidecar). A curator-authored root block is
+// kept verbatim instead (see TestConformance_Section8_1_RootMetadataRoundTrip).
 func assertGeneratedIndexSection8And12(t *testing.T, dir string) {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join(dir, "index.md"))
@@ -236,5 +238,47 @@ func TestConformance_ValidateFlagsGeneratedIndexRegression(t *testing.T) {
 	}
 	if !hasFindingFor(Validate(b), "index.md") {
 		t.Fatalf("validate must flag a generated index carrying `type: Index` frontmatter; got %v", Validate(b))
+	}
+}
+
+// TestConformance_Section8_1_RootMetadataRoundTrip closes the produce→validate
+// loop for OKF v0.3 §8.1: a bundle-root index carrying bundle metadata and an
+// extension key validates clean, survives index build byte-for-byte (§8.1 MUST
+// keep; §4 no re-serialization), and still validates clean afterwards.
+func TestConformance_Section8_1_RootMetadataRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	writeConceptBundle(t, dir, reproRootFrontmatter+"\n# Acme\n")
+	if f := validateBundleAt(t, dir); len(f) != 0 {
+		t.Fatalf("§8.1: bundle metadata on the root index must validate clean before build; got %v", f)
+	}
+	b, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteIndex(b); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "index.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(raw), reproRootFrontmatter+"\n# Acme\n") {
+		t.Errorf("§8.1: index build must keep the root frontmatter and H1 verbatim; got:\n%s", raw)
+	}
+	if f := validateBundleAt(t, dir); len(f) != 0 {
+		t.Errorf("§8.1: rebuilt bundle must validate clean; got %v", f)
+	}
+}
+
+// TestConformance_Section8_1_ConceptKeyOnRootIndexFlagged is the positive
+// control for the §8.1 floor: a concept key (here `type`, §4.1) on the root
+// index is neither bundle metadata nor an extension key, so it is flagged even
+// when it sits beside permitted keys.
+func TestConformance_Section8_1_ConceptKeyOnRootIndexFlagged(t *testing.T) {
+	dir := t.TempDir()
+	writeConceptBundle(t, dir, "---\nokf_version: \"0.3\"\ntitle: Acme\ntype: Index\n---\n\n# Acme\n")
+	msgs := findingMessagesFor(validateBundleAt(t, dir), "index.md")
+	if len(msgs) != 1 || !strings.HasSuffix(msgs[0], "found concept key: type") {
+		t.Errorf("§8.1: `type` on the root index must yield exactly one finding; got %v", msgs)
 	}
 }

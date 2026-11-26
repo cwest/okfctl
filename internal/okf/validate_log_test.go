@@ -229,7 +229,7 @@ func TestValidate_NonRootIndexEmptyBlockFails(t *testing.T) {
 	writeValidBundleShell(t, dir)
 	writeFile(t, dir, "sub/index.md", "---\n---\n\n# Sub\n")
 	f := validateBundleAt(t, dir)
-	if !hasFindingMessage(f, "sub/index.md", "index files contain no frontmatter (§8); frontmatter is permitted only on the bundle-root index and only for okf_version (§12)") {
+	if !hasFindingMessage(f, "sub/index.md", "index files contain no frontmatter (§8); only the bundle-root index may carry frontmatter (§8.1)") {
 		t.Errorf("V6: non-root empty block must FAIL §8; got %v", findingMessagesFor(f, "sub/index.md"))
 	}
 }
@@ -251,15 +251,16 @@ func TestValidate_RootIndexOkfVersionOnlySilent(t *testing.T) {
 	}
 }
 
-func TestValidate_RootIndexEmptyBlockFails(t *testing.T) {
-	// A present-but-empty block on the root index: block present, okf_version
-	// absent — a §12 violation per the existing root rule.
+func TestValidate_RootIndexEmptyBlockSilent_Section8_1(t *testing.T) {
+	// A present-but-empty block on the root index is conformant under v0.3:
+	// every §8.1 key (okf_version included) is optional. The non-root empty
+	// block above stays a §8 failure.
 	dir := t.TempDir()
 	writeFile(t, dir, "index.md", "---\n---\n\n# Index\n")
 	writeFile(t, dir, "notes/note.md", "---\ntype: Concept\ntitle: Note\n---\n\n# Note\n")
 	f := validateBundleAt(t, dir)
-	if len(findingMessagesFor(f, "index.md")) == 0 {
-		t.Errorf("V6: root index with an empty block must FAIL (block present, okf_version absent); got no finding")
+	if msgs := findingMessagesFor(f, "index.md"); len(msgs) != 0 {
+		t.Errorf("§8.1: root index with an empty block must be silent; got %v", msgs)
 	}
 }
 

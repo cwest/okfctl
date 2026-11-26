@@ -37,7 +37,8 @@ const (
 //
 // The scaffolded index.md carries NO frontmatter (OKF §8). The bundle's
 // okf_version is pinned by the .okf sidecar; `okfctl index build` surfaces it as
-// the sole permitted index frontmatter key (§12) once the index is regenerated.
+// an okf_version-only root frontmatter block (§8.1) once the index is
+// regenerated.
 func Scaffold(dir string) error {
 	// A scaffolded bundle dir holds shareable knowledge documents; 0o755 is intended.
 	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: shareable bundle content dir
