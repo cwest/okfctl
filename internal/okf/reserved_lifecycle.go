@@ -526,6 +526,11 @@ func WriteIndexWithOptions(b *Bundle, opts IndexShapeOptions) error {
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil { //nolint:gosec // G301: shareable bundle content dir; 0o755 is intended
 			return err
 		}
+		// §3.2 rule 5 / §11.2: never read or write through an index.md that
+		// is a symlink out of the bundle root.
+		if escapesBundleRoot(b.Root, p) {
+			return fmt.Errorf("%s is a symlink that resolves outside the bundle root; not read (OKF §3.2, §11.2)", filepath.ToSlash(rel(b.Root, p)))
+		}
 		rendered := RenderDirIndexWithOptions(b, dir, opts)
 		// Preserve on write (issue #185): the render is produced LF, but if the
 		// index.md already on disk is dominantly CRLF (a Windows checkout), write
@@ -576,6 +581,9 @@ func IndexInSyncWithOptions(b *Bundle, opts IndexShapeOptions) (bool, string) {
 	for _, dir := range IndexDirs(b) {
 		want[dir] = true
 		p := indexPathFor(b.Root, dir)
+		if escapesBundleRoot(b.Root, p) {
+			return false, fmt.Sprintf("%s is a symlink that resolves outside the bundle root; not read (OKF §3.2, §11.2)", filepath.ToSlash(rel(b.Root, p)))
+		}
 		onDisk, err := os.ReadFile(p) //nolint:gosec // G304: reading the tool's own generated index file
 		if err != nil {
 			return false, fmt.Sprintf("%s is missing or unreadable; run `okfctl index build`", filepath.ToSlash(rel(b.Root, p)))
@@ -641,6 +649,11 @@ func AppendLog(root, message string) error {
 	today := nowUTC().Format("2006-01-02")
 
 	p := filepath.Join(root, "log.md")
+	// §3.2 rule 5 / §11.2: never read (or write through) a log.md that is a
+	// symlink out of the bundle root.
+	if escapesBundleRoot(root, p) {
+		return fmt.Errorf("%s is a symlink that resolves outside the bundle root; not read (OKF §3.2, §11.2)", "log.md")
+	}
 	existing, err := os.ReadFile(p) //nolint:gosec // G304: reading the user's own bundle log.md
 	if err != nil {
 		// Create a fresh §9 log with the default title. A new file is always LF.
@@ -673,8 +686,14 @@ func AppendLog(root, message string) error {
 	return os.WriteFile(p, []byte(out), 0o644) //nolint:gosec // G306: log.md is shareable bundle content; 0o644 is intended
 }
 
-// ReadLog returns the log.md body (empty string if the file is absent).
+// ReadLog returns the log.md body (empty string if the file is absent). A
+// log.md that is a symlink resolving outside the bundle root is an error.
 func ReadLog(root string) (string, error) {
+	// §3.2 rule 5 / §11.2: a log.md symlinked out of the bundle root is not
+	// read from the local file system.
+	if escapesBundleRoot(root, filepath.Join(root, "log.md")) {
+		return "", fmt.Errorf("log.md is a symlink that resolves outside the bundle root; not read (OKF §3.2, §11.2)")
+	}
 	data, err := os.ReadFile(filepath.Join(root, "log.md")) //nolint:gosec // G304: reading the user's own bundle log.md
 	if os.IsNotExist(err) {
 		return "", nil

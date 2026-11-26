@@ -56,6 +56,14 @@ func loadBundleForCmd(cmd *cobra.Command, dir string, noIgnore bool) (*okf.Bundl
 			len(b.SkippedDirs), plural(len(b.SkippedDirs), "y", "ies"),
 			strings.Join(b.SkippedDirs, ", "))
 	}
+	// §3.2 rule 5 / §11.2: never drop an out-of-root symlink silently.
+	if len(b.EscapedSymlinks) > 0 {
+		fmt.Fprintf(cmd.ErrOrStderr(),
+			"note: did not read %d symlink%s that resolve%s outside the bundle root (%s)\n",
+			len(b.EscapedSymlinks), plural(len(b.EscapedSymlinks), "", "s"),
+			plural(len(b.EscapedSymlinks), "s", ""),
+			strings.Join(b.EscapedSymlinks, ", "))
+	}
 	return b, nil
 }
 

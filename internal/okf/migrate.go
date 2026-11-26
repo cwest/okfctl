@@ -471,6 +471,9 @@ func bumpVersionMarkers(root, target string) error {
 // preserving every other line. Absent sidecar is a no-op.
 func bumpOkfSidecar(root, target string) error {
 	abs := filepath.Join(root, ".okf")
+	if escapesBundleRoot(root, abs) { // §3.2 rule 5, §11.2
+		return fmt.Errorf("%s is a symlink that resolves outside the bundle root; not read (OKF §3.2, §11.2)", ".okf")
+	}
 	data, err := os.ReadFile(abs) //nolint:gosec // G304: reading the user's own bundle .okf sidecar
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -501,6 +504,9 @@ func bumpOkfSidecar(root, target string) error {
 // a no-op — this never invents a marker where the author had none.
 func bumpRootIndexMarker(root, target string) error {
 	abs := filepath.Join(root, "index.md")
+	if escapesBundleRoot(root, abs) { // §3.2 rule 5, §11.2
+		return fmt.Errorf("%s is a symlink that resolves outside the bundle root; not read (OKF §3.2, §11.2)", "index.md")
+	}
 	raw, err := os.ReadFile(abs) //nolint:gosec // G304: reading the user's own bundle index.md
 	if err != nil {
 		if os.IsNotExist(err) {

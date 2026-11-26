@@ -42,6 +42,11 @@ const DriftIgnoreRevsFile = ".okf-drift-ignore-revs"
 // SHAs are lower-cased so matching is case-insensitive against git's %H output.
 func LoadDriftIgnoreRevs(root string) (map[string]bool, error) {
 	out := map[string]bool{}
+	// §3.2 rule 5 / §11.2: an ignore-revs file symlinked out of the bundle root
+	// is not read. It is optional, so treat it as absent.
+	if escapesBundleRoot(root, filepath.Join(root, DriftIgnoreRevsFile)) {
+		return out, nil
+	}
 	data, err := os.ReadFile(filepath.Join(root, DriftIgnoreRevsFile)) //nolint:gosec // G304: reading a file from the user's own bundle root
 	if err != nil {
 		if os.IsNotExist(err) {

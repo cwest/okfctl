@@ -60,6 +60,13 @@ func newValidateCmd() *cobra.Command {
 			for _, f := range findings {
 				fmt.Fprintf(out, "FAIL %s: %s\n", f.Path, f.Message)
 			}
+			// §3.2 rule 5 / §11.2: a symlink that resolves outside the bundle
+			// root was not read. That is a consumer rule, not a bundle
+			// conformance failure (§11.1), so it is a warning and never changes
+			// the exit code.
+			for _, p := range b.EscapedSymlinks {
+				fmt.Fprintf(out, "warning %s: %s\n", p, okf.EscapedSymlinkMessage)
+			}
 
 			var drift []okf.DriftFinding
 			if templates {
