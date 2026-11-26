@@ -313,3 +313,45 @@ func TestBumpRootIndexMarker_Section8_1_CRLFAndNoOps(t *testing.T) {
 		}
 	}
 }
+
+func TestWriteIndex_Section8_1_RootBlockWithoutTrailingNewline(t *testing.T) {
+	// §8.1: a root index.md that ends right after the closing `---` (no final
+	// newline) still keeps its block, and index check is clean right after
+	// index build. The kept block gains only the line terminator the render
+	// needs; the frontmatter bytes are unchanged.
+	for name, src := range map[string]string{
+		"lf":   "---\ntitle: Acme\n---",
+		"crlf": "---\r\ntitle: Acme\r\n---",
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeConceptBundle(t, dir, src)
+			b, err := Load(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := WriteIndex(b); err != nil {
+				t.Fatal(err)
+			}
+			got, _ := os.ReadFile(filepath.Join(dir, "index.md"))
+			norm := strings.ReplaceAll(string(got), "\r\n", "\n")
+			if !strings.HasPrefix(norm, "---\ntitle: Acme\n---\n\n# ") {
+				t.Fatalf("§8.1: root block must be kept and separated from the H1 by one blank line; got %q", got)
+			}
+			b2, err := Load(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ok, why := IndexInSync(b2); !ok {
+				t.Errorf("index check must be clean right after build: %s", why)
+			}
+			if err := WriteIndex(b2); err != nil {
+				t.Fatal(err)
+			}
+			again, _ := os.ReadFile(filepath.Join(dir, "index.md"))
+			if string(again) != string(got) {
+				t.Errorf("second index build changed the root index:\n%q\n%q", got, again)
+			}
+		})
+	}
+}

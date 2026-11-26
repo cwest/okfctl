@@ -214,7 +214,8 @@ func scalarString(v any) string {
 //     destroy curator content, and validate already reports it. Line endings
 //     are normalized to LF here because the render is
 //     LF; WriteIndex restores CRLF for a CRLF file, so a CRLF block still
-//     round-trips verbatim.
+//     round-trips verbatim. A block with no final newline (the file ends at
+//     the closing `---`) gets one line terminator so a rebuild is stable.
 //  2. Otherwise an okf_version-only block is emitted when the
 //     marker-compatibility contract says the key should be present (see
 //     bundleRootOkfVersion), and "" otherwise. The value is quoted so the
@@ -223,7 +224,15 @@ func scalarString(v any) string {
 // `type: Index` is never emitted.
 func rootFrontmatter(b *Bundle) string {
 	if idx, ok := b.Reserved["index.md"]; ok && idx != nil && idx.RawFrontmatter != "" {
-		return normalizeEOL(idx.RawFrontmatter) + "\n"
+		raw := normalizeEOL(idx.RawFrontmatter)
+		// A file that ends right after the closing `---` yields a block with
+		// no line terminator. Terminate it before the blank separator line so
+		// the render is a fixed point: the rebuilt file reloads to the same
+		// block plus "\n", and index check stays clean after index build.
+		if !strings.HasSuffix(raw, "\n") {
+			raw += "\n"
+		}
+		return raw + "\n"
 	}
 	if v, ok := bundleRootOkfVersion(b); ok {
 		return fmt.Sprintf("---\nokf_version: %q\n---\n\n", v)
