@@ -322,7 +322,7 @@ func setMapping(mapping *yaml.Node, key string, pairs []kv) {
 // `{ resource }` mappings, preserving order. An existing sources sequence is
 // extended in place; otherwise a new key is appended after the existing keys.
 func appendSources(mapping *yaml.Node, sources []SourceEdit) {
-	seq := findSequence(mapping, "sources")
+	seq := sourcesSequence(mapping)
 	if seq == nil {
 		seq = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
 		mapping.Content = append(mapping.Content,
@@ -365,12 +365,28 @@ func removeKey(mapping *yaml.Node, key string) {
 	}
 }
 
-// findSequence returns the sequence node value of key, or nil.
-func findSequence(mapping *yaml.Node, key string) *yaml.Node {
+// sourcesSequence returns the `sources` value as a sequence node, coercing an
+// existing non-sequence value in place per OKF v0.3 §11.2: a null or empty
+// value is an absent key (rule 1) and becomes an empty sequence, and any other
+// single item becomes a one-item sequence (rule 2). Without this, extending a
+// null or single-mapping `sources` would append a duplicate key. Returns nil
+// only when the key is absent.
+func sourcesSequence(mapping *yaml.Node) *yaml.Node {
 	for i := 0; i+1 < len(mapping.Content); i += 2 {
-		if mapping.Content[i].Value == key && mapping.Content[i+1].Kind == yaml.SequenceNode {
-			return mapping.Content[i+1]
+		if mapping.Content[i].Value != "sources" {
+			continue
 		}
+		v := mapping.Content[i+1]
+		if v.Kind == yaml.SequenceNode {
+			return v
+		}
+		seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+		nullish := v.Kind == yaml.ScalarNode && (v.Tag == "!!null" || v.Value == "")
+		if !nullish {
+			seq.Content = []*yaml.Node{v}
+		}
+		mapping.Content[i+1] = seq
+		return seq
 	}
 	return nil
 }

@@ -113,6 +113,7 @@ $ echo $?
 | `broken-link` | a node links to a `.md` target that resolves to no node, **and a node with that basename exists elsewhere** — a moved or mistyped path (a defect, not an unwritten concept) | fix the path to the resolved candidate the finding names |
 | `coverage-gap` | a **known concept term** (declared as a title/alias) is referenced by ≥ threshold distinct nodes but has no node of its own — a node whose title *is* the term or *leads with* it counts as its home | author the missing node — it's a real to-do, prioritized by mention count |
 | `type-hygiene` | two `type` values fold to the same canonical form (case / trailing-`s` plural), e.g. `Concept` vs `Concepts` | pick one spelling and normalize the drifting nodes |
+| `source-missing-resource` | a `sources` entry has no `resource` (or a null/empty one). OKF v0.3 §5.1 requires it, so the entry is ignored as provenance (§11.2 rule 3) | add the `resource` the entry cites, or remove the entry |
 
 Two accuracy notes that keep you from chasing ghosts:
 

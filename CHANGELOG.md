@@ -61,6 +61,18 @@ tagged release, goreleaser generates the release notes from the commit log
   still carries no frontmatter (§8). `index build` now keeps an existing root
   frontmatter block byte-for-byte instead of rewriting it to `okf_version` only
   (§8.1 MUST keep; §4 no re-serialization).
+- Concept frontmatter now follows the OKF v0.3 §11.2 consumer rules for empty
+  and single-item values, applied once at load so every command agrees. A null,
+  empty-string, or empty-list value reads as an absent key, so `status:` with no
+  value means `stable` instead of a `status-lifecycle` finding on `"<nil>"`. A
+  single item in a list field (`tags`, `sources`, `verified`, `parameters`)
+  reads as a one-item list, so `sources: { resource: ... }` now counts as a
+  citation instead of leaving the node uncited. `migrate` extends a null or
+  single-mapping `sources` in place rather than writing a duplicate key.
+- `lint` reports a new `source-missing-resource` finding for each `sources`
+  entry with no `resource`. The entry is still ignored as provenance, but no
+  longer silently (§11.2 rule 3). Like every lint finding it fails only under
+  `--strict`; `validate` is unaffected.
 - `validate` now enforces OKF v0.2 §9 on every reserved `log.md` at any depth:
   each `## ` date heading must be a valid ISO-8601 `YYYY-MM-DD` (rejecting
   impossible dates like `2025-13-45` and non-dates like `last Tuesday`),
