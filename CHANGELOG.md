@@ -35,6 +35,16 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ### Fixed
 
+- `node refresh`, `node edit`, and `migrate --apply` now splice the frontmatter
+  entry they change instead of re-encoding the whole block (OKF v0.3 §4: a
+  producer SHOULD NOT re-serialize values it did not change). A one-field
+  refresh is a one-line diff: alignment padding, blank-line grouping, list
+  indentation, comments, quoting, CRLF line endings, and unknown or `x-` keys
+  (§4.1) all keep their bytes. A newly added key is appended as one line, and a
+  quoted value keeps its quotes. A frontmatter shape the splicer does not model
+  falls back to the previous re-encoding writer, so no edit that worked before
+  can break. (#146)
+
 - `analyze` now reports staleness only from `stale_after` (OKF v0.3 §5.5,
   §11.2). A new "Stale" section and `freshness.stale_after` JSON list name each
   concept whose `stale_after` has passed, plus each concept whose `stale_after`

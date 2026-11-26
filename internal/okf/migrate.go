@@ -273,47 +273,26 @@ func MigrateApply(root string, b *Bundle, plan MigratePlan) error {
 // renderMigratedNode returns the node file bytes with the planned deterministic
 // edits applied to its frontmatter, order-preserving and additive: the only
 // keys that change are `timestamp` (removed) and `generated` / `sources`
-// (added, appended after the existing keys). The body is preserved verbatim. It
+// (added, appended after the existing keys). The edit is a splice (OKF v0.3
+// §4): every untouched entry keeps its bytes, and the body is preserved
+// verbatim. It
 // is PURE — the single writer both --apply and its --dry-run render through, so
 // a dry-run's rendered bytes are byte-identical to the applied bytes.
 func renderMigratedNode(raw []byte, nm NodeMigration) ([]byte, error) {
-	yamlBlock, rawAfter, ok := splitFrontmatterRaw(raw)
-	if !ok {
+	if _, _, ok := splitFrontmatterRaw(raw); !ok {
 		// A node with no frontmatter block carries neither a timestamp nor a
 		// body-citation edit that touches frontmatter; nothing to do.
 		return raw, nil
 	}
-	var doc yaml.Node
-	if err := yaml.Unmarshal(yamlBlock, &doc); err != nil {
-		return nil, fmt.Errorf("parse frontmatter: %w", err)
-	}
-	root := frontmatterMapping(&doc)
-	if root == nil {
-		return nil, fmt.Errorf("frontmatter is not a mapping")
-	}
-
-	if nm.Generated != nil {
-		removeKey(root, "timestamp")
-		setMapping(root, "generated", []kv{{"by", nm.Generated.By}, {"at", nm.Generated.At}})
-	}
-	if len(nm.Sources) > 0 {
-		appendSources(root, nm.Sources)
-	}
-
-	var fmBuf bytes.Buffer
-	enc := yaml.NewEncoder(&fmBuf)
-	enc.SetIndent(2)
-	if err := enc.Encode(root); err != nil {
-		return nil, fmt.Errorf("encode frontmatter: %w", err)
-	}
-	_ = enc.Close()
-
-	var out bytes.Buffer
-	out.WriteString("---\n")
-	out.Write(fmBuf.Bytes())
-	out.WriteString("---\n")
-	out.Write(rawAfter)
-	return out.Bytes(), nil
+	return editFrontmatter(raw, func(root *yaml.Node) {
+		if nm.Generated != nil {
+			removeKey(root, "timestamp")
+			setMapping(root, "generated", []kv{{"by", nm.Generated.By}, {"at", nm.Generated.At}})
+		}
+		if len(nm.Sources) > 0 {
+			appendSources(root, nm.Sources)
+		}
+	})
 }
 
 // kv is an ordered key/value pair for building a small mapping node.
@@ -542,7 +521,14 @@ func bumpRootIndexMarker(root, target string) error {
 	if val == nil || val.Kind != yaml.ScalarNode || val.Value == "" || val.Value == target {
 		return nil // no marker to bump, or already at target (idempotent no-op)
 	}
-	out, err := spliceScalar(raw, val, `"`+target+`"`)
+	out, err := editFrontmatter(raw, func(m *yaml.Node) {
+		setScalar(m, "okf_version", target)
+		for i := 0; i+1 < len(m.Content); i += 2 {
+			if m.Content[i].Value == "okf_version" {
+				m.Content[i+1].Style = yaml.DoubleQuotedStyle
+			}
+		}
+	})
 	if err != nil {
 		return fmt.Errorf("rewrite index.md okf_version: %w", err)
 	}
@@ -550,59 +536,4 @@ func bumpRootIndexMarker(root, target string) error {
 		return nil
 	}
 	return os.WriteFile(abs, out, 0o644) //nolint:gosec // G306: a bundle node is a shareable knowledge document; 0o644 is intended
-}
-
-// spliceScalar replaces the source text of a single-line flow scalar (plain,
-// single-quoted, or double-quoted) in a file that starts with a frontmatter
-// block, leaving every other byte as is. val must come from parsing that
-// block: its Line is 1-based within the block, so file line Line+1 holds it
-// (line 1 is the opening `---`), and its Column is 1-based in runes.
-func spliceScalar(raw []byte, val *yaml.Node, replacement string) ([]byte, error) {
-	if val.Style&(yaml.LiteralStyle|yaml.FoldedStyle) != 0 {
-		return nil, fmt.Errorf("block scalar at line %d is not supported", val.Line)
-	}
-	lines := bytes.SplitAfter(raw, []byte("\n"))
-	li := val.Line // 0-based index of file line val.Line+1
-	if li < 1 || li >= len(lines) {
-		return nil, fmt.Errorf("value line %d out of range", val.Line)
-	}
-	text := []rune(string(lines[li]))
-	start := val.Column - 1
-	if start < 0 || start >= len(text) {
-		return nil, fmt.Errorf("value column %d out of range", val.Column)
-	}
-	end := -1
-	switch {
-	case val.Style&yaml.DoubleQuotedStyle != 0:
-		for i := start + 1; i < len(text); i++ {
-			if text[i] == '\\' {
-				i++
-				continue
-			}
-			if text[i] == '"' {
-				end = i + 1
-				break
-			}
-		}
-	case val.Style&yaml.SingleQuotedStyle != 0:
-		for i := start + 1; i < len(text); i++ {
-			if text[i] == '\'' {
-				if i+1 < len(text) && text[i+1] == '\'' {
-					i++
-					continue
-				}
-				end = i + 1
-				break
-			}
-		}
-	default:
-		if n := len([]rune(val.Value)); start+n <= len(text) && string(text[start:start+n]) == val.Value {
-			end = start + n
-		}
-	}
-	if end < 0 {
-		return nil, fmt.Errorf("cannot locate the value on line %d", val.Line+1)
-	}
-	lines[li] = []byte(string(text[:start]) + replacement + string(text[end:]))
-	return bytes.Join(lines, nil), nil
 }

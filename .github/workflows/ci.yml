@@ -92,6 +92,7 @@ jobs:
           go test ./internal/okf/       -run '^$' -fuzz '^FuzzParseFrontmatter$'   -fuzztime=30s
           go test ./internal/okf/       -run '^$' -fuzz '^FuzzSplitFrontmatterRaw$' -fuzztime=30s
           go test ./internal/okf/       -run '^$' -fuzz '^FuzzLoadBundle$'          -fuzztime=30s
+          go test ./internal/okf/       -run '^$' -fuzz '^FuzzEditFrontmatter$'     -fuzztime=30s
           go test ./internal/apiserver/ -run '^$' -fuzz '^FuzzSearchQueryParams$'   -fuzztime=30s
           go test ./internal/apiserver/ -run '^$' -fuzz '^FuzzCanonicalizeQuery$'   -fuzztime=30s
       - name: positive control — a guaranteed crasher MUST fail the fuzz gate
