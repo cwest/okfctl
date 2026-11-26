@@ -16,7 +16,6 @@ package okf
 
 import (
 	"path"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -115,10 +114,13 @@ type CoverageReport struct {
 	KnownGaps      []string         `json:"known_gaps"`
 }
 
-// DanglingLink is a body link whose .md target resolves to no node.
+// DanglingLink is a body link, or a §6.2 path field, whose in-bundle .md target
+// resolves to no node. Field is empty for a body link and names the path field
+// otherwise (e.g. "superseded_by", "sources[0].resource").
 type DanglingLink struct {
 	From   string `json:"from"`
 	Target string `json:"target"`
+	Field  string `json:"field,omitempty"`
 }
 
 // EpistemicReport surfaces the observed distribution of the `epistemic` grade
@@ -223,11 +225,6 @@ type SlugPair struct {
 // node's knowledge is time-sensitive.
 var timeSensitiveRe = regexp.MustCompile(`(?i)\b(latest|current|as of|recently|today|this year|deprecated|beta|preview|roadmap|upcoming|pricing|version \d)`)
 
-// danglingLinkRe matches CommonMark inline links; unlike scanNodeLinks (which
-// only returns links that RESOLVE to a node), this finds .md targets that do
-// NOT resolve — referenced-but-unwritten knowledge (OKF §5).
-var danglingLinkRe = regexp.MustCompile(`\[[^\]]*\]\(([^)]+)\)`)
-
 // Analyze runs the five-dimension proactive curation report over a loaded
 // bundle. It is READ-ONLY, pure (aside from the package clock for freshness),
 // and deterministic (all output ordered by sort). It NEVER mutates the bundle
@@ -315,9 +312,13 @@ func analyzeCoverage(b *Bundle, opts AnalyzeOptions) CoverageReport {
 	out := CoverageReport{}
 	for _, p := range sortedNodePaths(b) {
 		n := b.Nodes[p]
-		// Dangling forward-links: .md targets that resolve to no node.
+		// Dangling forward-links: .md targets that resolve to no node, from
+		// body links and from §6.2 path fields.
 		for _, tgt := range danglingTargets(b, p, n) {
 			out.DanglingLinks = append(out.DanglingLinks, DanglingLink{From: p, Target: tgt})
+		}
+		for _, f := range danglingPathFields(b, p, n) {
+			out.DanglingLinks = append(out.DanglingLinks, DanglingLink{From: p, Target: f.Value, Field: f.Field})
 		}
 		// Thin nodes: non-blank body line count below the threshold.
 		if bl := bodyLineCount(n.Body); bl < opts.ThinLines {
@@ -370,63 +371,49 @@ func analyzeEpistemic(b *Bundle) EpistemicReport {
 	return EpistemicReport{Distribution: dist, Untagged: untagged}
 }
 
-// danglingTargets returns the sorted, de-duped set of .md link targets in a
-// node body that do NOT resolve to a known node (via any of the three forms
-// scanNodeLinks resolves: "/"-absolute bundle-root relative, root-relative, or
-// dir-relative) and are not reserved index/log links.
+// danglingTargets returns the sorted, de-duped set of link targets in a node
+// body that name an in-bundle .md file which does not exist. Resolution is the
+// shared §6 resolver, so a bare target resolves from the node's directory and a
+// "/"-rooted one from the bundle root. URLs (§6 rule 1), in-page anchors,
+// targets outside the bundle root (external, §6), non-.md assets, and reserved
+// index/log links are never dangling. §6.1: a broken link is not malformed; this
+// is an advisory coverage signal, never a validate failure.
 func danglingTargets(b *Bundle, nodePath string, n *Node) []string {
-	dir := filepath.Dir(nodePath)
 	seen := map[string]bool{}
 	var out []string
-	body := n.Body
-	for _, loc := range danglingLinkRe.FindAllStringSubmatchIndex(body, -1) {
-		if loc[0] > 0 && body[loc[0]-1] == '!' {
-			continue // image, not a link
-		}
-		raw := body[loc[2]:loc[3]]
-		fields := strings.Fields(raw)
-		if len(fields) == 0 {
+	for _, l := range scanRawLinks(n.Body) {
+		if !danglingRef(b.ResolveLink(nodePath, l.url)) {
 			continue
 		}
-		url := fields[0]
-		if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "#") {
-			continue
-		}
-		// Only .md targets are candidate concept references (strip any anchor).
-		link := url
-		if i := strings.IndexByte(link, '#'); i >= 0 {
-			link = link[:i]
-		}
-		if !strings.HasSuffix(link, ".md") {
-			continue
-		}
-		// A link to a reserved generated artifact is a navigational edge, never
-		// a dangling concept reference.
-		if IsReservedPath(link) {
-			continue
-		}
-		// Resolves to a real node? -> not dangling. Three forms, matching the
-		// shared edge-builder: "/"-absolute (bundle-root relative, OKF §5.1),
-		// root-relative, then dir-relative against the linking node's dir.
-		if strings.HasPrefix(link, "/") {
-			if abs := filepath.ToSlash(filepath.Clean(strings.TrimPrefix(link, "/"))); b.Nodes[abs] != nil {
-				continue
-			}
-		} else {
-			if rootRel := filepath.ToSlash(filepath.Clean(link)); b.Nodes[rootRel] != nil {
-				continue
-			}
-			if dirRel := filepath.ToSlash(filepath.Clean(filepath.Join(dir, link))); b.Nodes[dirRel] != nil {
-				continue
-			}
-		}
-		if !seen[url] {
-			seen[url] = true
-			out = append(out, url)
+		if !seen[l.url] {
+			seen[l.url] = true
+			out = append(out, l.url)
 		}
 	}
 	sort.Strings(out)
 	return out
+}
+
+// danglingPathFields returns the node's §6.2 path fields that resolve (with
+// the §12.1 bundle-root fallback for bundles declaring 0.2 or earlier, or no
+// version) to an in-bundle .md file that does not exist, in PathFields order.
+// Scope descriptors (§5.1), URLs, external values, and non-.md targets are
+// skipped, the same way danglingTargets treats body links.
+func danglingPathFields(b *Bundle, nodePath string, n *Node) []PathField {
+	var out []PathField
+	for _, f := range n.PathFields() {
+		if danglingRef(b.ResolvePathField(nodePath, f.Value)) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// danglingRef reports whether a resolved reference names a missing in-bundle
+// concept file: an in-bundle, non-reserved .md path with nothing at it.
+func danglingRef(r Ref) bool {
+	return r.Kind == RefBundle && !r.Exists &&
+		strings.HasSuffix(r.Path, ".md") && !IsReservedPath(r.Path)
 }
 
 // bodyLineCount counts non-blank lines in a body (matching the reference's

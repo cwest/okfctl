@@ -16,7 +16,6 @@ package okf
 
 import (
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -186,58 +185,39 @@ func evalCitations(b *Bundle) []EvalFinding {
 		}
 
 		// citation-unresolved: any frontmatter source whose resource is a
-		// bundle-internal node path that resolves to no node. External http(s)
-		// sources are skipped — verifying them needs the network.
+		// bundle-internal .md path that resolves (§6, §6.2 with the §12.1
+		// fallback) to no node. URLs, scope descriptors (§5.1), assets, and
+		// values outside the bundle root are skipped.
 		for _, s := range sources {
-			target, internal := internalResource(s.Resource)
-			if !internal {
+			if !citesMissingNode(b, path, s.Resource) {
 				continue
 			}
-			if b.Nodes[target] == nil {
-				out = append(out, EvalFinding{
-					Check: "citation-unresolved",
-					Path:  path,
-					Message: fmt.Sprintf("citation-unresolved: %s cites %s which resolves to no node in the bundle",
-						path, s.Resource),
-				})
-			}
+			out = append(out, EvalFinding{
+				Check: "citation-unresolved",
+				Path:  path,
+				Message: fmt.Sprintf("citation-unresolved: %s cites %s which resolves to no node in the bundle",
+					path, s.Resource),
+			})
 		}
 	}
 	return out
+}
+
+// citesMissingNode reports whether a sources[].resource value is an in-bundle
+// .md path that the shared resolver cannot find.
+func citesMissingNode(b *Bundle, from, resource string) bool {
+	r := b.ResolvePathField(from, resource)
+	return r.Kind == RefBundle && !r.Exists && strings.HasSuffix(r.Path, ".md")
 }
 
 // hasInlineNodeReference reports whether a node body links to at least one other
 // node in the bundle (an inline citation to a sibling). A self-link does not
 // count as citing a source.
 func hasInlineNodeReference(b *Bundle, path string, n *Node) bool {
-	dir := filepath.Dir(path)
-	for _, l := range scanNodeLinks(b, dir, n.Body) {
+	for _, l := range scanNodeLinks(b, path, n.Body) {
 		if l.resolved != "" && l.resolved != path {
 			return true
 		}
 	}
 	return false
-}
-
-// internalResource reports whether a source resource points at a bundle-internal
-// node (an OKF "/…"-absolute or a bare ".md" path) and returns the resolved node
-// key. An http(s) URL or a non-.md resource is external (internal=false).
-func internalResource(resource string) (target string, internal bool) {
-	r := strings.TrimSpace(resource)
-	if r == "" {
-		return "", false
-	}
-	if strings.HasPrefix(r, "http://") || strings.HasPrefix(r, "https://") {
-		return "", false
-	}
-	// Strip any anchor.
-	if i := strings.IndexByte(r, '#'); i >= 0 {
-		r = r[:i]
-	}
-	if !strings.HasSuffix(r, ".md") {
-		return "", false
-	}
-	// OKF §5.1: a "/"-absolute resource resolves against the bundle root.
-	r = strings.TrimPrefix(r, "/")
-	return filepath.ToSlash(filepath.Clean(r)), true
 }

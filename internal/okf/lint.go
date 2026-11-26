@@ -17,7 +17,6 @@ package okf
 import (
 	"fmt"
 	"path"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -96,18 +95,16 @@ func inboundCounts(b *Bundle) map[string]int {
 		}
 	}
 
-	for src, n := range b.Nodes {
-		dir := filepath.Dir(src)
-		for _, l := range scanNodeLinks(b, dir, n.Body) {
-			if l.resolved != "" {
-				add(src, l.resolved)
-			}
+	// Concept nodes: the §6.4 bundle graph (links and path-field edges), the
+	// same edges BuildGraph exports, so graph and lint agree on orphans.
+	for src := range b.Nodes {
+		for _, tgt := range b.OutboundLinks(src) {
+			add(src, tgt)
 		}
 	}
 	// Reserved files (index.md especially) also confer reachability.
 	for src, n := range b.Reserved {
-		dir := filepath.Dir(src)
-		for _, l := range scanNodeLinks(b, dir, n.Body) {
+		for _, l := range scanNodeLinks(b, src, n.Body) {
 			if l.resolved != "" {
 				add(src, l.resolved)
 			}
@@ -206,8 +203,7 @@ func proseBody(n *Node) string {
 // linkedTargets returns the set of node paths a given node already links to.
 func linkedTargets(b *Bundle, path string, n *Node) map[string]bool {
 	out := map[string]bool{}
-	dir := filepath.Dir(path)
-	for _, l := range scanNodeLinks(b, dir, n.Body) {
+	for _, l := range scanNodeLinks(b, path, n.Body) {
 		if l.resolved != "" {
 			out[l.resolved] = true
 		}
@@ -307,6 +303,12 @@ func isWordByte(c byte) bool {
 // The finding names BOTH the bad target and the resolved candidate path, so the
 // fix is obvious without a second lookup. If several nodes share the basename,
 // all candidates are listed (sorted) rather than guessing one.
+//
+// The check covers body links (§6.1) and §6.2 path fields (resource,
+// sources[].resource, computation, executor.resource, attester.resource,
+// superseded_by), both resolved by the shared §6 resolver. A path-field finding
+// names the field. Scope descriptors (§5.1), URLs, assets, and values outside
+// the bundle root are never broken links.
 func lintBrokenLinks(b *Bundle) []LintFinding {
 	// basename -> sorted node paths carrying that basename.
 	byBase := map[string][]string{}
@@ -317,32 +319,45 @@ func lintBrokenLinks(b *Bundle) []LintFinding {
 	for base := range byBase {
 		sort.Strings(byBase[base])
 	}
+	// hint returns the "did you mean" suggestion for a dangling target, or ""
+	// when no node shares its basename (a coverage gap, not a defect).
+	hint := func(tgt string) string {
+		link := tgt
+		if i := strings.IndexAny(link, "#?"); i >= 0 {
+			link = link[:i]
+		}
+		candidates := byBase[path.Base(link)]
+		switch len(candidates) {
+		case 0:
+			return ""
+		case 1:
+			return fmt.Sprintf("did you mean %s?", candidates[0])
+		default:
+			return fmt.Sprintf("did you mean one of: %s?", strings.Join(candidates, ", "))
+		}
+	}
 
 	var out []LintFinding
 	for _, p := range sortedNodePaths(b) {
 		n := b.Nodes[p]
 		for _, tgt := range danglingTargets(b, p, n) {
-			// Strip any anchor, then take the basename of the target path.
-			link := tgt
-			if i := strings.IndexByte(link, '#'); i >= 0 {
-				link = link[:i]
+			if h := hint(tgt); h != "" {
+				out = append(out, LintFinding{
+					Check:   "broken-link",
+					Path:    p,
+					Message: fmt.Sprintf("broken-link: %s links to %s which resolves to no node; %s", p, tgt, h),
+				})
 			}
-			base := path.Base(link)
-			candidates := byBase[base]
-			if len(candidates) == 0 {
-				continue // genuinely unwritten: a coverage gap, not a defect
+		}
+		for _, f := range danglingPathFields(b, p, n) {
+			if h := hint(f.Value); h != "" {
+				out = append(out, LintFinding{
+					Check: "broken-link",
+					Path:  p,
+					Message: fmt.Sprintf("broken-link: %s path field %s: %s resolves to no node (§6.2); %s",
+						p, f.Field, f.Value, h),
+				})
 			}
-			var hint string
-			if len(candidates) == 1 {
-				hint = fmt.Sprintf("did you mean %s?", candidates[0])
-			} else {
-				hint = fmt.Sprintf("did you mean one of: %s?", strings.Join(candidates, ", "))
-			}
-			out = append(out, LintFinding{
-				Check:   "broken-link",
-				Path:    p,
-				Message: fmt.Sprintf("broken-link: %s links to %s which resolves to no node; %s", p, tgt, hint),
-			})
 		}
 	}
 	return out

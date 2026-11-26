@@ -81,10 +81,21 @@ var DefaultSkipDirs = map[string]bool{
 // Bundle is a loaded OKF bundle: concept nodes keyed by bundle-relative path,
 // plus the reserved files, plus the derived link graph.
 type Bundle struct {
-	Root       string
-	Nodes      map[string]*Node // concept nodes only (excludes reserved)
-	Reserved   map[string]*Node // index.md, log.md
-	OkfVersion string           // okf_version from the bundle's .okf, or SpecVersion if absent
+	Root     string
+	Nodes    map[string]*Node // concept nodes only (excludes reserved)
+	Reserved map[string]*Node // index.md, log.md
+	// OkfVersion is the version okfctl reads the bundle as: the declared
+	// okf_version, or SpecVersion when the bundle declares none.
+	OkfVersion string
+	// DeclaredOkfVersion is the okf_version the bundle itself declares, or ""
+	// when it declares none. "Undeclared" is a distinct state from the build
+	// default: the §12.1 compatibility fallbacks key on this field, never on
+	// SpecVersion.
+	DeclaredOkfVersion string
+	// OkfVersionSource names where DeclaredOkfVersion came from: the
+	// bundle-root index.md (VersionFromIndex, §8.1/§12), the legacy .okf
+	// sidecar (VersionFromSidecar), or VersionUndeclared.
+	OkfVersionSource string
 	// SkippedDirs holds the bundle-relative slash paths of directories pruned
 	// from the walk by the default skip list (see DefaultSkipDirs), sorted.
 	// Empty when WithNoIgnore was passed or nothing matched. The CLI announces
@@ -97,6 +108,11 @@ type Bundle struct {
 	// warns per path and the CLI announces the list on stderr.
 	EscapedSymlinks []string
 	edges           map[string][]string
+	// files and dirs hold the bundle-relative slash paths of every walked
+	// non-Markdown file (asset) and directory, so the §6 resolver can tell an
+	// existing asset or directory from a missing one without touching the disk.
+	files map[string]bool
+	dirs  map[string]bool
 }
 
 // loadConfig holds the resolved options for a Load call.
@@ -135,6 +151,8 @@ func Load(root string, opts ...LoadOption) (*Bundle, error) {
 		Nodes:    map[string]*Node{},
 		Reserved: map[string]*Node{},
 		edges:    map[string][]string{},
+		files:    map[string]bool{},
+		dirs:     map[string]bool{},
 	}
 	// §3.2 rule 5 / §11.2: a consumer reads only files under the bundle root
 	// and does not follow a symbolic link out of it. The boundary is the root's
@@ -172,9 +190,17 @@ func Load(root string, opts ...LoadOption) (*Bundle, error) {
 				}
 				return fs.SkipDir
 			}
+			if p != root {
+				if rel, relErr := filepath.Rel(root, p); relErr == nil {
+					b.dirs[filepath.ToSlash(rel)] = true
+				}
+			}
 			return nil
 		}
 		if !strings.HasSuffix(d.Name(), ".md") {
+			if rel, relErr := filepath.Rel(root, p); relErr == nil {
+				b.files[filepath.ToSlash(rel)] = true
+			}
 			return nil
 		}
 		rel, err := filepath.Rel(root, p)
@@ -224,20 +250,24 @@ func Load(root string, opts ...LoadOption) (*Bundle, error) {
 		}
 		sort.Strings(b.EscapedSymlinks)
 	}
-	b.OkfVersion = readOkfVersion(root)
+	b.DeclaredOkfVersion, b.OkfVersionSource = b.readDeclaredVersion()
+	b.OkfVersion = b.DeclaredOkfVersion
+	if b.OkfVersion == "" {
+		b.OkfVersion = SpecVersion
+	}
 	b.buildEdges()
 	return b, nil
 }
 
-// readOkfVersion returns the okf_version declared in the bundle's .okf file, or
-// SpecVersion if the file is absent or carries no (non-empty) okf_version key.
-// The .okf is a small YAML document (e.g. "okf_version: 0.1"); a missing or
-// unreadable file is not an error here — Load stays lenient and falls back to
-// the build's version. It reads through the generalized sidecar parser
-// (readOkfSidecar) so a bundle carrying other sidecar keys — e.g. a §9.2
-// `templates` reference — does not change the version read.
+// readOkfVersion returns the okf_version declared in the bundle's legacy .okf
+// sidecar, or SpecVersion if the file is absent or carries no (non-empty)
+// okf_version key. Load does not call it: the bundle-root index.md declaration
+// wins (§8.1, §12) and the sidecar is only the fallback (readDeclaredVersion).
+// It reads through the generalized sidecar parser (readOkfSidecar) so a bundle
+// carrying other sidecar keys (e.g. a §9.2 `templates` reference) does not
+// change the version read.
 func readOkfVersion(root string) string {
-	if v := strings.TrimSpace(readOkfSidecar(root)["okf_version"]); v != "" {
+	if v := sidecarDeclaredVersion(root); v != "" {
 		return v
 	}
 	return SpecVersion
@@ -311,24 +341,41 @@ func (b *Bundle) place(rel string, n *Node) {
 	b.Nodes[rel] = n
 }
 
-// buildEdges derives the in-bundle link graph from each concept node's body.
+// buildEdges derives the bundle graph (§6.4) from each concept node. It has two
+// kinds of directed edges:
 //
-// For every CommonMark inline link [text](target) it resolves target to a node
-// two ways, in order: first root-relative via filepath.Clean(target), then
-// dir-relative via filepath.Clean(join(dir, target)) where dir is the linking
-// node's directory. Only in-bundle .md targets that resolve to a known node
-// become edges. External links (http/https), in-page anchors (#...), and any
-// target that does not resolve to a node are ignored. Image syntax
-// (![alt](src), a '!' immediately preceding '[') is not a link and is skipped.
-// An optional CommonMark title (e.g. `path.md "Title"`) is stripped before
-// resolution, keeping only the leading whitespace-delimited URL.
+//   - a link (§6.1): an inline or reference-style Markdown link whose target,
+//     without #fragment, resolves (§6) to a concept node;
+//   - a path field (§6.2) that resolves to a concept node, from the concept
+//     that contains the field to the target.
+//
+// Resolution goes through the shared §6 resolver (ResolveLink,
+// ResolvePathField): a bare value resolves from the containing file's
+// directory, a leading "/" from the bundle root. External URLs, in-page
+// anchors, values outside the bundle root, image syntax, and targets that are
+// not concept nodes make no edge. Link edges keep one entry per link
+// occurrence; a path-field edge is added only when the source has no edge to
+// that target yet, so it never duplicates a link edge.
 func (b *Bundle) buildEdges() {
 	for path, n := range b.Nodes {
-		dir := filepath.Dir(path)
-		for _, l := range scanNodeLinks(b, dir, n.Body) {
+		for _, l := range scanNodeLinks(b, path, n.Body) {
 			b.edges[path] = append(b.edges[path], l.resolved)
 		}
+		for _, tgt := range b.pathFieldConcepts(path, n) {
+			if !containsString(b.edges[path], tgt) {
+				b.edges[path] = append(b.edges[path], tgt)
+			}
+		}
 	}
+}
+
+func containsString(xs []string, s string) bool {
+	for _, x := range xs {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }
 
 // OutboundLinks returns the in-bundle nodes that path links to.
