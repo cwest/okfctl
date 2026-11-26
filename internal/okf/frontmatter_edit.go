@@ -16,6 +16,7 @@ package okf
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -47,8 +48,7 @@ func TouchModifiedFile(abs string, at time.Time) error {
 	}
 	stamp := stampValue(at)
 
-	yamlBlock, rawAfter, ok := splitFrontmatterRaw(raw)
-	if !ok {
+	if _, _, ok := splitFrontmatterRaw(raw); !ok {
 		// No frontmatter block: prepend a minimal one carrying just modified.
 		// (Validate will still flag a missing type — that is the floor's job,
 		// not this refresh's.)
@@ -59,33 +59,18 @@ func TouchModifiedFile(abs string, at time.Time) error {
 		return os.WriteFile(abs, out.Bytes(), 0o644) //nolint:gosec // G306: shareable bundle content file
 	}
 
-	var doc yaml.Node
-	if err := yaml.Unmarshal(yamlBlock, &doc); err != nil {
-		return fmt.Errorf("parse frontmatter of %s: %w", abs, err)
-	}
-	root := frontmatterMapping(&doc)
-	if root == nil {
+	out, err := editFrontmatter(raw, func(root *yaml.Node) { setScalar(root, "modified", stamp) })
+	if errors.Is(err, errFrontmatterNotMapping) {
 		return fmt.Errorf("frontmatter of %s is not a mapping", abs)
 	}
-	setScalar(root, "modified", stamp)
-
-	var fmBuf bytes.Buffer
-	enc := yaml.NewEncoder(&fmBuf)
-	enc.SetIndent(2)
-	if err := enc.Encode(root); err != nil {
-		return fmt.Errorf("encode frontmatter of %s: %w", abs, err)
+	if err != nil {
+		return fmt.Errorf("%s: %w", abs, err)
 	}
-	_ = enc.Close()
-
-	var out bytes.Buffer
-	out.WriteString("---\n")
-	out.Write(fmBuf.Bytes())
-	out.WriteString("---\n")
-	// rawAfter is the body region verbatim (including any blank separator line),
-	// so the only bytes that change are inside the frontmatter block.
-	out.Write(rawAfter)
+	if bytes.Equal(out, raw) {
+		return nil
+	}
 	// A bundle node is a shareable knowledge document; 0o644 is intended.
-	return os.WriteFile(abs, out.Bytes(), 0o644) //nolint:gosec // G306: shareable bundle content file
+	return os.WriteFile(abs, out, 0o644) //nolint:gosec // G306: shareable bundle content file
 }
 
 // frontmatterMapping unwraps a decoded yaml document to its top-level mapping
