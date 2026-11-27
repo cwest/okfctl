@@ -58,7 +58,10 @@ func newMigrateCmd() *cobra.Command {
 			"marks one (never the full entry text, §5.1). An entry with no " +
 			"URL but one DOI, arXiv id, PubMed id, or ISBN (checksum verified) gets a " +
 			"resource built from it, offline: doi.org, arxiv.org, pubmed.ncbi.nlm.nih.gov, " +
-			"or openlibrary.org. Nothing is fetched to check it. The v0.2 changes " +
+			"or openlibrary.org. Nothing is fetched to check it. Each converted entry's " +
+			"source gets an id (its plain key, else its list number, else cite-<n>; unique " +
+			"with case folded), the entry's full text becomes the footnote definition " +
+			"[^id], and body [k] references become [^id] (§5.1, §4.2). The v0.2 changes " +
 			"(§13.1) give a leading / to any link or path field that resolves only from the " +
 			"bundle root (§12.1). It then points at the same file under v0.3 (§6). They " +
 			"also respell a §5 timestamp that has an offset but isn't in RFC 3339 form.\n\n" +
@@ -68,6 +71,9 @@ func newMigrateCmd() *cobra.Command {
 			"(§5, §13.2), and timestamp-invalid is a §5 value where no date can be found. " +
 			"source-title-unnamed marks an entry whose untitled source gets no name, and " +
 			"source-title-conflict one that names a different work than its source's title. " +
+			"citation-ref-unclear marks a body [k] near \"brief\", \"citation\", \"node\", or a " +
+			"link, citation-unattached a second entry for one resource, and " +
+			"source-id-collision a node whose ids would collide. " +
 			"All of them wait for you to decide them. While a prose-citation or missing-actor " +
 			"item is left, apply holds the version: those items need the v0.1 " +
 			"fallbacks §12.1 grants only to bundles declaring 0.2 or older (or nothing). " +

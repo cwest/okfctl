@@ -62,15 +62,17 @@ okfctl migrate mykb --plan migrate-plan.json --generated-by human:casey
 ```
 
 ```text
-Wrote migrate-plan.json: 2 file(s) with deterministic edits (5 edit(s)), 1 judgment item(s).
+Wrote migrate-plan.json: 2 file(s) with deterministic edits (7 edit(s)), 1 judgment item(s).
 version: 0.1 -> hold (1 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
 edits: 2 file(s); timestamp->generated 2, citations->sources 2, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+attribution: source ids 2, footnote definitions 2, body references->footnotes 0
 judgment: 1 item(s); prose-citation 1
 1 item(s) need a decision before they can migrate; see the plan file.
 ```
 
-`acidity.md` gets two of the five edits. `tannin.md` gets three, counting the
-link. The Montalcino line is another matter. It
+`acidity.md` gets three of the seven edits: the rename, the source, and its
+footnote definition (the source's `id` rides on the new source). `tannin.md`
+gets four, counting the link. The Montalcino line is another matter. It
 names nothing a reader can follow, and `migrate` won't invent a source for it.
 The plan files it under `judgment`:
 
@@ -103,27 +105,36 @@ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
 ```diff
 --- a/wine/acidity.md
 +++ b/wine/acidity.md
-@@ -1,7 +1,9 @@
+@@ -1,12 +1,17 @@
  ---
  type: Reference
  title: Acidity
 -timestamp: 2026-06-02T09:15:00Z
 +generated: {by: "human:casey", at: "2026-06-02T09:15:00Z"}
 +sources:
-+  - resource: "https://en.wikipedia.org/wiki/Acids_in_wine"
++  - id: cite-1
++    resource: "https://en.wikipedia.org/wiki/Acids_in_wine"
  ---
 
  # Acidity
+
+ Acidity makes a wine taste fresh.
++
++[^cite-1]: https://en.wikipedia.org/wiki/Acids_in_wine
+
+ # Citations
+ - https://en.wikipedia.org/wiki/Acids_in_wine
 --- a/wine/tannin.md
 +++ b/wine/tannin.md
-@@ -1,13 +1,15 @@
+@@ -1,13 +1,18 @@
  ---
  type: Reference
  title: Tannin
 -timestamp: 2026-05-28T22:53:05Z
 +generated: {by: "human:casey", at: "2026-05-28T22:53:05Z"}
 +sources:
-+  - resource: "https://en.wikipedia.org/wiki/Tannin"
++  - id: cite-1
++    resource: "https://en.wikipedia.org/wiki/Tannin"
  ---
 
  # Tannin
@@ -131,15 +142,21 @@ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
  Tannin is the drying grip in red wine. It balances against
 -[acidity](wine/acidity.md).
 +[acidity](/wine/acidity.md).
++
++[^cite-1]: https://en.wikipedia.org/wiki/Tannin
 
  # Citations
  - https://en.wikipedia.org/wiki/Tannin
 ```
 
 After the diffs it repeats the plan summary and ends with
-`2 file(s) would change (dry run; nothing written).` The body
-`# Citations` list stays where it was. `migrate` adds frontmatter and never
-deletes the prose it came from.
+`2 file(s) would change (dry run; nothing written).` Each new source gets an
+`id`, and the entry's full text becomes the footnote definition with that
+label (§5.1: per-claim attribution is a footnote whose label is a
+`sources[].id`). These entries have no key, so the id is `cite-<n>`, the
+entry's place in the list. The body `# Citations` list stays where it was.
+`migrate` adds frontmatter and footnotes and never deletes the prose it came
+from.
 
 ### 3. Apply
 
@@ -181,9 +198,10 @@ $ mv tannin.tmp mykb/wine/tannin.md
 -->
 ```text
 $ okfctl migrate mykb --plan migrate-plan.json --generated-by human:casey
-Wrote migrate-plan.json: 1 file(s) with deterministic edits (1 edit(s)), 0 judgment item(s).
+Wrote migrate-plan.json: 1 file(s) with deterministic edits (2 edit(s)), 0 judgment item(s).
 version: 0.1 -> declare v0.3
 edits: 1 file(s); timestamp->generated 0, citations->sources 1, citation titles->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
+attribution: source ids 1, footnote definitions 1, body references->footnotes 0
 judgment: 0 item(s); none
 $ okfctl migrate mykb --apply --plan migrate-plan.json
 migrated wine/tannin.md
@@ -196,8 +214,9 @@ reserved: 2
 okf_version: 0.3 (declared in index.md)
 ```
 
-The new link became a second `sources` entry, with the link text as its
-`title`. The bundle-root `index.md` now opens with `okf_version: "0.3"`, as
+The new link became a second `sources` entry (`id: cite-2`), with the link
+text as its `title` and the entry as its footnote definition. The bundle-root
+`index.md` now opens with `okf_version: "0.3"`, as
 does the `.okf` sidecar.
 
 Run it again and nothing happens. A plan on a migrated bundle has no edits;
@@ -238,6 +257,21 @@ From v0.1 (v0.3 Appendix B), two renames:
   URL matches however its host or case is spelled). If that source has no
   `title`, the entry's name fills it in. A source that already has a title
   keeps it.
+- each entry whose source is in `sources` gets an `id` and a footnote
+  definition, and the body cites it as a footnote (§5.1: per-claim attribution
+  is a Markdown footnote whose label is a `sources[].id`; §4.2). The id is the
+  entry key when it is a plain slug (`[ga4-schema]`, `[12]`) that no other
+  entry shares once case is folded; otherwise the ordered-list number;
+  otherwise `cite-<n>`, the entry's place in the list. GFM matches footnote
+  labels case-insensitively, so `[S1]` and `s1` count as one label, and a node
+  whose ids would collide is refused rather than renumbered. A number-looking
+  id is quoted (§4: `id: "12"`). The footnote definition `[^12]: <entry text>`
+  holds the whole entry, with its list marker removed and its wrapped lines
+  joined, and sits just above `# Citations`; the leading `[12]` is dropped
+  only because it became the id. A grade bracket such as
+  `[PRIMARY-DOC, VERIFIED]` stays. Each body `[12]` becomes `[^12]`, and
+  `[3]–[5]` or `[1, 2]` expand to one footnote per entry. Code, links,
+  reference-link labels, and footnotes already in place are left alone.
 
 From v0.2 (v0.3 §13.1), two edits:
 
@@ -276,9 +310,18 @@ present, is bumped too.
   (`source-title-unnamed`). The title stays unset until you name the work.
 - a citation entry that names a different work than the title its source
   already has (`source-title-conflict`). The existing title stays.
+- a body `[k]` that names an entry of the node but sits within 60 characters
+  of "brief", "citation", "node", or a link, or is the label of an undefined
+  `[text][k]` reference (`citation-ref-unclear`). It may point at another
+  document's list, so it stays as written.
+- a second citation entry for a resource another entry already holds
+  (`citation-unattached`). A source carries one `id`, so this entry gets no
+  footnote and its body references stay as written.
+- a node whose ids would collide once case is folded (`source-id-collision`).
+  It gets no ids, footnotes, or reference rewrites.
 
-The two `source-title-*` kinds don't hold the version declaration: the
-resource is already in `sources`.
+The two `source-title-*` kinds and these three don't hold the version
+declaration: the resource is already in `sources`.
 
 ## Bundles `migrate` leaves alone
 

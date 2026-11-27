@@ -295,3 +295,63 @@ func toLowerASCII(s string) string {
 	}
 	return string(b)
 }
+
+// OKF v0.3 §5.1: a `[^id]:` footnote definition carries a source's citation
+// text, and consumers do not parse footnote text. A node title named only
+// inside a footnote definition is citation text, not body prose, so it must not
+// raise missing-xref (the definition line and its indented continuation lines
+// are both skipped).
+func TestLint_MissingXref_Section5_1_IgnoresTitleInsideFootnoteDefinition(t *testing.T) {
+	b := mkLintBundle(t, map[string]string{
+		"index.md":   "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [One](one.md)\n- [Charlie](charlie.md)\n",
+		"one.md":     lintDoc("Concept", "One", "A claim with a citation.[^2]\n\n[^2]: Vendor guide, chapter on Charlie [PRIMARY-DOC, VERIFIED]\n    continued about Charlie too."),
+		"charlie.md": lintDoc("Concept", "Charlie", "Charlie is a concept node."),
+	})
+	for _, f := range findingsFor(Lint(b, LintOptions{}), "missing-xref") {
+		if f.Path == "one.md" {
+			t.Fatalf("\"Charlie\" appears only inside a [^2]: footnote definition (§5.1 citation text); one.md must not get a missing-xref: %+v", f)
+		}
+	}
+}
+
+// Negative control for the §5.1 footnote skip: the same title written in body
+// prose, beside a footnote definition, is still a real missing-xref.
+func TestLint_MissingXref_Section5_1_TitleInProseBesideFootnoteStillFires(t *testing.T) {
+	b := mkLintBundle(t, map[string]string{
+		"index.md":   "---\ntype: Index\ntitle: Index\n---\n\n# Index\n\n- [One](one.md)\n- [Charlie](charlie.md)\n",
+		"one.md":     lintDoc("Concept", "One", "Charlie shapes this claim.[^2]\n\n[^2]: Vendor guide [PRIMARY-DOC, VERIFIED]"),
+		"charlie.md": lintDoc("Concept", "Charlie", "Charlie is a concept node."),
+	})
+	found := false
+	for _, f := range findingsFor(Lint(b, LintOptions{}), "missing-xref") {
+		if f.Path == "one.md" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("\"Charlie\" is written in body prose; one.md must get a missing-xref to charlie.md")
+	}
+}
+
+// Seam guard (§5.1): proseBody drops a `[^id]:` footnote definition and its
+// indented continuation, keeps the body prose and the inline `[^id]` reference
+// text around it, and still preserves a plain `[9]: running prose` line (not a
+// footnote definition).
+func TestProseBody_Section5_1_StripsFootnoteDefinitions(t *testing.T) {
+	n := &Node{Body: "Keep Alpha here.[^a1]\n\n" +
+		"[^a1]: Bravo report, latest edition\n    Delta continuation line.\n" +
+		"[^2]: Echo whitepaper\n\n" +
+		"After Foxtrot.\n\n" +
+		"[9]: Golf provides the counterpoint here."}
+	got := proseBody(n)
+	for _, hidden := range []string{"bravo", "latest", "delta", "echo"} {
+		if containsWord(toLowerASCII(got), hidden) {
+			t.Fatalf("proseBody must strip footnote definition text %q, got: %q", hidden, got)
+		}
+	}
+	for _, visible := range []string{"alpha", "foxtrot", "golf provides"} {
+		if !containsWord(toLowerASCII(got), visible) {
+			t.Fatalf("proseBody must preserve prose %q, got: %q", visible, got)
+		}
+	}
+}

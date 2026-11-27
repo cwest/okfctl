@@ -174,8 +174,8 @@ func TestConformance_MigrateIdentifier_Section5_1_PlanBuildsAndIsIdempotent(t *t
 		}
 	}
 	want := []SourceEdit{
-		{Resource: "https://doi.org/10.2139/ssrn.2690435"},
-		{Resource: "https://openlibrary.org/isbn/9780321486813", Title: "Compilers"},
+		{Resource: "https://doi.org/10.2139/ssrn.2690435", ID: "1"},
+		{Resource: "https://openlibrary.org/isbn/9780321486813", Title: "Compilers", ID: "2"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("a.md sources = %+v, want %+v", got, want)

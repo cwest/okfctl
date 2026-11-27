@@ -98,6 +98,22 @@ func writeMigrateSummary(out io.Writer, plan okf.MigratePlan) {
 	fmt.Fprintf(out, "version: %s -> %s\n", declared, action)
 	fmt.Fprintf(out, "edits: %d file(s); timestamp->generated %d, citations->sources %d, citation titles->sources %d, root-relative links->/ %d, root-relative path fields->/ %d, timestamps->RFC 3339 %d\n",
 		len(plan.Nodes), gen, src, titles, links, fields, stamps)
+	var ids, notes, refs int
+	for _, nm := range plan.Nodes {
+		notes += len(nm.Footnotes)
+		ids += len(nm.IDs)
+		for _, s := range nm.Sources {
+			if s.ID != "" {
+				ids++
+			}
+		}
+		for _, r := range nm.Refs {
+			refs += r.Count
+		}
+	}
+	if ids+notes+refs > 0 {
+		fmt.Fprintf(out, "attribution: source ids %d, footnote definitions %d, body references->footnotes %d\n", ids, notes, refs)
+	}
 	byKind := map[okf.JudgmentKind]int{}
 	for _, j := range plan.Judgment {
 		byKind[j.Kind]++

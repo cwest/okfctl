@@ -372,3 +372,30 @@ func TestMigrate_PlanSummaryCountsSourceTitles_Section5_1(t *testing.T) {
 		}
 	}
 }
+
+// §5.1/§4.2: the summary counts the ids, footnote definitions, and body
+// references a plan rewrites, and the judgment line names a reference left
+// for review by its kind.
+func TestMigrate_PlanSummaryCountsAttribution_Section5_1(t *testing.T) {
+	dir := mkPromoteCLIBundle(t, map[string]string{
+		"index.md": "# KB\n",
+		"log.md":   "# Log\n",
+		"a.md": "---\ntype: Concept\n---\n\n# Def\n\nA claim [1] and another [1].\n\n" +
+			"This paragraph is padding, long enough to keep the reference below well away.\n\n" +
+			"The write-time brief says [1] too.\n\n# Citations\n" +
+			"- [1] Acme, *The FP&A Handbook*, 2024. https://wiki.acme/fpa\n",
+	})
+	planPath := filepath.Join(t.TempDir(), "migrate-plan.json")
+	out, err := runOKF(t, "migrate", dir, "--plan", planPath)
+	if err != nil {
+		t.Fatalf("migrate --plan: err=%v out=%q", err, out)
+	}
+	for _, want := range []string{
+		"attribution: source ids 1, footnote definitions 1, body references->footnotes 2",
+		"citation-ref-unclear 1",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("summary missing %q:\n%s", want, out)
+		}
+	}
+}

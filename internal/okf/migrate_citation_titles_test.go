@@ -69,8 +69,8 @@ func TestConformance_MigrateCitationTitle_Section5_1_UntitledExistingSourceGains
 	if len(nm.Sources) != 0 {
 		t.Fatalf("idempotence: an existing resource must not be added again, got %+v", nm.Sources)
 	}
-	if nm.EditCount() != 1 {
-		t.Fatalf("EditCount = %d, want 1", nm.EditCount())
+	if len(nm.Titles) != 1 {
+		t.Fatalf("want exactly one title edit, got %+v", nm.Titles)
 	}
 }
 
@@ -125,8 +125,10 @@ func TestConformance_MigrateCitationTitle_Section5_1_BareURLEntryPlansNothing(t 
 			"# Citations\n- https://wiki.acme/fpa\n",
 	})
 	_, plan := planFor(t, dir, "", false)
-	if nm := planNodeMigration(plan, "a.md"); nm != nil {
-		t.Fatalf("want no edit, got %+v", nm)
+	// The entry still gets its §5.1 id and footnote definition; a bare URL
+	// names nothing, so no title is planned.
+	if nm := planNodeMigration(plan, "a.md"); nm != nil && len(nm.Titles) != 0 {
+		t.Fatalf("want no title edit, got %+v", nm.Titles)
 	}
 	if len(plan.Judgment) != 0 {
 		t.Fatalf("want no judgment, got %+v", plan.Judgment)
@@ -165,8 +167,8 @@ func TestConformance_MigrateCitationTitle_Section5_1_NewSourceTitleIsNameOnly(t 
 	_, plan := planFor(t, dir, "", false)
 	nm := findNodeMigration(t, plan, "a.md")
 	want := []SourceEdit{
-		{Resource: "https://arxiv.org/abs/2307.03172", Title: "Lost in the Middle: How Language Models Use Long Contexts"},
-		{Resource: "https://probe.example/"},
+		{Resource: "https://arxiv.org/abs/2307.03172", Title: "Lost in the Middle: How Language Models Use Long Contexts", ID: "1"},
+		{Resource: "https://probe.example/", ID: "2"},
 	}
 	if len(nm.Sources) != 2 || nm.Sources[0] != want[0] || nm.Sources[1] != want[1] {
 		t.Fatalf("§5.1: sources = %+v, want %+v", nm.Sources, want)
@@ -188,11 +190,15 @@ func TestConformance_MigrateCitationTitle_Section4_ApplySplicesAndIsIdempotent(t
 	if err := MigrateApply(dir, b, plan); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
-	want := strings.Replace(titledNode,
-		"  - resource: https://wiki.acme/fpa\n",
-		"  - resource: https://wiki.acme/fpa\n    title: \"The FP&A Handbook\"\n", 1)
-	if got := readRel(t, dir, "a.md"); got != want {
-		t.Fatalf("§4: apply must insert only the title line\n--- got\n%s\n--- want\n%s", got, want)
+	// Only lines are inserted: every original line survives in order, and
+	// the title line sits under its source's resource (ids and footnote
+	// definitions are the other inserted lines).
+	got := readRel(t, dir, "a.md")
+	if !strings.Contains(got, "  - resource: https://wiki.acme/fpa\n    id: \"2\"\n    title: \"The FP&A Handbook\"\n") {
+		t.Fatalf("§4: title line not inserted under its resource\n%s", got)
+	}
+	if !linesSurviveInOrder(titledNode, got) {
+		t.Fatalf("§4: apply must only insert lines\n--- got\n%s\n--- orig\n%s", got, titledNode)
 	}
 	nb := loadMigrate(t, dir)
 	if fs := Validate(nb); len(fs) != 0 {
@@ -230,8 +236,8 @@ func TestConformance_MigrateCitationTitle_Section5_1_DOISpellingTitlesExistingSo
 	if err := MigrateApply(dir, b, plan); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
-	if got, w := readRel(t, dir, "a.md"), strings.Replace(node, "10.1000/ABC\n", "10.1000/ABC\n    title: The DOI Work\n", 1); got != w {
-		t.Fatalf("apply\n--- got\n%s\n--- want\n%s", got, w)
+	if got := readRel(t, dir, "a.md"); !strings.Contains(got, "10.1000/ABC\n    id: cite-1\n    title: The DOI Work\n") || !linesSurviveInOrder(node, got) {
+		t.Fatalf("apply\n--- got\n%s", got)
 	}
 	if _, again := planFor(t, dir, "", false); len(again.Nodes) != 0 {
 		t.Fatalf("re-plan must plan 0 edits, got %+v", again.Nodes)
@@ -263,8 +269,8 @@ func TestConformance_MigrateCitationTitle_Section5_1_EntryFragmentTitleIsNotACon
 	if len(got) != 1 || !strings.Contains(got[0].Context, "Vertex AI Pipelines") {
 		t.Fatalf("want only the short differing title reported, got %+v", got)
 	}
-	if nm := planNodeMigration(plan, "a.md"); nm != nil {
-		t.Fatalf("a titled source is never edited, got %+v", nm)
+	if nm := planNodeMigration(plan, "a.md"); nm != nil && len(nm.Titles) != 0 {
+		t.Fatalf("a titled source's title is never edited, got %+v", nm.Titles)
 	}
 }
 
@@ -301,4 +307,21 @@ func TestConformance_MigrateCitationTitle_Section5_1_LinkReferenceDefinitionPlan
 	if len(plan.Judgment) != 0 {
 		t.Fatalf("a link reference definition is neither a conflict nor unnamed: %+v", plan.Judgment)
 	}
+}
+
+// linesSurviveInOrder reports whether every line of orig appears in got in the
+// same order: an edit that only inserts lines.
+func linesSurviveInOrder(orig, got string) bool {
+	g := strings.Split(got, "\n")
+	j := 0
+	for _, line := range strings.Split(orig, "\n") {
+		for j < len(g) && g[j] != line {
+			j++
+		}
+		if j == len(g) {
+			return false
+		}
+		j++
+	}
+	return true
 }
