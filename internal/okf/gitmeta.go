@@ -64,7 +64,7 @@ func GitLastCommitDateIgnoring(root, relPath string, ignore map[string]bool) (ti
 	// Fixed git subcommand; root/relPath are separated by "--" and are the
 	// user's own bundle path, not arbitrary shell input.
 	cmd := exec.Command("git", "-C", root, "log", "--format=%H %cI", "--", relPath) //nolint:gosec // G204: fixed git subcommand over the user's bundle
-	out, err := cmd.Output()
+	out, err := gitOutput(cmd)
 	if err != nil {
 		// A non-repo directory makes git exit non-zero ("not a git repository").
 		// That is "no answer", not a tool failure we should surface — degrade.
