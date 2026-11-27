@@ -57,136 +57,167 @@ and logged each node in `log.md` as it went, which is why
 
 ![okfctl quickstart: bundle init through validate and bundle info](docs/assets/quickstart.gif)
 
-okfctl ships as one static Go binary. It needs no toolchain, interpreter, or
-model download to run. Try `okfctl search "tannin" mykb` to find nodes by text,
-`okfctl graph export mykb` to dump the link graph, or `okfctl analyze mykb` to
-see where the bundle is thin. Each `okfctl <cmd> --help` ends with an example
-you can paste.
+okfctl is written in pure Go and runs offline. The one command that reaches
+the network is `connect`, and it uses git to clone a remote bundle. Try
+`okfctl search "tannin" mykb` to find nodes by text and `okfctl graph export mykb`
+to dump the link graph as JSON. `okfctl analyze mykb` shows where the bundle is
+thin. Each `okfctl <cmd> --help` ends with an example you can paste.
 
 ## Install
 
-Three ways to get running. Pick one:
+Pick one of these three. Each one gets you `okfctl` and the `okfctl-search`
+plugin.
 
-**Homebrew** (macOS, or Linux with Homebrew):
+With [Homebrew](https://brew.sh) on macOS or Linux:
 
 ```sh
 brew install cwest/tap/okfctl
 ```
 
-**One-liner** (macOS and Linux)—detects your OS/arch, downloads the matching
-release archive, verifies its checksum, and installs `okfctl` and `okfctl-search`
-onto your `PATH`:
+Or use the install script on macOS or Linux. It grabs the release archive for
+your OS and CPU and checks it against the release's `checksums.txt`. If they
+don't match, it installs nothing:
 
 ```sh
 curl -sSL https://okfctl.dev/install.sh | sh
 ```
 
-**Go toolchain**—install from source:
+Or, with Go 1.26 or later, build from source:
 
 ```sh
 go install github.com/cwest/okfctl@latest
+go install github.com/cwest/okfctl/cmd/okfctl-search@latest
 ```
 
-Prebuilt archives, Debian/RPM packages, cosign signature verification, and
-building from source all live in the [install guide](docs/install.md).
+Run `okfctl version` to check that it worked. The
+[install guide](docs/install.md) shows what each method prints. It also has
+the prebuilt archives, the Debian and RPM packages, how to check a release's
+signature, and how to build from a checkout.
 
-## The spec is the authority
+## The spec decides what's valid
 
-OKF is a specification `okfctl` consumes; it doesn't author it. The
+The
 [Open Knowledge Format spec](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md)
-decides behavior, and where it does, it wins. `okfctl` enforces the spec *floor*
-for everyone and keeps anything stricter behind an explicit opt-in overlay
-(`--templates`), so an unknown `type` or a future frontmatter key still
-passes `validate` (OKF §11.2).
+decides what a valid bundle is, and okfctl follows it. In the `mykb` bundle
+from above, add a node with a made-up `type` and a frontmatter key okfctl has
+never seen. Then try to create a node with no type at all:
+
+<!-- transcript: exit 1 okfctl node new concepts/cork.md --title "Cork" --bundle mykb -->
+```text
+$ printf '%s\n' '---' 'type: Recipe' 'title: Mulled wine' 'x-acme-owner: casey' '---' '' 'Warm red wine with spices.' > mykb/mulled-wine.md
+$ okfctl validate mykb
+OK: bundle conforms to the OKF spec floor
+$ okfctl node new concepts/cork.md --title "Cork" --bundle mykb
+okfctl: --type is required (OKF §4.1 / §11: every node needs a non-empty type)
+```
+
+`validate` passed the recipe because the spec tells a tool to accept types and
+keys it doesn't know (OKF §11.2). `node new` refused the cork node with exit
+code 1 since the spec also says each concept has a non-empty `type` (§4.1).
+
+okfctl holds each bundle to that floor and no higher. If your team wants a
+stricter rule, like a `servings` field on each Recipe, put it in a type
+template. Templates run only when you call `okfctl validate --templates`.
 
 ## Commands
 
-Grouped by what you're doing. Run `okfctl <cmd> --help` for full detail and a
-runnable example, or read the [command reference](docs/commands/README.md).
+Run `okfctl <cmd> --help` for the flags and an example. The
+[command reference](docs/commands/README.md) has the same text in one place.
 
-**Author**—build and edit a bundle:
+To build and edit a bundle:
 
-- [`bundle`](docs/commands/README.md#okfctl-bundle)—scaffold (`init`) and summarize (`info`) a bundle.
-- [`node`](docs/commands/README.md#okfctl-node)—author and inspect nodes (`new`, `show`, `list`, `edit`, `mv`, `rm`, `refresh`, `promote`).
-- [`index`](docs/commands/README.md#okfctl-index)—regenerate (`build`) and verify (`check`) the reserved `index.md`.
-- [`log`](docs/commands/README.md#okfctl-log)—append (`append`) and print (`show`) the reserved `log.md` history.
+| Command | What it does |
+| :-- | :-- |
+| [`bundle`](docs/commands/README.md#okfctl-bundle) | Create a bundle (`init`) and summarize one (`info`). |
+| [`node`](docs/commands/README.md#okfctl-node) | Work with one node at a time: `new`, `show`, `list`, `edit`, `mv`, `rm`, `refresh`, and `promote`. |
+| [`index`](docs/commands/README.md#okfctl-index) | Rebuild (`build`) and check (`check`) the reserved `index.md`. |
+| [`log`](docs/commands/README.md#okfctl-log) | Add to (`append`) and print (`show`) the reserved `log.md` history. |
 
-**Check**—hold the corpus to the spec and to curation health:
+To check a bundle:
 
-- [`validate`](docs/commands/README.md#okfctl-validate)—check a bundle against the OKF spec floor; optionally overlay type-templates.
-- [`lint`](docs/commands/README.md#okfctl-lint)—report curation findings (orphans, broken links, coverage gaps); `--strict` for CI.
-- [`eval`](docs/commands/README.md#okfctl-eval)—measure node trustworthiness (TACA): a deterministic transparency gate plus an accuracy/alignment/calibration sampler.
+| Command | What it does |
+| :-- | :-- |
+| [`validate`](docs/commands/README.md#okfctl-validate) | Check the bundle against the OKF spec floor, and against your type templates with `--templates`. |
+| [`lint`](docs/commands/README.md#okfctl-lint) | Report curation findings such as orphans, broken links, and missing links. `--strict` makes findings fail CI. |
+| [`eval`](docs/commands/README.md#okfctl-eval) | Check that each node has a grade and citations (`transparency`), and draft a spot-check set for accuracy, alignment, and calibration, which a person has to judge (`sample`). |
 
-**Explore**—read the structure you've built:
+To explore what you've made:
 
-- [`analyze`](docs/commands/README.md#okfctl-analyze)—report where a bundle is weak: freshness, clusters, gaps, connectivity, structure.
-- [`search`](docs/commands/README.md#okfctl-search)—lexical and graph-neighborhood search (stdlib-only, no model or index).
-- [`graph`](docs/commands/README.md#okfctl-graph)—export the concept-node link graph (`--format json|dot`).
-- [`serve`](docs/commands/README.md#okfctl-serve)—serve an interactive web visualization of the bundle graph.
+| Command | What it does |
+| :-- | :-- |
+| [`analyze`](docs/commands/README.md#okfctl-analyze) | Report where the bundle is weak: freshness, clusters, gaps, connectivity, structure. |
+| [`search`](docs/commands/README.md#okfctl-search) | Find nodes by text, or by how close they sit in the link graph. |
+| [`graph`](docs/commands/README.md#okfctl-graph) | Export the link graph as JSON or as Graphviz `dot`; pick one with `--format`. |
+| [`serve`](docs/commands/README.md#okfctl-serve) | Browse the bundle as an interactive graph in your browser. |
 
-**Extend**—templates, migration, remotes, and the rest:
+Everything else:
 
-- [`template`](docs/commands/README.md#okfctl-template)—list (`list`) and show (`show`) the type-templates a bundle declares.
-- [`migrate`](docs/commands/README.md#okfctl-migrate)—upgrade a v0.1 or v0.2 bundle to OKF v0.3 (two-phase, consumer-agnostic).
-- [`registry`](docs/commands/README.md#okfctl-registry)—manage named remote bundle sources: `git remote` for OKF bundles.
-- [`connect`](docs/commands/README.md#okfctl-connect)—clone or fast-forward a remote bundle source into a local directory.
-- [`plugin`](docs/commands/README.md#okfctl-plugin)—discover (`list`) and install (`install`) `okfctl-<name>` plugins on `PATH`.
-- [`config`](docs/commands/README.md#okfctl-config)—get, set, and list okfctl configuration.
-- [`completion`](docs/commands/README.md#okfctl-completion)—generate a shell completion script (bash, zsh, fish).
-- [`version`](docs/commands/README.md#okfctl-version)—print the okfctl version (also `okfctl --version`).
+| Command | What it does |
+| :-- | :-- |
+| [`template`](docs/commands/README.md#okfctl-template) | Print the type templates a bundle declares (`list`) and one template in full (`show`). |
+| [`migrate`](docs/commands/README.md#okfctl-migrate) | Move a v0.1 or v0.2 bundle to OKF v0.3: write a plan file of the edits, then apply it. |
+| [`registry`](docs/commands/README.md#okfctl-registry) | Keep a list of named remote bundles, the way `git remote` keeps remotes. |
+| [`connect`](docs/commands/README.md#okfctl-connect) | Clone a remote bundle into a local directory, or fast-forward one you already have. |
+| [`plugin`](docs/commands/README.md#okfctl-plugin) | Find (`list`) and install (`install`) `okfctl-<name>` plugins on your `PATH`. |
+| [`config`](docs/commands/README.md#okfctl-config) | Get, set, and list okfctl settings. |
+| [`completion`](docs/commands/README.md#okfctl-completion) | Print a shell completion script for bash, zsh, or fish. |
+| [`version`](docs/commands/README.md#okfctl-version) | Print the version (`okfctl --version` does the same). |
 
-Semantic search over a bundle ships as the bundled `okfctl-search` plugin,
-invoked as `okfctl-search --semantic "query"`. See the
-[search guide](docs/guides/search.md).
+Semantic search comes in the `okfctl-search` plugin, installed with okfctl.
+Out of the box it matches words. To search by meaning, download a
+[Model2Vec](https://github.com/MinishLab/model2vec) model like
+[`minishlab/potion-base-8M`](https://huggingface.co/minishlab/potion-base-8M)
+and tell okfctl where it is. The plugin loads the model itself. okfctl won't
+download one for you. The command is `okfctl-search --semantic "query"`, and
+the [search guide](docs/guides/search.md) has the setup steps.
 
 ## Use as an agent plugin
 
-This repo is an [Agent Plugins 1.0.0](https://agent-plugins.org) package: the
-root [`plugin.json`](plugin.json) bundles the four generic okfctl skills
-(`okf-authoring`, `okf-curation-health`, `okf-migrate-plan`,
-`okf-semantic-search`) as an installable unit for compatible agent clients
-(Copilot, Cursor, Codex, …). Clients that read repo instructions directly pick
-the same guidance up from [`AGENTS.md`](AGENTS.md).
+This repo is also an [Agent Plugins 1.0.0](https://agent-plugins.org) package.
+The root [`plugin.json`](plugin.json) lists four okfctl skills
+(`okf-authoring`, `okf-curation-health`, `okf-migrate-plan`, and
+`okf-semantic-search`) for any agent client that reads the format to install
+in one step. Clients that read repo instructions pick up the same advice
+from [`AGENTS.md`](AGENTS.md).
 
-> **Not to be confused with `okfctl plugin`** above—that command discovers
-> and installs `okfctl-<name>` *executable* plugins (like `okfctl-search`) on
-> your `PATH`. This section is about packaging okfctl's *skills* for an agent
-> client, which is a different spec.
+Don't mix this up with `okfctl plugin`. It looks for executables named
+`okfctl-<name>` on your `PATH`, like `okfctl-search`. This section is about
+giving okfctl's skills to an AI agent, and it follows a different spec.
 
-**Prerequisite—install `okfctl` first.** The skills shell out to the `okfctl`
-binary, and a plugin client doesn't bundle it. Install it onto your `PATH`
-before enabling the plugin (see [Install](#install)):
+The skills run the `okfctl` binary, and the plugin client won't install it for
+you. [Install okfctl](#install) first:
 
 ```sh
 brew install cwest/tap/okfctl
 ```
 
-The manifest carries no hand-maintained version string: the authoritative
-version is the release tag, reported by `okfctl version`.
+The manifest has no version field. The release tag is the version, and
+`okfctl version` reports it.
 
 ## Learn more
 
-- **User docs**—concepts, task-oriented guides, and the full command
-  reference live under [`docs/`](docs/README.md). Start with
-  [concepts](docs/concepts.md), then the guides:
-  - [Starting and authoring a bundle](docs/guides/authoring.md)
-  - [Keeping `index.md` current and fixing freshness drift](docs/guides/index-and-freshness.md)—covers `.okf-drift-ignore-revs`.
-  - [Curation health: `lint`, `analyze`, and `--strict` in CI](docs/guides/curation-health.md)—covers the semantic-lint checks and the vendored/derived skip policy.
-  - [Search: core lexical/graph and the `okfctl-search` semantic plugin](docs/guides/search.md)—covers model2vec setup.
-  - [Migrating a bundle to OKF v0.3](docs/guides/migrating.md)
-  - [Remote sources: `registry` and `connect`](docs/guides/remote-sources.md)
-  - [Extending okfctl with plugins](docs/guides/plugins.md)
-- **Per-command help**—`okfctl <cmd> --help` is authoritative and always
-  matches the binary.
-- **The spec**—the authoritative
-  [OKF v0.3 specification](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md).
-  okfctl targets v0.3; the
-  [v0.3 gap analysis](docs/specs/2026-11-26-okf-v0.3-gap-analysis.md) records
-  how each v0.3 change landed.
-- **For contributors**—[`docs/PRD.md`](docs/PRD.md), the
-  [ADRs](docs/adr/README.md), and the dated
-  [plans](docs/plans/2026-07-22-roadmap.md)/[specs](docs/specs/) that record how
-  and why the tool was built.
+Start with the [concepts](docs/concepts.md) page, then pick a guide:
+
+- [Start and author a bundle](docs/guides/authoring.md)
+- [Update `index.md` and fix freshness drift](docs/guides/index-and-freshness.md) (this is where `.okf-drift-ignore-revs` is explained)
+- [Check curation health with `lint` and `analyze`, and fail CI on findings](docs/guides/curation-health.md)
+- [Search by text, by graph, and by meaning with `okfctl-search`](docs/guides/search.md)
+- [Migrate a bundle to OKF v0.3](docs/guides/migrating.md)
+- [Pull in remote bundles with `registry` and `connect`](docs/guides/remote-sources.md)
+- [Extend okfctl with plugins](docs/guides/plugins.md)
+
+`okfctl <cmd> --help` always matches the binary you've got. The
+[docs index](docs/README.md) lists everything else under `docs/`.
+
+okfctl targets OKF v0.3. The
+[v0.3 specification](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md)
+lives upstream, and [this record](docs/specs/2026-11-26-okf-v0.3-gap-analysis.md)
+lists how each v0.3 change landed here.
+
+To work on okfctl itself, read [`docs/PRD.md`](docs/PRD.md), the
+[architecture decision records](docs/adr/README.md), and the dated
+[plans](docs/plans/2026-07-22-roadmap.md) and [specs](docs/specs/) behind each
+release.
 
 ## License
 
