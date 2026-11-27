@@ -297,10 +297,11 @@ present, is bumped too.
 
 `migrate` writes these to the plan and leaves the file unchanged:
 
-- a citation entry with no follow-able resource (§5.1 wants one), or with two
-  different ones, where picking one or splitting the entry is your call
-  (`prose-citation`). Two identifiers count as two resources, and so does an
-  ISBN with a bad check digit.
+- a citation entry with no follow-able resource (§5.1 wants one)
+  (`prose-citation`), or with several where one of them is also named by
+  another entry of the node, so splitting it would need two ids on one source.
+  Two identifiers with no URL count as two resources and stay here too, and so
+  does an ISBN with a bad check digit.
 - a `timestamp` rename with no actor (§7, `missing-actor`)
 - a date-time with no offset, for example `2026-06-20T10:00:00`
   (`timestamp-no-offset`, §5 and §13.2). It names no instant. Only the
@@ -322,6 +323,16 @@ present, is bumped too.
 
 The two `source-title-*` kinds and these three don't hold the version
 declaration: the resource is already in `sources`.
+
+An entry that names several resources is not a judgment item: it becomes one
+source per resource, since §5.1 gives a source one `resource`. Given
+`[12] VERIFIED — *Export Schema*, https://a.example/schema; mirror https://b.example/mirror`
+and a body that cites it as `[12]`, migrate writes `id: "12"`
+(`title: Export Schema`) and `id: 12-2`, rewrites the reference to
+`[^12][^12-2]`, and defines `[^12]:` as the full entry text and `[^12-2]:` as
+`https://b.example/mirror`. A later part is titled only when the entry names
+it with a link. A URL inside a code span (`curl https://…`, a URL template) is
+not a resource and is never split off.
 
 ## Bundles `migrate` leaves alone
 

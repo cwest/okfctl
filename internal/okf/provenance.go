@@ -338,7 +338,14 @@ func (b *Bundle) SourceCitations(path string) int {
 	for _, entry := range citationEntries(n.Body) {
 		src, ok := citationSource(entry)
 		if !ok {
-			count++ // prose, or several resources: one entry, nothing to dedupe on
+			// A multi-resource entry whose every part is already in
+			// `sources` is the provenance migrate split it into; it adds
+			// nothing. Otherwise prose, or several resources not yet
+			// split: one entry, nothing to dedupe on.
+			if parts, split := citationSourcesFrom(entry); split && b.allSeen(path, parts, seen) {
+				continue
+			}
+			count++
 			continue
 		}
 		if k := b.provenanceKey(path, src.Resource); !seen[k] {
@@ -347,6 +354,16 @@ func (b *Bundle) SourceCitations(path string) int {
 		}
 	}
 	return count
+}
+
+// allSeen reports whether every part's resource is already in seen.
+func (b *Bundle) allSeen(path string, parts []SourceEdit, seen map[string]bool) bool {
+	for _, p := range parts {
+		if !seen[b.provenanceKey(path, p.Resource)] {
+			return false
+		}
+	}
+	return true
 }
 
 // provenanceKey is the identity of a provenance resource for de-duplication.
