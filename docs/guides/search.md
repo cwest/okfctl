@@ -98,8 +98,8 @@ title and body haven't changed.
 top `--k` results (5 by default), each with a snippet.
 
 `related` listed the oak node's nearest neighbors, leaving out oak itself.
-`okfctl lint --semantic` reads the same neighbors for its similarity checks
-(PRD §8.6). The [curation health guide](curation-health.md) explains them.
+`okfctl lint --semantic` reads the same neighbors for the similarity checks
+that the [curation health guide](curation-health.md) explains.
 
 ## Use a real model
 
@@ -154,16 +154,17 @@ These flags work with `--semantic`:
   weak matches ahead of any aging. `--decay-floor` (0.25 by default) limits how
   far age can pull a score down.
 - `--lexical-gate` helps with queries shaped like an identifier, where the
-  model blurs a rare token. It does the semantic query wide, holds on to the
-  results that contain a query term (in semantic order), and appends the word
-  matches the semantic results missed. Literal matches can't fall off the list
-  that way. Stopwords don't count as terms, and inflections match their stem
+  model blurs a rare token. It widens the semantic query, holds on to the hits
+  that contain a query term (in semantic order), and appends the word matches
+  that query missed. Literal matches can't fall off the list that way.
+  Stopwords don't count as terms, and inflections match their stem
   (`hash` and `hashes` find the same nodes).
 
 The gate switches itself off in two cases, and the results then match a run
 with no gate byte for byte. One is a query with no content words, like
 `"how should the"`. The other is a term found in more than 60% of the bundle.
-A word that common can't narrow anything (`agent` matches 73% of the
-reference corpus). It honors `--path`/`--type`/`--tag` and `--half-life`.
+A word that common can't narrow anything (`agent` matches 73% of a
+234-node knowledge base). The gate still respects `--path`, `--type`, `--tag`,
+and `--half-life`.
 
 `okfctl-search --help` lists the rest.

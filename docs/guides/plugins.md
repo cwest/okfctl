@@ -1,8 +1,10 @@
 # Extending okfctl with plugins
 
 Any program named `okfctl-<name>` on your `PATH` turns into the command
-`okfctl <name>`. That's how `git` and `kubectl` plugins work too. You can write
-one in any language. This one is a three-line shell script.
+`okfctl <name>`. That's how [`git`](https://git-scm.com/docs/git) and
+[`kubectl`](https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/)
+plugins work too. You can write one in any language. This one is a three-line
+shell script.
 
 ## Write and run a plugin
 
