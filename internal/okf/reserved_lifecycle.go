@@ -542,18 +542,47 @@ func WriteIndex(b *Bundle) error {
 // WriteIndexWithOptions is WriteIndex with an explicit shape config, for the CLI
 // flags. The zero-arg WriteIndex delegates here with DefaultShapeOptions so the
 // build/maintenance paths stay byte-identical to a default check.
+//
+// An index.md okfctl did not generate (see IsGeneratedIndex) is neither
+// rewritten nor pruned. Every other index is still written, and the kept paths
+// come back as a *HandWrittenIndexError so the caller can warn.
 func WriteIndexWithOptions(b *Bundle, opts IndexShapeOptions) error {
+	res, err := WriteIndexReport(b, opts, false)
+	if err != nil {
+		return err
+	}
+	if len(res.KeptHandWritten) > 0 {
+		return &HandWrittenIndexError{Paths: res.KeptHandWritten}
+	}
+	return nil
+}
+
+// WriteIndexReport is the single index writer. It renders one index.md per
+// content-bearing directory and prunes generated indexes from directories that
+// no longer hold content. When overwrite is false, an existing index.md that
+// okfctl did not generate is left byte for byte and listed in KeptHandWritten
+// (OKF v0.3 §8 lets a producer generate index.md; it does not require
+// discarding what a person wrote). When overwrite is true, such a file is
+// replaced by the render (or pruned) like any other; the bundle-root
+// frontmatter and H1 are still kept (§8.1).
+func WriteIndexReport(b *Bundle, opts IndexShapeOptions, overwrite bool) (IndexWriteResult, error) {
+	var res IndexWriteResult
 	want := map[string]bool{}
 	for _, dir := range IndexDirs(b) {
 		want[dir] = true
+		relIdx := indexRelFor(dir)
+		if !overwrite && isHandWrittenIndex(b, relIdx) {
+			res.KeptHandWritten = append(res.KeptHandWritten, relIdx)
+			continue
+		}
 		p := indexPathFor(b.Root, dir)
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil { //nolint:gosec // G301: shareable bundle content dir; 0o755 is intended
-			return err
+			return res, err
 		}
 		// §3.2 rule 5 / §11.2: never read or write through an index.md that
 		// is a symlink out of the bundle root.
 		if escapesBundleRoot(b.Root, p) {
-			return fmt.Errorf("%s is a symlink that resolves outside the bundle root; not read (OKF §3.2, §11.2)", filepath.ToSlash(rel(b.Root, p)))
+			return res, fmt.Errorf("%s is a symlink that resolves outside the bundle root; not read (OKF §3.2, §11.2)", filepath.ToSlash(rel(b.Root, p)))
 		}
 		rendered := RenderDirIndexWithOptions(b, dir, opts)
 		// Preserve on write (issue #185): the render is produced LF, but if the
@@ -567,11 +596,12 @@ func WriteIndexWithOptions(b *Bundle, opts IndexShapeOptions) error {
 			out = strings.ReplaceAll(rendered, "\n", "\r\n")
 		}
 		if err := os.WriteFile(p, []byte(out), 0o644); err != nil { //nolint:gosec // G306: a bundle index file is shareable content; 0o644 is intended
-			return err
+			return res, err
 		}
+		res.Written = append(res.Written, relIdx)
 	}
 	// Prune orphaned generated indexes: any on-disk index.md whose directory is
-	// not in the content-bearing set.
+	// not in the content-bearing set. A hand-written one stays (§8).
 	for relPath := range b.Reserved {
 		if path.Base(relPath) != "index.md" {
 			continue
@@ -579,11 +609,28 @@ func WriteIndexWithOptions(b *Bundle, opts IndexShapeOptions) error {
 		if want[indexDir(relPath)] {
 			continue
 		}
-		if err := os.Remove(indexPathFor(b.Root, indexDir(relPath))); err != nil && !os.IsNotExist(err) {
-			return err
+		if !overwrite && isHandWrittenIndex(b, relPath) {
+			res.KeptHandWritten = append(res.KeptHandWritten, relPath)
+			continue
 		}
+		if err := os.Remove(indexPathFor(b.Root, indexDir(relPath))); err != nil && !os.IsNotExist(err) {
+			return res, err
+		}
+		res.Pruned = append(res.Pruned, relPath)
 	}
-	return nil
+	sort.Strings(res.Written)
+	sort.Strings(res.Pruned)
+	sort.Strings(res.KeptHandWritten)
+	return res, nil
+}
+
+// indexRelFor returns the bundle-relative slash path of a directory's
+// index.md ("" -> "index.md").
+func indexRelFor(dir string) string {
+	if dir == "" {
+		return "index.md"
+	}
+	return dir + "/index.md"
 }
 
 // IndexInSync reports whether the on-disk nested index tree matches what
@@ -618,7 +665,11 @@ func IndexInSyncWithOptions(b *Bundle, opts IndexShapeOptions) (bool, string) {
 		// reported as drift — any other difference is still drift, so genuine
 		// staleness is still caught.
 		if normalizeEOL(string(onDisk)) != RenderDirIndexWithOptions(b, dir, opts) {
-			return false, fmt.Sprintf("%s is out of date; run `okfctl index build` to regenerate", filepath.ToSlash(rel(b.Root, p)))
+			msg := fmt.Sprintf("%s is out of date; run `okfctl index build` to regenerate", filepath.ToSlash(rel(b.Root, p)))
+			if isHandWrittenIndex(b, indexRelFor(dir)) {
+				msg += handWrittenNote
+			}
+			return false, msg
 		}
 	}
 	// An index.md that exists in a directory NOT expected to carry one is an
@@ -628,7 +679,11 @@ func IndexInSyncWithOptions(b *Bundle, opts IndexShapeOptions) (bool, string) {
 			continue
 		}
 		if !want[indexDir(relPath)] {
-			return false, fmt.Sprintf("%s is an orphaned index (its directory has no content); run `okfctl index build`", relPath)
+			msg := fmt.Sprintf("%s is an orphaned index (its directory has no content); run `okfctl index build`", relPath)
+			if isHandWrittenIndex(b, relPath) {
+				msg += handWrittenNote
+			}
+			return false, msg
 		}
 	}
 	return true, ""

@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -108,6 +109,23 @@ func maintainIndex(cmd *cobra.Command, dir string) {
 		return
 	}
 	if err := okf.WriteIndex(b); err != nil {
+		var hw *okf.HandWrittenIndexError
+		if errors.As(err, &hw) {
+			warnHandWritten(cmd, hw.Paths, "okfctl index build --overwrite-hand-written")
+			return
+		}
 		fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not refresh index.md: %v\n", err)
 	}
+}
+
+// warnHandWritten tells the user which index.md files a rebuild left alone
+// because okfctl did not generate them (OKF v0.3 §8: a producer MAY generate
+// index.md; okfctl does not discard what a person wrote).
+func warnHandWritten(cmd *cobra.Command, paths []string, overwriteHint string) {
+	for _, p := range paths {
+		fmt.Fprintf(cmd.ErrOrStderr(),
+			"warning: kept hand-written %s: okfctl did not generate it, so it was not rewritten or removed\n", p)
+	}
+	fmt.Fprintf(cmd.ErrOrStderr(),
+		"hint: edit the file(s) by hand, or run `%s` to replace them with the generated index\n", overwriteHint)
 }

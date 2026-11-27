@@ -60,11 +60,14 @@ func newIndexCmd() *cobra.Command {
 			"--no-shape drops the summary.\n\n" +
 			"Only the root index.md's frontmatter survives a rebuild (that frontmatter is " +
 			"where the bundle's okf_version, title, and description live, §8.1). Everything below " +
-			"it in each index.md is rewritten " +
-			"from scratch. An index.md in a directory with no nodes is deleted. Subdirectory index.md " +
-			"files with frontmatter go too: each is a concept stored where §8 puts an index " +
-			"(validate fails it). Run `okfctl node promote` on such a file first or build throws " +
-			"away what you wrote there.",
+			"it in each index.md okfctl wrote is rewritten from scratch, and an index.md okfctl " +
+			"wrote in a directory with no nodes left is deleted.\n\n" +
+			"An index.md with anything okfctl doesn't write (an intro paragraph, notes, your own " +
+			"heading, frontmatter on a subdirectory index) is left alone: build names it on " +
+			"stderr and exits 1. Move the prose into a node, or rerun with " +
+			"--overwrite-hand-written to replace the file (the root frontmatter and H1 still " +
+			"survive). A subdirectory index.md with frontmatter is a concept stored where §8 puts " +
+			"an index (validate fails it); `okfctl node promote` moves it out of the way first.",
 		Annotations: map[string]string{
 			transcriptAnnotation: "<!-- transcript: exit 1 okfctl index check atlas -->",
 		},
@@ -92,17 +95,24 @@ func newIndexCmd() *cobra.Command {
 	}
 	buildNoIgnore := addNoIgnoreFlag(buildCmd)
 	buildShape := addShapeFlags(buildCmd)
+	var overwriteHandWritten bool
+	buildCmd.Flags().BoolVar(&overwriteHandWritten, "overwrite-hand-written", false,
+		"also rewrite (or remove) index.md files okfctl did not generate; the bundle-root frontmatter and H1 are still kept")
 	buildCmd.RunE = func(cmd *cobra.Command, args []string) error {
 		dir := bundleDirArg(args)
 		b, err := loadBundleForCmd(cmd, dir, *buildNoIgnore)
 		if err != nil {
 			return err
 		}
-		if err := okf.WriteIndexWithOptions(b, buildShape()); err != nil {
+		res, err := okf.WriteIndexReport(b, buildShape(), overwriteHandWritten)
+		if err != nil {
 			return fmt.Errorf("write index.md: %w", err)
 		}
-		dirs := okf.IndexDirs(b)
-		fmt.Fprintf(cmd.OutOrStdout(), "Wrote %d index.md file(s) under %s\n", len(dirs), dir)
+		fmt.Fprintf(cmd.OutOrStdout(), "Wrote %d index.md file(s) under %s\n", len(res.Written), dir)
+		if len(res.KeptHandWritten) > 0 {
+			warnHandWritten(cmd, res.KeptHandWritten, "okfctl index build --overwrite-hand-written")
+			return fmt.Errorf("kept %d hand-written index.md file(s)", len(res.KeptHandWritten))
+		}
 		return nil
 	}
 	index.AddCommand(buildCmd)
@@ -119,7 +129,9 @@ func newIndexCmd() *cobra.Command {
 			"Pass the --shape-tag-min, --shape-tag-max, and --no-shape flags you built with. " +
 			"Build with --no-shape and check with the default flags: any index that links a " +
 			"subdirectory reads as stale.\n\n" +
-			"check doesn't fix anything. build does.",
+			"check doesn't fix anything. build does. When the file at fault is one okfctl didn't " +
+			"write, the report says so: build leaves that file alone, so fix it by hand or rebuild " +
+			"with --overwrite-hand-written.",
 		Annotations: map[string]string{
 			transcriptAnnotation: "<!-- transcript: exit 1 okfctl index check pantry -->",
 		},

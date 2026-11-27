@@ -36,8 +36,9 @@ OK: index.md is current
 
 `index check` exits 1 if an `index.md` is stale or missing. It also exits 1 if
 one is left over in a directory that has nothing in it now. `index build` fixes
-all three (it deletes the leftover). With the check in CI, an index can't lag
-the nodes by more than one pull request.
+all three. It deletes a leftover only if okfctl wrote it (more on that below).
+With the check in CI, an index can't lag the nodes by more than one pull
+request.
 
 ```text
 $ cat mykb/index.md
@@ -81,11 +82,56 @@ have to open it: how many concepts there are and of what type, with up to 12 tag
 2). Directories that nest deeper also get a `· N in
 subtree` total. `--no-shape` drops the whole thing.
 
-Most hand edits to an index disappear on the next build. The H1 survives. So
-does a description you add to a subdirectory entry, like
+A few hand edits carry through a rebuild. The H1 survives. So does a
+description you add to a subdirectory entry, like
 `* [Wine](wine/) - tasting vocabulary`. Windows line endings survive as well.
 An `index.md` checked out with CRLF stays CRLF. `index check` won't call it
 stale over that.
+
+## When an `index.md` has your own writing in it
+
+okfctl rewrites an `index.md` only when every line in it is one okfctl writes:
+the H1, the `## Subdirectories` and `## Concepts` headings, the link bullets,
+and its placeholder lines. Add an intro paragraph or notes of your own and the
+file is yours. `index build` leaves it alone and tells you:
+
+<!-- transcript: setup
+$ printf '# Wine\n\nTasting notes, newest first.\n' > mykb/wine/index.md
+-->
+<!-- transcript: exit 1 okfctl index build mykb -->
+```text
+$ okfctl index build mykb
+Wrote 1 index.md file(s) under mykb
+warning: kept hand-written wine/index.md: okfctl did not generate it, so it was not rewritten or removed
+hint: edit the file(s) by hand, or run `okfctl index build --overwrite-hand-written` to replace them with the generated index
+okfctl: kept 1 hand-written index.md file(s)
+$ cat mykb/wine/index.md
+# Wine
+
+Tasting notes, newest first.
+```
+
+The exit code is 1, so CI catches it. `index check` fails on the same file and
+says it's hand-written. The node commands keep the file too and print the same
+warning, but the node change itself still goes through.
+
+The same rule covers a directory that no longer holds nodes. okfctl deletes
+the old `index.md` there only if okfctl wrote it. One you wrote stays put.
+
+You have two ways out. Put the entries you want into the file by hand, or let
+okfctl take the file back:
+
+```text
+$ okfctl index build --overwrite-hand-written mykb
+Wrote 2 index.md file(s) under mykb
+$ okfctl index check mykb
+OK: index.md is current
+```
+
+`--overwrite-hand-written` replaces the file with the generated index. On the
+bundle-root `index.md` it still keeps the frontmatter and the H1 (§8.1). OKF
+v0.3 §8 lets a tool generate `index.md`. It doesn't ask the tool to throw away
+what a person wrote, and okfctl won't do that unless you pass the flag.
 
 ## Catch a `modified` date that git contradicts
 
