@@ -46,13 +46,18 @@ import (
 //
 // Only the first marked span is considered; when it fails the position test
 // the entry has no name, rather than falling through to a later span. A
-// candidate with an ellipsis is a truncated quotation and never a name.
+// candidate with an ellipsis is a truncated quotation and never a name. When
+// the entry opens with a bold span that is not a grade tag (its first word
+// not all caps), the bold span names the work, so an italic span after it is
+// the venue and gives no name; a quoted span still names the piece.
 
 var (
 	nameKeyRe     = regexp.MustCompile(`^\[[^\]\s][^\]]*\]\s+`)
 	nameBoldTagRe = regexp.MustCompile(`^\*\*\[[^*]*\*\*\s*`)
-	nameLeadLink  = regexp.MustCompile(`^\[([^\]\n]+)\]\(\s*<?[^)\s>]+>?(?:\s+"[^"]*")?\s*\)`)
-	nameLeadURL   = regexp.MustCompile(`^<?https?://\S+?>?\s+[—–-]\s+(.+)$`)
+	// nameBoldLeadRe matches a bold span that opens the entry.
+	nameBoldLeadRe = regexp.MustCompile(`^\*\*([^*]+)\*\*`)
+	nameLeadLink   = regexp.MustCompile(`^\[([^\]\n]+)\]\(\s*<?[^)\s>]+>?(?:\s+"[^"]*")?\s*\)`)
+	nameLeadURL    = regexp.MustCompile(`^<?https?://\S+?>?\s+[—–-]\s+(.+)$`)
 	// nameSpanRe finds an emphasized or quoted span: `*x*` (not `**`),
 	// straight double quotes, or curly double quotes.
 	nameSpanRe = regexp.MustCompile(`(?:^|[^*])\*([^*\s][^*]*?)\*(?:[^*]|$)|"([^"]+)"|“([^”]+)”`)
@@ -74,6 +79,11 @@ func citationName(entry string) (string, bool) {
 		text = t
 	}
 
+	boldLead := false
+	if m := nameBoldLeadRe.FindStringSubmatch(text); m != nil {
+		first, _, _ := strings.Cut(strings.TrimSpace(m[1]), " ")
+		boldLead = strings.ToUpper(first) != first // not a grade tag
+	}
 	if m := nameLeadLink.FindStringSubmatch(text); m != nil {
 		name := strings.TrimSpace(m[1])
 		if strings.HasPrefix(name, "/") || strings.HasSuffix(name, ".md") {
@@ -119,6 +129,10 @@ func citationName(entry string) (string, bool) {
 	}
 	before, after := text[:start], text[end:]
 	if !namePrefixOK(before) || !nameSuffixOK(after, inner) {
+		return "", false
+	}
+	// After a bold lead that names the work, an italic span is its venue.
+	if boldLead && text[start] == '*' {
 		return "", false
 	}
 	// An italic container followed by a quoted piece (`*Podcast*, "Episode"`)

@@ -46,6 +46,37 @@ func TestConformance_CitationName_Section5_1_FindsTheWorkName(t *testing.T) {
 	}
 }
 
+// Negative control from the real corpus: an entry that leads with a bold
+// span marks the work with that span, so a later italic is the venue, never
+// the name. Bold is not one of the marks citationName reads, so the entry has
+// no name rather than the journal's. A bold grade tag (`**VERIFIED**`) does
+// not mark the work and still lets the italic name through.
+func TestConformance_CitationName_Section5_1_BoldLeadIsNotTheVenue(t *testing.T) {
+	for _, entry := range []string{
+		"- **The Probability of Backtest Overfitting** — D. H. Bailey, J. M. Borwein, M. López de Prado, Q. J. Zhu, *Journal of Computational Finance* (2016), DOI `10.21314/jcf.2016.322`.",
+		"- **Deflated Sharpe Ratio** — Bailey & López de Prado, *The Journal of Portfolio Management*, 2014. https://example.org/dsr",
+	} {
+		if got, ok := citationName(entry); ok {
+			t.Errorf("citationName(%q) = %q, want no name (the italic is the venue)", entry, got)
+		}
+	}
+	const graded = "- **VERIFIED** — A. Author, *The Real Name*, 2024. https://example.org/x"
+	if got, ok := citationName(graded); !ok || got != "The Real Name" {
+		t.Errorf("citationName(%q) = %q ok=%v, want \"The Real Name\"", graded, got, ok)
+	}
+	// Positive controls from the same corpus: a grade tag with a lowercase
+	// qualifier is still a tag, and a bold lead followed by a quoted title
+	// names the quoted work (quotes mark the piece, italics the venue).
+	for entry, want := range map[string]string{
+		"[7] **VERIFIED (primary, arXiv)** — Aditya Kusupati et al., \"Matryoshka Representation Learning,\" arXiv:2205.13147 (2022-05-26).":                                                                                                     "Matryoshka Representation Learning",
+		"- **Critique conditions, presenter/critiquer roles.** Nielsen Norman Group, Gibbons, S., \"Design Critiques: Encourage a Positive Culture to Improve Products,\" nngroup.com, 2016. https://www.nngroup.com/articles/design-critiques/": "Design Critiques: Encourage a Positive Culture to Improve Products",
+	} {
+		if got, ok := citationName(entry); !ok || got != want {
+			t.Errorf("citationName(%q)\n got %q ok=%v\nwant %q", entry, got, ok, want)
+		}
+	}
+}
+
 // Negative control: emphasis or quotes that mark a claim, a term, or a
 // search string are not a name, and an entry with no marked name has none.
 func TestConformance_CitationName_Section5_1_NoNameWhenNotMarked(t *testing.T) {
