@@ -64,7 +64,7 @@ okfctl migrate mykb --plan migrate-plan.json --generated-by human:casey
 ```text
 Wrote migrate-plan.json: 2 file(s) with deterministic edits (5 edit(s)), 1 judgment item(s).
 version: 0.1 -> hold (1 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
-edits: 2 file(s); timestamp->generated 2, citations->sources 2, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 2 file(s); timestamp->generated 2, citations->sources 2, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
 judgment: 1 item(s); prose-citation 1
 1 item(s) need a decision before they can migrate; see the plan file.
 ```
@@ -183,7 +183,7 @@ $ mv tannin.tmp mykb/wine/tannin.md
 $ okfctl migrate mykb --plan migrate-plan.json --generated-by human:casey
 Wrote migrate-plan.json: 1 file(s) with deterministic edits (1 edit(s)), 0 judgment item(s).
 version: 0.1 -> declare v0.3
-edits: 1 file(s); timestamp->generated 0, citations->sources 1, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 1 file(s); timestamp->generated 0, citations->sources 1, citation titles->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
 judgment: 0 item(s); none
 $ okfctl migrate mykb --apply --plan migrate-plan.json
 migrated wine/tannin.md
@@ -208,7 +208,7 @@ write:
 $ okfctl migrate mykb --plan again.json
 Wrote again.json: 0 file(s) with deterministic edits (0 edit(s)), 0 judgment item(s).
 version: 0.3 -> keep (already v0.3)
-edits: 0 file(s); timestamp->generated 0, citations->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 0 file(s); timestamp->generated 0, citations->sources 0, citation titles->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
 judgment: 0 item(s); none
 ```
 
@@ -220,17 +220,24 @@ From v0.1 (v0.3 Appendix B), two renames:
 - body `# Citations` list → frontmatter `sources`. An entry that names one and
   only one follow-able resource (a URL with a scheme, or the path of a file in
   the bundle, per §5.1 and §6.2) turns into one `sources` entry: that resource,
-  plus the entry's text as `title`. The claim beside the URL comes along with
-  it. An entry with no URL that carries exactly one DOI, arXiv id, PubMed id,
+  plus the cited work's name as `title` (§5.1: "a label for humans"). The name
+  is taken only where the entry marks it: a leading link's text, a quoted or
+  italic title in citation position, or the page name after a leading URL.
+  Authors, venue, year, identifiers, URLs, and grades never go into `title`.
+  An entry that marks no name gets no title and a `source-title-unnamed` item.
+  An entry with no URL that carries exactly one DOI, arXiv id, PubMed id,
   or ISBN gets a `resource` built from that identifier:
   `https://doi.org/<doi>`, `https://arxiv.org/abs/<id>`,
   `https://pubmed.ncbi.nlm.nih.gov/<pmid>/`, or
   `https://openlibrary.org/isbn/<isbn>`. An ISBN must pass its check digit
   first. The URL is built offline from a fixed pattern; `migrate` never fetches
-  it. Such a source gets no `title`: a title names the work, and the full
-  citation isn't a name. An identifier that another entry in the same list
-  also names is a cross-reference, so that entry stays a judgment item. The
-  body list stays.
+  it. An identifier that another entry in the same list also names is a
+  cross-reference, so that entry stays a judgment item. The body list stays,
+  so the full entry text is still there.
+- an entry whose resource is in `sources` already is not added twice (a DOI
+  URL matches however its host or case is spelled). If that source has no
+  `title`, the entry's name fills it in. A source that already has a title
+  keeps it.
 
 From v0.2 (v0.3 §13.1), two edits:
 
@@ -265,6 +272,13 @@ present, is bumped too.
   (`timestamp-no-offset`, §5 and §13.2). It names no instant. Only the
   author knows which offset was meant.
 - a §5 timestamp value that isn't a date at all (`timestamp-invalid`)
+- a citation entry for an untitled source whose text marks no work name
+  (`source-title-unnamed`). The title stays unset until you name the work.
+- a citation entry that names a different work than the title its source
+  already has (`source-title-conflict`). The existing title stays.
+
+The two `source-title-*` kinds don't hold the version declaration: the
+resource is already in `sources`.
 
 ## Bundles `migrate` leaves alone
 

@@ -79,12 +79,13 @@ func writeMigrateSummary(out io.Writer, plan okf.MigratePlan) {
 	default:
 		action = "keep (§12: a version this build does not migrate from; consumed best-effort, never rewritten)"
 	}
-	var gen, src, links, fields, stamps int
+	var gen, src, titles, links, fields, stamps int
 	for _, nm := range plan.Nodes {
 		if nm.Generated != nil {
 			gen++
 		}
 		src += len(nm.Sources)
+		titles += len(nm.Titles)
 		stamps += len(nm.Timestamps)
 		for _, p := range nm.Paths {
 			if p.Field == "link" {
@@ -95,8 +96,8 @@ func writeMigrateSummary(out io.Writer, plan okf.MigratePlan) {
 		}
 	}
 	fmt.Fprintf(out, "version: %s -> %s\n", declared, action)
-	fmt.Fprintf(out, "edits: %d file(s); timestamp->generated %d, citations->sources %d, root-relative links->/ %d, root-relative path fields->/ %d, timestamps->RFC 3339 %d\n",
-		len(plan.Nodes), gen, src, links, fields, stamps)
+	fmt.Fprintf(out, "edits: %d file(s); timestamp->generated %d, citations->sources %d, citation titles->sources %d, root-relative links->/ %d, root-relative path fields->/ %d, timestamps->RFC 3339 %d\n",
+		len(plan.Nodes), gen, src, titles, links, fields, stamps)
 	byKind := map[okf.JudgmentKind]int{}
 	for _, j := range plan.Judgment {
 		byKind[j.Kind]++
