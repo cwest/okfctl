@@ -269,9 +269,22 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 		// (§5.1 requires resource; never fabricate or pick one). Idempotence:
 		// skip a resource already present in the node's sources.
 		existing := existingSourceResources(n)
-		for _, item := range citationEntries(n.Body) {
-			src, ok := citationSource(item)
+		entries := citationEntries(n.Body)
+		names := make([]map[string]bool, len(entries))
+		for i, item := range entries {
+			names[i] = citationNames(item)
+		}
+		for i, item := range entries {
+			src, ok, fromID := citationSourceFrom(item)
 			res := src.Resource
+			// An identifier that another entry in the same list also names
+			// is a cross-reference ("attribution to arXiv:..."), not this
+			// entry's own document. Skipping it as already migrated would
+			// drop the entry with no source of its own, so it stays for
+			// judgment. Read from the body only, so a re-plan agrees.
+			if ok && fromID && citedElsewhere(names, i, canonicalResource(res)) {
+				ok = false
+			}
 			if !ok {
 				plan.Judgment = append(plan.Judgment, JudgmentItem{
 					Path: rel, Kind: JudgmentProseCitation, Context: item,
@@ -284,11 +297,12 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 			if r := b.ResolvePathField(rel, res); r.Kind == RefBundle && r.Form == FormRootFallback {
 				res = rootedURL(res, r.Path)
 			}
-			if existing[res] {
+			if existing[res] || existing[canonicalResource(res)] {
 				continue // already migrated (idempotent)
 			}
 			nm.Sources = append(nm.Sources, SourceEdit{Resource: res, Title: src.Title})
 			existing[res] = true
+			existing[canonicalResource(res)] = true
 		}
 	}
 
@@ -642,6 +656,16 @@ func sourcesSequence(mapping *yaml.Node) *yaml.Node {
 	return nil
 }
 
+// citedElsewhere reports whether an entry other than skip names key.
+func citedElsewhere(names []map[string]bool, skip int, key string) bool {
+	for j, n := range names {
+		if j != skip && n[key] {
+			return true
+		}
+	}
+	return false
+}
+
 // existingSourceResources returns the set of resources already present in a
 // node's frontmatter `sources`, so a re-plan on an already-migrated node does
 // not re-add them (idempotence).
@@ -649,6 +673,7 @@ func existingSourceResources(n *Node) map[string]bool {
 	out := map[string]bool{}
 	for _, s := range n.Sources() {
 		out[s.Resource] = true
+		out[canonicalResource(s.Resource)] = true
 	}
 	return out
 }
