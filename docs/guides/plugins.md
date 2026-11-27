@@ -1,35 +1,71 @@
 # Extending okfctl with plugins
 
-okfctl extends `git`/`kubectl`-style: an unknown subcommand `okfctl foo bar`
-execs an `okfctl-foo` binary found on `PATH`, passing through `bar` plus the
-remaining flags and environment (with `OKFCTL` set to the core binary's path so a
-plugin can call back), and propagates the plugin's exit code. Built-in
-subcommands always take precedence; an unknown subcommand with no matching plugin
-produces the usual error plus a did-you-mean suggestion.
+Any program named `okfctl-<name>` on your `PATH` turns into the command
+`okfctl <name>`. That's how `git` and `kubectl` plugins work too. You can write
+one in any language. This one is a three-line shell script.
 
-The bundled `okfctl-search` plugin is the reference example—see
-[Search](search.md).
+## Write and run a plugin
 
-## Discover plugins
-
-```sh
-okfctl plugin list                   # okfctl-<name> executables on PATH, sorted; first-on-PATH wins
-okfctl plugin list --path "$PATH"    # inspect a specific PATH
+```text
+$ printf '#!/bin/sh\necho "okfctl-hello got: $*"\necho "called back through: $(basename "$OKFCTL")"\n' > okfctl-hello
+$ chmod +x okfctl-hello
+$ okfctl plugin install ./okfctl-hello --dir bin
+installed okfctl-hello -> bin/okfctl-hello
+note: bin is not on your PATH; add it so `okfctl hello` and `okfctl plugin list` find this plugin
+$ PATH="$PWD/bin:$PATH" okfctl hello world --loud
+okfctl-hello got: world --loud
+called back through: okfctl
 ```
 
-Executable detection uses Unix permission bits (macOS/Linux); Windows isn't yet
-supported.
+`plugin install` copied the script into `bin` and made the copy executable. Then
+it warned you that `bin` isn't on `PATH`. okfctl can't run a plugin it can't
+find.
 
-## Install a plugin
+With `bin` on `PATH`, `okfctl hello` found `okfctl-hello` and handed it
+everything after `hello`, flags included. The plugin also gets okfctl's
+environment plus one extra variable: `OKFCTL` holds the path of the okfctl
+binary that called it. Call that path and you get the same okfctl you ran.
+Whatever status the plugin exits with, okfctl exits with too.
 
-```sh
-okfctl plugin install ./okfctl-mytool           # copy into the managed plugins dir
-okfctl plugin install ./okfctl-mytool --dir ~/bin
+## Find the plugins on your PATH
+
+<!-- transcript: exit 1 PATH="$PWD/bin:$PATH" okfctl helo -->
+```text
+$ okfctl plugin list --path "$PWD/bin"
+okfctl-hello	<TMPDIR>/bin/okfctl-hello
+$ PATH="$PWD/bin:$PATH" okfctl helo
+okfctl: unknown command "helo" for "okfctl"
+
+Did you mean this?
+	hello
+
 ```
 
-The default destination is `$OKFCTL_CONFIG_HOME/plugins` (or `<user config
-dir>/okfctl/plugins`), the same config-home convention `config` uses; override
-with `--dir`. Put that directory on your `PATH`. The source's base name must
-follow `okfctl-<name>`; the copy is written with execute bits. If the destination
-isn't on your `PATH`, install prints a note to stderr so the plugin isn't
-silently undiscoverable.
+Leave off `--path` and `plugin list` reads your own `PATH`, sorted by name. If
+two directories hold the same name, the one first on `PATH` is the one listed
+and the one `okfctl <name>` will call. okfctl only counts a file with an execute
+bit set (macOS and Linux have those, Windows doesn't).
+
+The typo `helo` exited 1. okfctl drew its suggestion from the plugins on `PATH`
+as well as from its own commands.
+
+## Rules
+
+A command okfctl ships with always beats a plugin of the same name. That's why
+you type out `okfctl-search` to run the bundled search plugin: `okfctl search`
+is the core word search. The [search guide](search.md) explains the two.
+
+`plugin install` takes only a file named `okfctl-<name>`:
+
+<!-- transcript: exit 1 okfctl plugin install ./hello-tool --dir bin -->
+```text
+$ cp okfctl-hello hello-tool
+$ okfctl plugin install ./hello-tool --dir bin
+okfctl: plugin source "hello-tool" must be named okfctl-<name>
+```
+
+Leave off `--dir` and `plugin install` copies into the `plugins` directory under
+okfctl's config home. With `$OKFCTL_CONFIG_HOME` set, that's
+`$OKFCTL_CONFIG_HOME/plugins`. Otherwise it's `<user config dir>/okfctl/plugins`.
+Add that directory to your `PATH` one time and any plugin you install there
+shows up.
