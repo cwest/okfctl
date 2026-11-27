@@ -118,7 +118,8 @@ func TestParseFrontmatter_BareCRIsALineBreak(t *testing.T) {
 		want      any
 	}{
 		{"CR before CRLF", "---\n0: 0\r\r\n 0\n---\n", "0\n0"},
-		{"CR before LF", "---\na: x\r\n\r\n y\n---\n", "x\ny"},
+		{"CRLF blank line", "---\na: x\r\n\r\n y\n---\n", "x\ny"},
+		{"bare CR after LF", "---\na: x\n\r y\n---\n", "x\ny"},
 		{"CRLF only folds", "---\r\na: x\r\n y\r\n---\r\n", "x y"},
 		{"bare CR between keys", "---\na: x\rb: 2\n---\n", "x"},
 	}
