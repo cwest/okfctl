@@ -161,8 +161,15 @@ jobs:
         # the exact class a source-level or body-only scan cannot see. A finding
         # fails the build; the fix is to rewrite the flagged prose to plain
         # positive statements with every technical fact preserved.
+        #
+        # site/.share-assets/og.svg is the SVG the build rasterizes into og.png,
+        # the link-preview image. Words inside a PNG are invisible to a text
+        # scan, so the card's <text> lines are gated from the SVG it was drawn
+        # from; its old "Pure Go — no CGO, no model runtime." line shipped
+        # because nothing read it. A missing og.svg fails this step (the
+        # scanner cannot read the path), so the card can never drop out unread.
         if: needs.changes.outputs.site == 'true'
-        run: python3 site/scripts/scan_page_prose.py $(find site/dist -name '*.html')
+        run: python3 site/scripts/scan_page_prose.py $(find site/dist -name '*.html') site/.share-assets/og.svg
 
   # Gates the SHIPPED Markdown prose against the SAME negative-listing cadence the
   # site gate catches in rendered HTML, PLUS spaced em-dash drift. WHY THIS EXISTS,
