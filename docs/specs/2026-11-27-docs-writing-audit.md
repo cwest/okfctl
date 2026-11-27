@@ -135,7 +135,7 @@ everywhere: a bold label, then an em dash, then the gloss
 
 `scan_page_prose.py` scans the built HTML and the Markdown, but not
 `site/public/llms.txt` or the `plugin.json` description. The first line of
-`llms.txt` sets "Pure Go" off with a spaced em dash. What follows it is a
+`llms.txt` sets "Pure Go" off with a spaced em dash. After the dash comes a
 negative-listing cadence the gate was written to block after that cadence
 shipped twice. It got through because the file is `.txt`.
 
@@ -193,35 +193,41 @@ README not knowing what a bundle is, it does nothing, and that's most readers.
 guide cut to a stub. It makes the best first read and the worst lookup. All the
 guide content ends up in one file, and changing any command means editing it.
 
-My pick is O1. It answers F1 and F5 head-on, and the transcript test it needs
-would have caught F3 (the homepage casing) and the migrate summary no reader could
-reproduce.
+The recommendation is O1. It answers F1 and F5 head-on, and the transcript test
+it needs would have caught F3 (the homepage casing) and the migrate summary no
+reader could reproduce.
 
 ## The three samples
 
 This PR carries each one as a before/after diff.
 
+Round counts are accepted rounds over recorded rounds, read from each loop
+state file. A rework round starts a fresh state file, so the two rounds are
+counted apart. Counts are taken before the closing round that re-scores the
+committed bytes.
+
 | Sample | Before | After | Loop result |
 | :-- | --: | --: | :-- |
-| README top section (to `## Install`) | 97 | 39 | PASS |
-| `docs/guides/migrating.md` | 96 | 54 | STOP-PLATEAU after 16 accepted rounds |
-| `okfctl migrate --help` (Long text, regenerated into `docs/commands/README.md`) | 91 | 42 | STOP-PLATEAU after 11 accepted rounds |
+| README top section (to `## Install`) | 97 | 25 | PASS (round 1: 2/2; round 2: 1/1) |
+| `docs/guides/migrating.md` | 96 | 45 | STOP-PLATEAU (round 1: 18/21; round 2: 14/16) |
+| `okfctl migrate --help` (Long text, regenerated into `docs/commands/README.md`) | 91 | 39 | PASS (round 1: 11/14, STOP-PLATEAU at 42; round 2: 19/22) |
 
-Two of the three missed the 40 target. In the guide, the opening paragraph
-never cooled off. Over the 20 recorded rounds it went through several
-rewrites, and as a segment it never scored under 82. The reference half has to
-repeat spec terms too. What's left in the help
-text is "plan" and the `. 2` n-gram that numbered spec sections produce, and
-neither can go without taking the citations with it.
+The guide missed the 40 target. Its opening paragraph stayed the hottest
+segment through both rounds, and the rest of the page has to repeat spec terms
+and quote output verbatim, which leaves few sentences free to change.
 
-Past the score, the samples changed these things.
+The README opener now says who the tool is for, what it does, and one thing
+`lint --strict` catches in CI. Its quickstart is a run that hits a real
+`missing-xref` finding. `validate` passes, `lint` reports the finding, and
+`lint --strict` fails on it, with a sentence on each result. The redundant
+`index build` is gone, and one line says why a reader can skip it. Nothing
+under `## Install` changed, so the whole file still scores 90.
 
-The README opener says who the tool is for and what it does, in two sentences.
-Its quickstart is now a run that catches a real `missing-xref` finding. You see
-`validate` pass, `lint` report the finding, and `lint --strict` fail on it, and
-the text explains each result. I cut the redundant `index build` and wrote one
-line saying why you can skip it. Nothing under `## Install` changed. That is
-why the file as a whole still scores 92.
+An earlier draft of the opener said a mistyped link or a stale index fails CI.
+Neither does with the line the README gives. `lint` reports `broken-link` only
+when a node with the same basename exists elsewhere (§11.2 bars rejecting a
+bundle for broken links), and a stale index fails `index check`, not
+`lint --strict`. The opener now claims only what the run beneath it shows.
 
 In the migrating guide, one two-node v0.1 bundle goes through the plan, the
 preview, the apply, one resolved judgment item, and the v0.3 declaration, and
@@ -231,7 +237,9 @@ example actor (F4).
 
 `migrate --help` has four short paragraphs where it had one long one. "PURE
 READ", "consumer-agnostic", and "two-phase" are gone, along with the spaced em
-dash. The spec citations all survive, and the examples now use `./mykb` and
+dash. It names all four judgment kinds the code defines (`prose-citation`,
+`missing-actor`, `timestamp-no-offset`, `timestamp-invalid`), matching the
+guide. The spec citations all survive, and the examples now use `./mykb` and
 `human:casey`.
 
 ## Follow-up cards (proposed, not filed)

@@ -10,8 +10,9 @@ Markdown and want it to stay correct as it grows. It writes and checks
 [Open Knowledge Format](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md)
 (OKF) bundles: folders of Markdown files ("nodes") that link to each other and
 record where their facts came from in YAML frontmatter. Rename a node and okfctl
-rewrites every link that pointed at it. Put it in CI and a mistyped link or an
-out-of-date index fails the build long before a reader trips on it.
+rewrites every link that pointed at it. Put `okfctl lint --strict` in CI and a
+node that names another without linking to it fails the build, as the run below
+shows.
 
 **Website:** [okfctl.dev](https://okfctl.dev) &nbsp;•&nbsp;
 **Docs:** [`docs/`](docs/README.md) &nbsp;•&nbsp;

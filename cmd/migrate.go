@@ -47,26 +47,27 @@ func newMigrateCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "migrate <bundle>",
 		Short: "Upgrade a v0.1 or v0.2 bundle to OKF v0.3: plan, preview, apply",
-		Long: "migrate moves a bundle that declares OKF v0.1 or v0.2 (or no version at all) " +
+		Long: "migrate moves a bundle that declares OKF v0.1 or v0.2 (or none) " +
 			"to v0.3 in place. Run it twice. The first run writes a plan file and changes " +
 			"nothing else. The next one, with --apply, makes those edits and declares " +
 			"okf_version \"0.3\" in the bundle-root index.md (§8.1). Then it validates the " +
-			"result. Add --dry-run to print that diff and write nothing.\n\n" +
+			"result. With --dry-run, apply prints the diff it would write and writes nothing.\n\n" +
 			"A rule makes each edit. For a v0.1 bundle (Appendix B), timestamp turns into " +
 			"generated.at. Any body # Citations entry that names one follow-able resource " +
 			"is copied to the sources list, titled with the entry's text. The v0.2 changes " +
 			"(§13.1) give a leading / to any link or path field that resolves only from the " +
 			"bundle root (§12.1). It then points at the same file under v0.3 (§6). They " +
 			"also respell a §5 timestamp that has an offset but isn't in RFC 3339 form.\n\n" +
-			"Judgment items are the cases no rule can settle. There are three kinds. One is " +
-			"a citation with no resource or with two (§5.1). Another is a timestamp rename " +
-			"with no actor (§7). The last is a date-time with no offset (§5, §13.2). They " +
-			"stay in the plan for you to decide. While a prose-citation or missing-actor " +
-			"item is left, apply holds the version, since those items need the v0.1 " +
+			"Judgment items are the cases no rule can settle. prose-citation marks a " +
+			"citation with no resource or with two (§5.1). missing-actor marks a timestamp " +
+			"rename with no actor (§7). timestamp-no-offset is a date-time with no offset " +
+			"(§5, §13.2), and timestamp-invalid is a §5 value where no date can be found. " +
+			"All four wait for you to decide them. While a prose-citation or missing-actor " +
+			"item is left, apply holds the version: those items need the v0.1 " +
 			"fallbacks §12.1 grants only to bundles declaring 0.2 or older (or nothing). " +
-			"--force-declare at plan time overrides the hold.\n\n" +
-			"migrate never refuses a bundle on v0.3, on a later version, or on a version " +
-			"okfctl doesn't know, and never rewrites one to an older version (§12). No step " +
+			"--force-declare on the first run overrides the hold.\n\n" +
+			"migrate never refuses a bundle on v0.3, on a later version, or on one " +
+			"okfctl doesn't know. It never rewrites one to an older version (§12). No step " +
 			"needs a model.",
 		Example: "  # Write the plan; nothing in the bundle changes\n" +
 			"  okfctl migrate ./mykb --plan migrate-plan.json --generated-by human:casey\n\n" +
