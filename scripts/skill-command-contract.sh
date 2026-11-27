@@ -187,9 +187,16 @@ workflow_curation_health() {
 }
 
 workflow_migrate_plan() {
-  info "okf-migrate-plan: migrate <v0.1 bundle> --plan <file>; assert the plan file is written (target_version 0.2)"
-  local w plan out
+  info "okf-migrate-plan: migrate <v0.1 bundle> --plan <file>; assert the plan targets the version the installed binary scaffolds"
+  local w plan out want
   w="$(mktemp -d)"
+  # Derive the expected target from the installed binary instead of pinning a
+  # number: `bundle init` declares the version this build targets, and the
+  # plan's target_version must match it. A pinned value breaks the job on the
+  # first release that moves the target (the job installs the LATEST release).
+  "$OKFCTL" bundle init "$w/fresh" >/dev/null 2>&1 || fail "migrate: bundle init (deriving the target version)"
+  want="$("$OKFCTL" bundle info "$w/fresh" | sed -n 's/^okf_version: \([0-9][0-9.]*\).*/\1/p')"
+  [ -n "$want" ] || fail "migrate: could not read the target version from bundle info"
   mkdir -p "$w/v01/concepts"
   printf 'okf_version: 0.1\n' > "$w/v01/.okf"
   printf -- '---\ntype: Index\ntitle: Index\nokf_version: 0.1\n---\n\n# Index\n\n- [Tannin](concepts/tannin.md)\n' > "$w/v01/index.md"
@@ -199,9 +206,9 @@ workflow_migrate_plan() {
   out="$("$OKFCTL" migrate "$w/v01" --plan "$plan")"
   assert_contains "$out" "Wrote $plan" "migrate: plan write message"
   [ -f "$plan" ] || fail "migrate: plan file was not written to $plan"
-  assert_contains "$(cat "$plan")" '"target_version": "0.2"' "migrate: plan target_version"
+  assert_contains "$(cat "$plan")" "\"target_version\": \"$want\"" "migrate: plan target_version"
   rm -rf "$w"
-  echo "  migrate-plan workflow OK"
+  echo "  migrate-plan workflow OK (target_version $want)"
 }
 
 workflow_semantic_search() {
