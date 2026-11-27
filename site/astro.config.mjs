@@ -116,7 +116,7 @@ export default defineConfig({
           tag: "meta",
           attrs: {
             property: "og:image:alt",
-            content: "okfctl — author and maintain Open Knowledge Format bundles.",
+            content: "okfctl: author and maintain Open Knowledge Format bundles.",
           },
         },
         {

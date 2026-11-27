@@ -16,13 +16,15 @@ entry below.
 
 ## okfctl analyze
 
-Report where a bundle is weak (freshness, gaps, connectivity, clusters, structure)
+Report where a bundle is thin, stale, or poorly connected
 
-analyze is a proactive curation REPORT, not a gate. Where lint answers "is this corpus broken?" (a CI gate: --strict exits non-zero), analyze answers "where is this corpus weak?" across five dimensions — coverage gaps, freshness (staleness from stale_after, plus an aging advisory), connectivity, tag-cluster synthesis candidates, and structure. It never mutates the bundle.
+analyze shows where a bundle is thin or stale or poorly connected, to help you pick what to write or check next. It prints a section for each question with the nodes that answer it, then a count of actionable signals.
 
-Report semantics: analyze exits 0 whenever the analysis runs successfully, regardless of how many findings it produces. The exit code reflects whether the analysis succeeded, not whether the corpus is perfect. There's deliberately no --strict flag; use lint --strict for a gate.
+Coverage lists links to nodes no one has written, plus nodes shorter than --thin-lines lines and nodes with zero citations or one. Freshness lists nodes past their stale_after (§5.5) and nodes not checked in --aging-days days, plus time-sensitive nodes that have aged. Connectivity lists orphans and nodes with one link. Clusters lists any tag on --cluster-min or more nodes with no overview node. Structure lists titles and file names close enough to be one node. It also tallies the epistemic grades and status values it finds, for you to read.
 
-Pass --json for the machine path (the curation sweep files research cards from it).
+It never edits a file. It exits 0 whenever the report completes, however many signals it finds. It has no --strict flag; lint --strict is the gate for CI.
+
+--json prints the same report for a script.
 
 ```
 okfctl analyze [bundle-dir] [flags]
@@ -31,14 +33,14 @@ okfctl analyze [bundle-dir] [flags]
 Example:
 
 ```
-# Human-readable weakness report for the current bundle
+# Report on the bundle in the current directory
   okfctl analyze
 
   # Report on a bundle elsewhere
-  okfctl analyze ./bundles/knowledge
+  okfctl analyze ./mykb
 
-  # Machine-readable report (the curation sweep files research cards from this)
-  okfctl analyze --json ./bundles/knowledge
+  # The same report as JSON, for a script
+  okfctl analyze --json ./mykb
 ```
 
 Flags:
@@ -105,7 +107,9 @@ Example:
 
 Generate a shell completion script
 
-completion writes a shell completion script for okfctl to stdout. Source it (or install it where your shell loads completions) to get tab-completion of commands and flags. Supported shells: bash, zsh, fish. It prints the script only — it doesn't install anything itself.
+completion prints a bash, zsh, or fish script to stdout. Load it in your shell (or save it where your shell looks for completions) and Tab will fill in okfctl's commands and flags.
+
+Give it one of those three shell names. Anything else exits 1. completion only prints the script. Where you save it is up to you.
 
 ```
 okfctl completion [bash|zsh|fish]
@@ -127,14 +131,16 @@ Example:
 
 ## okfctl config
 
-Get and set okfctl configuration
+Read and write okfctl's own settings
+
+config reads and writes config.json, okfctl's settings file. Set $OKFCTL_CONFIG_HOME to choose its directory; without it okfctl uses the okfctl directory under your OS's user config directory. Plugins read the file too (okfctl-search looks up model_path there). Names you save with `okfctl registry` go in it as keys that start with `registry.`. No bundle content lands in it.
 
 
 ### okfctl config get
 
 Get a config value
 
-get prints the value stored for a single config key, or exits non-zero if the key is unset. It's read-only. Use `okfctl config list` to see every key at once.
+get prints the value saved under one key. If the key isn't set, get exits 1. For all of them, run `okfctl config list`.
 
 ```
 okfctl config get <key>
@@ -144,7 +150,7 @@ Example:
 
 ```
 # Print one config value
-  okfctl config get default.remote
+  okfctl config get model_path
 ```
 
 
@@ -152,7 +158,7 @@ Example:
 
 List all config values
 
-list prints every stored config key and its value, sorted by key. It's read-only. Registered remote sources appear here too, under the registry. key prefix (see `okfctl registry list` for a focused view of those).
+list prints each saved key as key = value, sorted by key. Keys that start with `registry.` show up here too. `okfctl registry list` shows just those.
 
 ```
 okfctl config list
@@ -170,7 +176,7 @@ Example:
 
 Set a config value
 
-set writes a key/value pair into the single okfctl config store (a flat file under $OKFCTL_CONFIG_HOME or the OS user-config dir). An existing key is overwritten. This is okfctl's own tool configuration, not bundle content — it never touches a bundle.
+set saves a value under a key and prints nothing. Setting a key again replaces its value. okfctl doesn't check key names. Misspell one and you've made a new key.
 
 ```
 okfctl config set <key> <value>
@@ -179,19 +185,20 @@ okfctl config set <key> <value>
 Example:
 
 ```
-# Pin a default remote registry URL prefix
-  okfctl config set default.remote https://github.com/acme
+# Point okfctl-search at a local model2vec model
+  okfctl config set model_path ~/models/potion-base-8M
 ```
 
 
 ## okfctl connect
 
-Clone or update a remote bundle source into a local directory
+Clone a remote bundle, or fast-forward the copy you have
 
-Materialize a remote OKF bundle source into a local directory over git.
-The first argument is a remote name registered with `okfctl registry`, or an ad-hoc git URL. The optional second argument is the destination directory (default: a directory named after the source).
+connect gets you a local copy of a remote bundle over git. Name the source with a name you saved through `okfctl registry add`, or give it a git URL (a local path counts). With no directory argument it uses the last part of the URL minus .git, the name `git clone` would pick.
 
-A fresh destination is cloned; an existing checkout of the same source is fast-forwarded (never a history-rewriting merge). A non-empty directory that isn't that git checkout is left untouched.
+A missing or empty directory gets a fresh clone. A checkout of the same source gets `git pull --ff-only`. If your copy and the remote have both gained commits, that pull fails and connect exits 1 with git's message. Nothing gets merged or rebased.
+
+connect won't touch any other directory with files in it. It exits 1 there. It also exits 1 on a word that's neither a saved name nor a URL, and tells you how to register it.
 
 ```
 okfctl connect <name|git-url> [dir]
@@ -213,22 +220,24 @@ Example:
 
 ## okfctl eval
 
-Measure KB-node trustworthiness (TACA): a Transparency gate + a spot-check sampler
+Check how far you can trust a bundle's nodes
 
-eval decomposes node trust along the four TACA dimensions — Transparency, Accuracy, Calibration, Alignment — as far as a pure-Go, offline, no-model tool can.
+eval checks how far you can trust a bundle's nodes, using the four TACA dimensions (Transparency, Accuracy, Calibration, Alignment). okfctl can check only the first one by itself.
 
-'eval transparency' is the deterministic gate: it checks that provenance is present (a grade + citations) and that internal citations resolve. It's the first machine gate that touches trust rather than format.
+eval transparency is the gate. It looks for a grade and citations on each node and makes sure citations to other nodes in the bundle resolve. Put it in CI.
 
-'eval sample' scaffolds the three dimensions okfctl can't automate (Accuracy, Alignment, Calibration) into an eval-set for a human or an out-of-band LLM judge to complete. okfctl never computes a truth verdict itself — checking a claim against a source needs a model or the network, which core deliberately doesn't do.
+eval sample is for the other three. It picks nodes and writes a worksheet with what okfctl could read from each one, leaving the judgment blank for you to fill in, by hand or with a model you run yourself. okfctl never judges a claim true or false. It would have to read the source or call a model to do it.
 
 
 ### okfctl eval sample
 
-Emit a spot-check eval-set scaffold for Accuracy/Alignment/Calibration
+Write a worksheet for the checks okfctl can't run: accuracy, alignment, calibration
 
-sample selects a spot-check sample of nodes and emits a structured eval-set for the three TACA dimensions okfctl can't automate — Accuracy (are the claims supported by the cited source?), Alignment (does the node answer the question it set out to?), and Calibration (does the grade hold up on re-check?). Every field okfctl can extract is pre-populated; the judgment slots are left empty for a human or an out-of-band LLM judge to fill in. okfctl computes NO truth verdict.
+sample picks a few nodes and writes a worksheet for the three checks okfctl can't do by itself. Accuracy: do the cited sources back the claims? Alignment: does the node answer the question its title and description set up? Calibration: does its grade survive a second look?
 
-Selection: --changed-since <ref> samples nodes changed since a git ref (the curation/CI hook); otherwise --sample N draws a deterministic seeded random sample.
+okfctl copies in everything it can read from each node (title, grades, trust tier, sources, candidate claims) and leaves the answer slots empty. You fill them in by hand or with a model.
+
+On a pull request, use --changed-since <ref> to take the nodes changed since that git ref. Otherwise --sample N takes N at random. Run it again with the same --seed to get the same nodes back. With neither flag you get nothing. JSON is the default. Use --format md for a worksheet people will read.
 
 ```
 okfctl eval sample [bundle-dir] [flags]
@@ -238,10 +247,10 @@ Example:
 
 ```
 # A worksheet for 5 random nodes
-  okfctl eval sample --sample 5 --format md ./bundles/knowledge
+  okfctl eval sample --sample 5 --format md ./mykb
 
-  # Machine eval-set for nodes changed on this branch (curation hook)
-  okfctl eval sample --changed-since origin/main ./bundles/knowledge
+  # JSON for the nodes changed on this branch
+  okfctl eval sample --changed-since origin/main ./mykb
 ```
 
 Flags:
@@ -257,16 +266,23 @@ Flags:
 
 ### okfctl eval transparency
 
-Gate TACA-Transparency: grade present, cited, internal citations resolve
+Check that each node has a grade and citations, and that internal citations resolve
 
-transparency runs the deterministic, offline TACA-Transparency checks over a bundle. Like lint it's advisory (exit 0) by default and never mutates the bundle; pass --strict to exit non-zero on any finding (the CI gate). The four checks:
+transparency checks that each node shows where it came from. It prints one line per finding, then a count. It exits 0 by default. With --strict it exits 1 on any finding.
 
-  grade-missing        a node carries no epistemic OR authority grade
-  grade-vocabulary     a grade value is off-vocabulary for the corpus (a likely typo)
-  uncited              a node carries no citations of any kind
-  citation-unresolved  an internal citation resolves to no node in the bundle
+It never edits a file.
 
-External http(s) citations are deliberately out of scope — verifying them needs the network, which is the eval-sample / human pass, not this gate.
+It has four checks:
+
+    grade-missing        the node has neither an epistemic nor an authority grade
+    grade-vocabulary     a grade value fewer than --grade-vocabulary-floor nodes
+                         use (likely a typo)
+    uncited              no sources, no # Citations section, and no link to
+                         another node
+    citation-unresolved  a sources entry names a .md path in the bundle that
+                         doesn't exist
+
+It doesn't fetch http(s) citations. Fetching needs the network. Leave those to eval sample and to yourself.
 
 ```
 okfctl eval transparency [bundle-dir] [flags]
@@ -275,14 +291,14 @@ okfctl eval transparency [bundle-dir] [flags]
 Example:
 
 ```
-# Report transparency findings (advisory, exit 0)
-  okfctl eval transparency ./bundles/knowledge
+# Report findings (exits 0)
+  okfctl eval transparency ./mykb
 
   # Fail CI on any finding
-  okfctl eval transparency --strict ./bundles/knowledge
+  okfctl eval transparency --strict ./mykb
 
-  # Machine-readable findings
-  okfctl eval transparency --json ./bundles/knowledge
+  # Print findings as JSON
+  okfctl eval transparency --json ./mykb
 ```
 
 Flags:
@@ -297,14 +313,16 @@ Flags:
 
 ## okfctl graph
 
-Query and export the bundle's knowledge graph
+Export the bundle's link graph
 
 
 ### okfctl graph export
 
-Export the graph in a machine format (json or dot)
+Print the link graph as JSON or Graphviz DOT
 
-graph export serializes the bundle's concept-node link graph for use in other tools and CI. Formats: json (default) and dot. For SVG, pipe dot to Graphviz: okfctl graph export --format dot | dot -Tsvg > graph.svg
+graph export prints the bundle's link graph for another tool to draw or check. Each node is a concept with its path, title, type, and top-level directory. Orphans are flagged. Each edge is a link or path field from one concept to another (§6.4).
+
+JSON is the default. --format dot writes Graphviz DOT. Pipe that to dot -Tsvg for a picture. It never edits a file.
 
 ```
 okfctl graph export [bundle-dir] [flags]
@@ -313,14 +331,14 @@ okfctl graph export [bundle-dir] [flags]
 Example:
 
 ```
-# Export the current bundle's graph as JSON
+# Print the graph of the bundle in the current directory as JSON
   okfctl graph export
 
-  # Export a bundle elsewhere as Graphviz DOT
-  okfctl graph export --format dot ./bundles/knowledge
+  # Print a bundle elsewhere as Graphviz DOT
+  okfctl graph export --format dot ./mykb
 
-  # Render an SVG via Graphviz
-  okfctl graph export --format dot ./bundles/knowledge | dot -Tsvg > graph.svg
+  # Draw it as an SVG with Graphviz
+  okfctl graph export --format dot ./mykb | dot -Tsvg > graph.svg
 ```
 
 Flags:
@@ -402,17 +420,34 @@ Flags:
 
 ## okfctl lint
 
-Report a bundle's curation health (orphans, broken links, coverage gaps, hygiene)
+Report what a curator should look at: orphans, unlinked mentions, broken links, hygiene
 
-lint surfaces judgment-worthy curation findings, not spec-floor violations (use validate for those). It never mutates the bundle. By default it's advisory and exits 0 even with findings; pass --strict to exit non-zero on any finding.
+lint reports what a careful curator would want a second look at. You can pass validate with a node no other node links to, or with a node that names another and doesn't link it. lint prints one line per finding, then a count. It exits 0 by default. Run lint --strict in CI and it exits 1 on any finding.
 
-A broken-link finding reports an internal .md link that resolves to no node when a node with the same basename exists elsewhere — a moved or mistyped path (a defect), distinct from a genuinely unwritten concept (a coverage gap, which analyze reports advisorily and lint stays quiet on).
+It never edits a file. None of its findings makes a bundle non-conformant under §11.1. These are its checks:
 
-tag-hygiene reports two or more `tags` spellings that fold to one canonical form. The fold is a heuristic: case, trimmed, separator-insensitive (so run-book, run_book and runbook are one value), plus a vocabulary-aware plural merge (a plural folds onto its singular only when that singular is itself a tag in the bundle). Like type-hygiene, it never rejects a value: it only reports spellings that fold together, so a curator can pick one. Because the fold is heuristic, review a finding before normalizing — it groups spellings that look like one tag, not a proof that they are.
+    orphan                   nothing links to the node, not index.md or log.md either
+    missing-xref             the body names another node's title but doesn't link it
+    broken-link              a link or path field finds no node, but one with that
+                             file name exists elsewhere
+    coverage-gap             an alias some node declares, mentioned by at least
+                             --coverage-threshold nodes, with no node of its own
+    type-hygiene             type values that differ only by case or a plural s
+    tag-hygiene              tags that fold to one spelling (case, separators, or a
+                             plural of a tag already in use)
+    status-lifecycle         a status §5.4 doesn't define, so the node isn't stable
+    spec-version             a per-node okf_spec_version key (the version belongs
+                             on the bundle-root index.md, §8.1)
+    source-missing-resource  a sources entry with no resource (§5.1)
+    timestamp-form           a §5 timestamp that's neither an RFC 3339 date-time
+                             with an offset nor a plain date
+    verified-event           a verified event missing by or at (§5.2)
+    superseded-by            a superseded_by that finds no concept, or sits on a
+                             node that isn't deprecated
 
-OKF §5 checks (advisory; the bundle stays conformant, so validate never fails on them): timestamp-form reports a §5 timestamp key (generated.at, verified[].at, stale_after, sources[].last_modified, usage_window.from/to) whose value is not an RFC 3339 date-time with an offset or a full-date — a date-time without an offset is not valid, and an unparseable stale_after is treated as stale, never fresh. verified-event reports a verified event missing by or at, which consumers ignore. superseded-by reports a superseded_by that resolves to no concept, or that is set on a concept whose status is not deprecated. status-lifecycle notes a status §5.4 does not define; such a concept is not stable and is excluded from current knowledge.
+A link to a file that exists nowhere isn't a finding. The spec treats it as knowledge no one has written (§6.1). analyze lists it under coverage. The two hygiene checks group spellings that look alike, but two tags can look alike and still mean different things. Read the finding first and rename later. An unparseable stale_after gets a timestamp-form finding and never counts as fresh (§5.5).
 
---semantic adds similarity-driven checks (similar-but-unlinked pairs, nodes with no semantic neighbors) by reading the index built by 'okfctl-search index build'. Core only reads that index, so no embedding model is needed to lint.
+--semantic adds two checks that read the index okfctl-search index build writes. similar-unlinked flags two nodes that read alike with no link between them. no-semantic-neighbors flags a node with nothing close to it. Nodes added since the last build aren't in the index. lint can't check them and names them in one stale-index finding. lint loads no model to do this. It reads the index. With no index on disk, lint exits 1 and says to build one.
 
 ```
 okfctl lint [bundle-dir] [flags]
@@ -421,17 +456,17 @@ okfctl lint [bundle-dir] [flags]
 Example:
 
 ```
-# Report curation findings for the current bundle (advisory, exit 0)
+# Report findings for the bundle in the current directory (exits 0)
   okfctl lint
 
   # Fail CI on any finding
-  okfctl lint --strict ./bundles/knowledge
+  okfctl lint --strict ./mykb
 
-  # Machine-readable findings for tooling
-  okfctl lint --json ./bundles/knowledge
+  # Print findings as JSON for another tool
+  okfctl lint --json ./mykb
 
-  # Also run similarity checks against a prebuilt semantic index
-  okfctl lint --semantic ./bundles/knowledge
+  # Add the similarity checks (needs okfctl-search index build ./mykb first)
+  okfctl lint --semantic ./mykb
 ```
 
 Flags:
@@ -781,14 +816,18 @@ Flags:
 
 ## okfctl plugin
 
-Discover and manage okfctl plugins (okfctl-<name> on PATH)
+Find and install okfctl-<name> plugins
+
+A plugin is any executable named okfctl-<name> on your PATH. When okfctl has no command called <name>, `okfctl <name>` runs okfctl-<name> with the rest of your arguments and exits with its status. git and kubectl do the same. okfctl's own commands always beat a plugin with the same name.
 
 
 ### okfctl plugin install
 
-Install an okfctl-<name> plugin executable into the managed plugins dir
+Copy an okfctl-<name> executable into okfctl's plugins directory
 
-Install copies the okfctl-<name> executable at <source> into the okfctl plugins dir (default $OKFCTL_CONFIG_HOME/plugins or <user config dir>/okfctl/plugins, override with --dir). Put that dir on your PATH so `okfctl plugin list` and subcommand dispatch discover the installed plugin.
+plugin install copies an executable named okfctl-<name> into okfctl's plugins directory: $OKFCTL_CONFIG_HOME/plugins if that's set, otherwise okfctl/plugins under your OS's user config directory. --dir picks another directory. The copy gets mode 755 and replaces any plugin with the same name there.
+
+A source that isn't named okfctl-<name> exits 1. install doesn't touch your PATH. If the directory isn't on it, install prints a note. Add the directory yourself so `okfctl <name>` and `okfctl plugin list` can find the plugin.
 
 ```
 okfctl plugin install <source> [flags]
@@ -815,7 +854,9 @@ Flags:
 
 List okfctl-<name> plugin executables found on PATH
 
-plugin list discovers okfctl-<name> executables on your PATH and prints each plugin's name and resolved path. These are the subcommands okfctl will dispatch to git/kubectl-style when you run `okfctl <name>`. Read-only. Scan a specific PATH with --path; the default is $PATH.
+plugin list prints each okfctl-<name> executable it finds on your PATH, with its path. When two directories hold the same name, the first one on PATH is the one `okfctl <name>` runs. --path scans a different list of directories.
+
+list only reads. When it finds no plugins it says so on stderr and exits 0.
 
 ```
 okfctl plugin list [flags]
@@ -842,15 +883,16 @@ Flags:
 
 Manage named remote bundle sources (git URLs)
 
-Manage a local, named directory of remote OKF bundle sources.
-Each source is a plain git URL — this is `git remote` for bundles, not a hosted registry, account system, or schema registry.
+registry names your remote bundle sources. Each one is a plain git URL. The name lets you type `okfctl connect knowledge` in place of the URL. It works like `git remote`. There's no hosted service or account behind it. The names live in okfctl's config file.
 
 
 ### okfctl registry add
 
-Register (or re-point) a named remote bundle source
+Save a name for a remote bundle's git URL
 
-add registers a named remote bundle source (a plain git URL) in okfctl's config store, or re-points an existing name at a new URL. The name must be a safe identifier (letters, digits, and -_. ). This only records the mapping — it doesn't clone anything; use `okfctl connect <name>` to materialize it.
+add saves a name for a git URL in okfctl's config. Saving a name that exists points it at the new URL. add then prints Updated in place of Added. Names use letters, digits, hyphens, underscores, and dots. Anything else exits 1.
+
+add clones nothing. Run `okfctl connect <name>` to get a local copy.
 
 ```
 okfctl registry add <name> <git-url>
@@ -866,9 +908,9 @@ Example:
 
 ### okfctl registry list
 
-List registered remote bundle sources
+List saved remote names and their git URLs
 
-list prints every registered remote bundle source and its git URL, sorted by name. Read-only. A registry with no sources prints a notice and exits zero.
+list prints each saved name and its git URL, one per line, sorted by name. With none saved it prints a notice and exits 0. It only reads.
 
 ```
 okfctl registry list
@@ -884,9 +926,9 @@ Example:
 
 ### okfctl registry remove
 
-Unregister a remote bundle source
+Forget a saved remote name
 
-remove deletes a registered remote source from okfctl's config, or exits non-zero if the name isn't registered. It only forgets the mapping — it never touches any local checkout you already cloned with `okfctl connect`.
+remove (or rm) deletes a saved name from okfctl's config. If the name isn't saved, remove exits 1. It forgets the name and nothing more. Any copy you made with `okfctl connect` stays where it is.
 
 ```
 okfctl registry remove <name>
@@ -904,7 +946,7 @@ Example:
 
 Print a remote source's git URL
 
-show prints the git URL registered for a single remote name, or exits non-zero if the name isn't registered. Read-only.
+show prints the git URL saved under one name. If nothing is saved under it, show exits 1. It only reads.
 
 ```
 okfctl registry show <name>
@@ -920,19 +962,13 @@ Example:
 
 ## okfctl search
 
-Search the bundle lexically or by graph neighborhood (core, stdlib-only)
+Find nodes by text or by link distance, with no model or index
 
-search queries the bundle from the CLI without a model or index.
+search finds the nodes that contain your query in one of four fields (title, tags, type, body) and prints each with its path, type, and matching fields. Case doesn't matter. It needs no model or index. --field narrows it to one of those fields. No match prints nothing and exits 0.
 
-Lexical mode (default): okfctl search "query" [dir] matches concept nodes by
-title, tag, type, or body substring (case-insensitive). Restrict the fields
-with --field title|tag|type|body.
+--neighbors <node-path> asks a different question: which nodes sit within --depth links of that node, following links either way.
 
-Graph-structural mode: okfctl search --neighbors <node-path> [dir] returns the
-nodes within --depth hops of a node in the link graph (edges are undirected).
-
-Semantic (vector) search is the separate okfctl-search plugin: run
-`okfctl-search --semantic "query"` (PRD §8).
+It never edits a file. To search by meaning, install the okfctl-search plugin and run `okfctl-search --semantic "query"` (PRD §8).
 
 ```
 okfctl search [query] [bundle-dir] [flags]
@@ -941,14 +977,14 @@ okfctl search [query] [bundle-dir] [flags]
 Example:
 
 ```
-# Lexical search across all fields in the current bundle
+# Search every field in the bundle in the current directory
   okfctl search "income statement"
 
-  # Restrict the match to titles, in a bundle elsewhere
-  okfctl search --field title revenue ./bundles/knowledge
+  # Match titles only, in a bundle elsewhere
+  okfctl search --field title revenue ./mykb
 
-  # Graph mode: nodes within 2 hops of a node in the link graph
-  okfctl search --neighbors concepts/income-statement.md --depth 2 ./bundles/knowledge
+  # Nodes within 2 links of one node
+  okfctl search --neighbors concepts/income-statement.md --depth 2 ./mykb
 ```
 
 Flags:
@@ -964,9 +1000,11 @@ Flags:
 
 ## okfctl serve
 
-Serve an interactive web visualization of the bundle graph
+Draw the bundle's link graph in your browser
 
-serve starts a local web server that renders the bundle as an interactive, navigable knowledge graph. Assets are embedded in the binary — no separate install. Binds loopback by default; override with --addr.
+serve runs a web server on 127.0.0.1:8080 that draws the bundle's link graph in your browser, where you can click a node to see its type and links and filter the graph by type or by top-level directory. Dashed nodes are orphans. The page is part of the binary.
+
+serve loads the bundle at startup and never edits it. Restart it to pick up a change. It listens only on your own machine unless you pass --addr.
 
 ```
 okfctl serve [bundle-dir] [flags]
@@ -975,11 +1013,11 @@ okfctl serve [bundle-dir] [flags]
 Example:
 
 ```
-# Serve the current bundle on http://127.0.0.1:8080
+# Serve the bundle in the current directory on http://127.0.0.1:8080
   okfctl serve
 
-  # Serve a bundle elsewhere on a custom address
-  okfctl serve --addr 127.0.0.1:9000 ./bundles/knowledge
+  # Serve a bundle elsewhere on another port
+  okfctl serve --addr 127.0.0.1:9000 ./mykb
 ```
 
 Flags:
@@ -991,14 +1029,20 @@ Flags:
 
 ## okfctl template
 
-Read the type-template bundle (templates are authored as ordinary OKF nodes)
+Inspect the type templates a bundle uses
+
+A type template is a node, typed `Type Template`, that says which fields and body sections a node of some type should have. Only two other commands read templates. `okfctl node new --type` builds the new node from the one for that type, and `okfctl validate --templates` warns when a node drifts. Try `okfctl template list` first to see what your bundle has.
 
 
 ### okfctl template list
 
-List the type templates a bundle declares (target type, required fields, body sections)
+List each type template's target type, field and section counts, and source
 
-template list shows the type templates a bundle declares. Templates are okfctl's opt-in team overlay (PRD §9): they're authored as ordinary OKF nodes whose type is `Type Template`, NOT a spec concept, and they never affect the spec floor. A bundle may REFERENCE a separate type-template bundle via its .okf `templates: <path>` key (or --templates-from, which overrides it); referenced templates are folded in and local `Type Template` nodes overlay them (local wins per target type). Each row names a target type, how many required fields and body sections its template defines, and the source node it came from; a local entry that shadows a referenced one is flagged. Read-only. A bundle with no templates prints a notice and exits zero.
+template list prints one line for each type template the bundle uses: the type it governs, how many fields and body sections it asks for, and its source file. With no templates it prints a notice and exits 0.
+
+A template can sit in the bundle itself or in a separate template bundle named by `templates: <path>` in the bundle's .okf file. --templates-from points at a different one for this run. If the bundle and the referenced one both define a type, the local template wins and its line ends with [shadows referenced template].
+
+list only reads. Templates are okfctl's own convention (PRD §9) and not part of the OKF spec. They never change what plain validate accepts. If the referenced template bundle can't be read, list exits 1 and names the path.
 
 ```
 okfctl template list [bundle-dir] [flags]
@@ -1026,9 +1070,11 @@ Flags:
 
 ### okfctl template show
 
-Show a single type template's required/recommended fields and body sections
+Print one type template's fields and body sections
 
-template show prints one type template in full: its target type, source node, and its required fields, recommended fields, and body sections. Templates are okfctl's opt-in team overlay (PRD §9), authored as ordinary OKF nodes — this command only reads them and never mutates the bundle. The governing template may come from a referenced bundle (the .okf `templates:` key, or --templates-from which overrides it) or from a local `Type Template` node, with local winning per target type; `source` names where it resolved from. It errors if no template governs the given type. See what `okfctl validate --templates` will enforce and what `node new` will scaffold.
+template show prints the template that governs one type: its source file, its required and recommended fields, and its body sections. `okfctl node new --type` scaffolds new nodes from it. `okfctl validate --templates` warns if a node drifts from it.
+
+It finds templates the way template list does, so your own `Type Template` node beats one from the bundle named by the .okf `templates:` key or by --templates-from. If no template governs the type, show exits 1. It never changes the bundle.
 
 ```
 okfctl template show <target-type> [bundle-dir] [flags]
@@ -1056,9 +1102,15 @@ Flags:
 
 ## okfctl validate
 
-Check a bundle for OKF spec-floor conformance (optionally overlay team type-templates)
+Check a bundle against the OKF spec floor, and optionally your team's type templates
 
-validate enforces the OKF spec floor: every concept's frontmatter parses and carries a non-empty type, and reserved index.md/log.md files follow §8/§9. A .md file with no frontmatter or no type is not a concept (OKF v0.3 §3.2): it is reported as a warning and never fails the run. It also reports git drift: a node whose frontmatter `modified` contradicts its git last-commit date (read-only — it never rewrites the file, and degrades to nothing outside a git repo). With --templates it runs the opt-in team overlay (PRD §9.4) as well, reporting template drift; templates may be referenced from a separate bundle via the .okf `templates:` key or --templates-from (PRD §9.2). All drift is advisory by default (exit 0); pass --strict to exit non-zero on any drift. Floor violations always fail regardless of --strict.
+validate checks a bundle against the floor every OKF bundle has to meet (§11.1). Every frontmatter block has to parse as a YAML mapping. Each reserved index.md and log.md has to follow §8 and §9. A floor failure prints FAIL and always exits 1.
+
+It never edits a file. A .md file with no frontmatter or no type isn't a concept (OKF v0.3 §3.2). validate warns about it and the run still passes. It also warns about drift: a node whose modified date disagrees with its last git commit (outside a git repo it's silent), or an okf_version in the legacy .okf sidecar that disagrees with the one in index.md (§8.1, §12).
+
+Drift is advice: the run exits 0 unless you pass --strict.
+
+--templates checks each node against your team's type template (PRD §9.4) and reports where a node strays as more drift. The templates can live in another bundle, named by the .okf templates: key or by --templates-from (PRD §9.2). An unknown type or an extra key never fails the floor (§11.2).
 
 ```
 okfctl validate [bundle-dir] [flags]
@@ -1067,17 +1119,17 @@ okfctl validate [bundle-dir] [flags]
 Example:
 
 ```
-# Check the spec floor for the bundle in the current directory
+# Check the bundle in the current directory
   okfctl validate
 
   # Check a bundle elsewhere
-  okfctl validate ./bundles/knowledge
+  okfctl validate ./mykb
 
-  # Also run the opt-in team template overlay, failing CI on any drift
-  okfctl validate --templates --strict ./bundles/knowledge
+  # Also check type templates, and fail CI on any drift
+  okfctl validate --templates --strict ./mykb
 
-  # Overlay templates from a specific bundle, overriding the .okf reference
-  okfctl validate --templates --templates-from ../okf-type-templates ./bundles/knowledge
+  # Take the templates from another bundle instead of the .okf reference
+  okfctl validate --templates --templates-from ../okf-type-templates ./mykb
 ```
 
 Flags:
@@ -1094,7 +1146,7 @@ Flags:
 
 Print the okfctl version
 
-version prints the okfctl build metadata: the release version, git commit, and build date. On a plain `go build` with no release ldflags these degrade to "dev". It's equivalent to `okfctl --version`.
+version prints the okfctl version, the git commit it came from, and the build date: the same line as `okfctl --version`. Release builds fill in all three. If you built from source or used `go install`, you'll see the module version Go recorded (dev when there isn't one) with commit none and built unknown.
 
 ```
 okfctl version

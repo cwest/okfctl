@@ -34,23 +34,26 @@ func newAnalyzeCmd() *cobra.Command {
 	var noIgnore *bool
 	c := &cobra.Command{
 		Use:   "analyze [bundle-dir]",
-		Short: "Report where a bundle is weak (freshness, gaps, connectivity, clusters, structure)",
-		Long: "analyze is a proactive curation REPORT, not a gate. Where lint answers " +
-			"\"is this corpus broken?\" (a CI gate: --strict exits non-zero), analyze answers " +
-			"\"where is this corpus weak?\" across five dimensions — coverage gaps, freshness " +
-			"(staleness from stale_after, plus an aging advisory), connectivity, tag-cluster " +
-			"synthesis candidates, and structure. It never mutates the bundle.\n\n" +
-			"Report semantics: analyze exits 0 whenever the analysis runs successfully, regardless " +
-			"of how many findings it produces. The exit code reflects whether the analysis " +
-			"succeeded, not whether the corpus is perfect. There's deliberately no --strict flag; " +
-			"use lint --strict for a gate.\n\n" +
-			"Pass --json for the machine path (the curation sweep files research cards from it).",
-		Example: "  # Human-readable weakness report for the current bundle\n" +
+		Short: "Report where a bundle is thin, stale, or poorly connected",
+		Long: "analyze shows where a bundle is thin or stale or poorly connected, to help you " +
+			"pick what to write or check next. It prints a section for each question with the " +
+			"nodes that answer it, then a count of actionable signals.\n\n" +
+			"Coverage lists links to nodes no one has written, plus nodes shorter than " +
+			"--thin-lines lines and nodes with zero citations or one. Freshness lists nodes past " +
+			"their stale_after (§5.5) and nodes not checked in --aging-days days, plus " +
+			"time-sensitive nodes that have aged. Connectivity lists orphans and nodes with one " +
+			"link. Clusters lists any tag on --cluster-min or more nodes with no overview node. " +
+			"Structure lists titles and file names close enough to be one node. It also tallies " +
+			"the epistemic grades and status values it finds, for you to read.\n\n" +
+			"It never edits a file. It exits 0 whenever the report completes, however many " +
+			"signals it finds. It has no --strict flag; lint --strict is the gate for CI.\n\n" +
+			"--json prints the same report for a script.",
+		Example: "  # Report on the bundle in the current directory\n" +
 			"  okfctl analyze\n\n" +
 			"  # Report on a bundle elsewhere\n" +
-			"  okfctl analyze ./bundles/knowledge\n\n" +
-			"  # Machine-readable report (the curation sweep files research cards from this)\n" +
-			"  okfctl analyze --json ./bundles/knowledge",
+			"  okfctl analyze ./mykb\n\n" +
+			"  # The same report as JSON, for a script\n" +
+			"  okfctl analyze --json ./mykb",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."

@@ -31,14 +31,17 @@ import (
 func newConnectCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "connect <name|git-url> [dir]",
-		Short: "Clone or update a remote bundle source into a local directory",
-		Long: "Materialize a remote OKF bundle source into a local directory over git.\n" +
-			"The first argument is a remote name registered with `okfctl registry`, " +
-			"or an ad-hoc git URL. The optional second argument is the destination " +
-			"directory (default: a directory named after the source).\n\n" +
-			"A fresh destination is cloned; an existing checkout of the same source " +
-			"is fast-forwarded (never a history-rewriting merge). A non-empty " +
-			"directory that isn't that git checkout is left untouched.",
+		Short: "Clone a remote bundle, or fast-forward the copy you have",
+		Long: "connect gets you a local copy of a remote bundle over git. Name the source with " +
+			"a name you saved through `okfctl registry add`, or give it a git URL (a local " +
+			"path counts). With no directory argument it uses the last part of the URL minus " +
+			".git, the name `git clone` would pick.\n\n" +
+			"A missing or empty directory gets a fresh clone. A checkout of the same source " +
+			"gets `git pull --ff-only`. If your copy and the remote have both gained commits, " +
+			"that pull fails and connect exits 1 with git's message. Nothing gets merged or rebased.\n\n" +
+			"connect won't touch any other directory with files in it. It exits 1 there. It " +
+			"also exits 1 on a word that's neither a saved name nor a URL, and tells you how " +
+			"to register it.",
 		Example: "  # Clone a registered remote into a directory named after the source\n" +
 			"  okfctl connect knowledge\n\n" +
 			"  # Clone an ad-hoc git URL into a chosen directory\n" +
