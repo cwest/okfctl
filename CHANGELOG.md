@@ -11,6 +11,19 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+### Added
+
+- `migrate` splits a `# Citations` entry that names two or more resources
+  into one §5.1 source per resource, in the order the entry names them, with
+  ids `<id>`, `<id>-2`, `<id>-3`. The first part's footnote definition holds
+  the full entry text; a later part's holds its link text, or its resource
+  when it has none. Each part's `title` is a name only: the name the entry
+  marks for the first, link text for a later part named by a link. Every body
+  `[k]` that cites the entry becomes `[^id][^id-2]…`. A URL inside a code span
+  is not a resource. An entry with a resource that another entry of the node
+  also names stays a `prose-citation` item. `analyze` no longer counts a split
+  entry on top of the sources it became.
+
 ## [0.6.0] - 2026-11-27
 
 This release fixes a data-loss bug: `index build` and the node verbs no longer

@@ -212,6 +212,8 @@ type entryAttachment struct {
 	resource   string
 	duplicate  bool
 	existingID string
+	// parts are the second and later sources of a split entry, in order.
+	parts []splitPart
 }
 
 // existingSourceIDs maps each source resource in a node's frontmatter to its
@@ -270,6 +272,7 @@ func planSourceIDs(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, en
 	}
 	srcIDs, allIDs := existingSourceIDs(n)
 	final := make([]string, len(entries))
+	partIDs := make([][]string, len(entries))
 	held := map[string]bool{} // existing ids a matched entry takes over
 	for i, a := range att {
 		final[i] = ids[i].ID
@@ -278,6 +281,14 @@ func planSourceIDs(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, en
 				final[i] = id
 				held[strings.ToLower(id)] = true
 			}
+		}
+		for k, p := range a.parts {
+			id := splitPartID(final[i], k+2)
+			if p.existingID != "" {
+				id = p.existingID
+				held[strings.ToLower(id)] = true
+			}
+			partIDs[i] = append(partIDs[i], id)
 		}
 	}
 	set := NewSourceIDSet()
@@ -303,6 +314,12 @@ func planSourceIDs(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, en
 			refuse(fmt.Errorf("entry %d: %w", i+1, err))
 			return
 		}
+		for _, id := range partIDs[i] {
+			if err := set.Claim(id); err != nil {
+				refuse(fmt.Errorf("entry %d: %w", i+1, err))
+				return
+			}
+		}
 	}
 	defined := map[string]bool{}
 	for _, m := range footnoteDefRe.FindAllStringSubmatch(n.Body, -1) {
@@ -310,7 +327,7 @@ func planSourceIDs(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, en
 	}
 	for _, m := range footnoteLabelRe.FindAllStringSubmatch(n.Body, -1) {
 		l := strings.ToLower(m[1])
-		if set.Has(l) && !held[l] && !ownLabel(final, att, srcIDs, l) {
+		if set.Has(l) && !held[l] && !ownLabel(final, partIDs, att, srcIDs, l) {
 			refuse(fmt.Errorf("footnote label [^%s] is already in the body", m[1]))
 			return
 		}
@@ -344,8 +361,25 @@ func planSourceIDs(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, en
 		if !defined[strings.ToLower(id)] {
 			nm.Footnotes = append(nm.Footnotes, FootnoteEdit{ID: id, Text: footnoteText(entries[i], id)})
 		}
+		cite := []string{id}
+		for k, p := range a.parts {
+			pid := partIDs[i][k]
+			cite = append(cite, pid)
+			if j, ok := newIdx[p.resource]; ok {
+				nm.Sources[j].ID = pid
+			} else if p.existingID == "" {
+				nm.IDs = append(nm.IDs, SourceIDEdit{Resource: p.resource, ID: pid})
+			}
+			if !defined[strings.ToLower(pid)] {
+				text := p.def
+				if text == "" {
+					text = p.resource
+				}
+				nm.Footnotes = append(nm.Footnotes, FootnoteEdit{ID: pid, Text: text})
+			}
+		}
 		if ids[i].RefKey != "" {
-			refKeys[ids[i].RefKey] = id
+			refKeys[ids[i].RefKey] = strings.Join(cite, " ")
 		}
 	}
 	if len(refKeys) == 0 {
@@ -359,12 +393,21 @@ func planSourceIDs(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, en
 	}
 }
 
-// ownLabel reports whether label (folded) is the id of an entry whose source
-// already carries it: a footnote this migration wrote on an earlier run.
-func ownLabel(final []string, att []entryAttachment, srcIDs map[string]string, label string) bool {
+// ownLabel reports whether label (folded) is the id of an entry, or of a part
+// of a split entry, whose source already carries it: a footnote this
+// migration wrote on an earlier run.
+func ownLabel(final []string, partIDs [][]string, att []entryAttachment, srcIDs map[string]string, label string) bool {
 	for i, a := range att {
-		if a.resource != "" && !a.duplicate && strings.ToLower(final[i]) == label && srcIDs[a.resource] != "" {
+		if a.resource == "" || a.duplicate {
+			continue
+		}
+		if strings.ToLower(final[i]) == label && srcIDs[a.resource] != "" {
 			return true
+		}
+		for k, p := range a.parts {
+			if strings.ToLower(partIDs[i][k]) == label && p.existingID != "" {
+				return true
+			}
 		}
 	}
 	return false
@@ -564,7 +607,11 @@ func scanCitationRefs(body string, nodeKeys map[string]bool, refKeys map[string]
 				nb.Reset()
 				break
 			}
-			nb.WriteString("[^" + id + "]")
+			// A split entry maps to every part's id, space-separated (an
+			// id never holds whitespace; SourceIDSet.Claim refuses it).
+			for _, part := range strings.Fields(id) {
+				nb.WriteString("[^" + part + "]")
+			}
 		}
 		if nb.Len() == 0 {
 			continue // names an entry that has no source

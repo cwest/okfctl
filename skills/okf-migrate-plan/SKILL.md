@@ -273,7 +273,8 @@ comes back to you as a judgment item:
 | Old form | v0.3 form | Edit when | Judgment item when |
 |---|---|---|---|
 | `timestamp:` (v0.1) | `generated: {by, at}` (§7) | you pass `--generated-by <actor>` | no actor: `missing-actor` |
-| body `# Citations` entry (v0.1) | `sources[]: {resource, title}` (§5.1) | the entry names exactly one resource, an absolute URL or a Markdown link to a bundle path, even across wrapped lines | it names none, or two different ones: `prose-citation`; it marks no work name: `source-title-unnamed` (the source is still added, untitled) |
+| body `# Citations` entry (v0.1) | `sources[]: {resource, title}` (§5.1) | the entry names exactly one resource, an absolute URL or a Markdown link to a bundle path, even across wrapped lines | it names none: `prose-citation`; it marks no work name: `source-title-unnamed` (the source is still added, untitled) |
+| body `# Citations` entry that names two or more resources | one `sources[]` entry per resource, ids `<id>`, `<id>-2`, `<id>-3` (§5.1) | always, in the order the entry names them; a URL inside a code span is not a resource | a resource is also named by another entry of the node: `prose-citation` (nothing split) |
 | body `# Citations` entry whose resource is already in `sources` | that source's `title` (§5.1) | the source has no `title` and the entry marks the work's name | it marks no name: `source-title-unnamed` (the title stays unset); the source already has a different `title`: `source-title-conflict` (the existing title stays) |
 | body `# Citations` entry with a source, and the body `[k]` that cites it | `sources[].id`, footnote definition `[^id]: <entry text>`, body `[^id]` (§5.1, §4.2) | always: id is the plain-slug key unique after case folding, else the ordered-list number, else `cite-<n>`; `[3]–[5]` and `[1, 2]` expand | a `[k]` within 60 characters of "brief", "citation", "node", or a link: `citation-ref-unclear`; a second entry for the same resource: `citation-unattached`; ids that collide once case is folded: `source-id-collision` (nothing written for that node) |
 | link or path field that resolves only from the bundle root (§12.1) | same target with a leading `/` (§6) | always | never |
@@ -288,6 +289,21 @@ URL. When one entry has the same URL twice, that's one source.
 
 The `source-title-*` items don't hold the version back. Their resources are in
 `sources` now, and v0.3 readers find them there.
+
+An entry that names several resources becomes one source per resource, since
+§5.1 gives a source one `resource`. Given
+
+```
+[12] VERIFIED — *Export Schema*, https://a.example/schema; mirror https://b.example/mirror
+```
+
+and a body that cites it as `[12]`, migrate writes two sources, `id: "12"`
+(`title: Export Schema`) and `id: 12-2`, rewrites the body reference to
+`[^12][^12-2]`, and adds two footnote definitions: `[^12]:` holds the full
+entry text, `[^12-2]:` holds `https://b.example/mirror`. A later part is
+titled only when the entry names it with a link, and its definition is that
+link text. A URL inside a code span (`curl https://…`, a URL template) is not a
+resource and is never split off.
 
 ### Why the version waits
 

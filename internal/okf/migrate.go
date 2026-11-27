@@ -302,10 +302,11 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 			}
 		}
 
-		// Appendix B: body # Citations -> frontmatter sources. Only an entry
-		// that names exactly one follow-able resource is deterministic; a prose
-		// finding, or an entry with several resources, is a judgment item
-		// (§5.1 requires resource; never fabricate or pick one). Idempotence:
+		// Appendix B: body # Citations -> frontmatter sources. An entry that
+		// names exactly one follow-able resource becomes one source; one that
+		// names several becomes one source per resource (§5.1 allows one
+		// `resource` per source); a prose finding is a judgment item (§5.1
+		// requires resource; never fabricate one). Idempotence:
 		// a resource already present in the node's sources is not added
 		// again; its missing title is filled with the work's name instead.
 		existing := existingSourceTitles(n)
@@ -327,6 +328,16 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 			attached[k] = true
 			att[i] = entryAttachment{resource: res, existingID: srcIDs[res]}
 		}
+		// §6.2/§12.1: a bare resource that resolves only from the bundle
+		// root is written `/`-rooted, the form its body link is rewritten
+		// to, so it resolves in the v0.3 bundle and a re-plan finds it.
+		rooted := func(res string) string {
+			if r := b.ResolvePathField(rel, res); r.Kind == RefBundle && r.Form == FormRootFallback {
+				return rootedURL(res, r.Path)
+			}
+			return res
+		}
+		splits := planCitationSplits(entries, rooted)
 		for i, item := range entries {
 			src, ok, fromID := citationSourceFrom(item)
 			res := src.Resource
@@ -338,18 +349,20 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 			if ok && fromID && citedElsewhere(names, i, canonicalResource(res)) {
 				ok = false
 			}
+			if !ok && splits[i] != nil {
+				att[i] = planSplitEntry(&plan, nm, rel, item, splits[i], existing, srcIDs, added)
+				for _, r := range append([]string{att[i].resource}, att[i].partResources()...) {
+					attached[canonicalResource(r)] = true
+				}
+				continue
+			}
 			if !ok {
 				plan.Judgment = append(plan.Judgment, JudgmentItem{
 					Path: rel, Kind: JudgmentProseCitation, Context: item,
 				})
 				continue
 			}
-			// §6.2/§12.1: a bare resource that resolves only from the bundle
-			// root is written `/`-rooted, the form its body link is rewritten
-			// to, so it resolves in the v0.3 bundle and a re-plan finds it.
-			if r := b.ResolvePathField(rel, res); r.Kind == RefBundle && r.Form == FormRootFallback {
-				res = rootedURL(res, r.Path)
-			}
+			res = rooted(res)
 			if added[res] || added[canonicalResource(res)] {
 				attach(i, res)
 				continue // a second entry for a source this plan adds

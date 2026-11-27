@@ -97,6 +97,27 @@ func TestConformance_SourceCitations_Section12_1_DuplicateCountedOnce(t *testing
 	}
 }
 
+// A multi-resource entry that migrate split keeps its body text (the list is
+// removed in a later step), so in a bundle still on the §12.1 fallback it must
+// not be counted on top of the sources it became: once every part is in
+// `sources`, it adds nothing. Before the split it is one entry (negative
+// control: the pre-migration count does not move).
+func TestConformance_SourceCitations_Section12_1_SplitEntryCountedOnce(t *testing.T) {
+	entry := "# Citations\n\n- [1] *Work*, https://example.com/a and https://example.com/b\n"
+	b := mkResolveBundle(t, map[string]string{
+		"index.md": "# KB\n\n* [S](split.md)\n* [P](pre.md)\n",
+		"split.md": "---\ntype: Concept\ntitle: S\nsources:\n  - id: \"1\"\n    resource: https://example.com/a\n" +
+			"  - id: 1-2\n    resource: https://example.com/b\n---\n\n# S\n\nA claim [^1][^1-2].\n\n" + entry,
+		"pre.md": "---\ntype: Concept\ntitle: P\n---\n\n# P\n\nA claim [1].\n\n" + entry,
+	})
+	if got := b.SourceCitations("split.md"); got != 2 {
+		t.Errorf("§12.1: split entry counted on top of its 2 sources: SourceCitations = %d, want 2", got)
+	}
+	if got := b.SourceCitations("pre.md"); got != 1 {
+		t.Errorf("§12.1: an unsplit multi-resource entry is one body citation: SourceCitations = %d, want 1", got)
+	}
+}
+
 // The body list is parsed with the parser migrate uses, so analyze and migrate
 // agree on what a citation entry is: a plain bullet entry that migrate would
 // convert or report counts here too.

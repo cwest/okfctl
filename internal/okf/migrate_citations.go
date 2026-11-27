@@ -16,6 +16,7 @@ package okf
 
 import (
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -30,9 +31,10 @@ import (
 // full entry text stays in the body.
 // An entry with no URL or path but exactly one DOI, arXiv id, PubMed id or
 // valid ISBN gets its resource built from that identifier (identifierResource).
-// An entry with no resource, or with two different ones, is a judgment item:
-// choosing which URL is "the" source, or splitting the entry, is the author's
-// call.
+// An entry with no resource is a judgment item. An entry with two or more is
+// split into one source per resource (citationSourcesFrom,
+// planCitationSplits), unless one of its resources is also named by another
+// entry, which keeps it for judgment.
 
 var (
 	// citationBulletRe matches a plain bullet entry (`- ...` / `* ...`); the
@@ -225,26 +227,14 @@ func citationSourceFrom(entry string) (src SourceEdit, ok, fromIdentifier bool) 
 	text = orderedMarkerRe.ReplaceAllString(text, "")
 	text = strings.TrimSpace(text)
 
-	var resources []string
-	seen := map[string]bool{}
-	add := func(r string) {
-		if r != "" && !seen[r] {
-			seen[r] = true
-			resources = append(resources, r)
-		}
-	}
+	parts, rest, _ := citationResources(text)
+	resources := make([]string, len(parts))
 	linkText := ""
-	rest := citationLinkSpanRe.ReplaceAllStringFunc(text, func(span string) string {
-		m := citationLinkSpanRe.FindStringSubmatch(span)
-		if strings.HasPrefix(span, "!") || strings.HasPrefix(m[2], "#") {
-			return " " // an image or an in-page anchor names no source
+	for i, p := range parts {
+		resources[i] = p.resource
+		if p.link != "" {
+			linkText = p.linkText
 		}
-		add(m[2])
-		linkText = m[1]
-		return " "
-	})
-	for _, u := range citationURLRe.FindAllString(rest, -1) {
-		add(trimURL(u))
 	}
 	if len(resources) == 0 {
 		// No URL or bundle path: a DOI, arXiv id, PubMed id or valid ISBN in
@@ -269,6 +259,122 @@ func citationSourceFrom(entry string) (src SourceEdit, ok, fromIdentifier bool) 
 		title, _ = citationName(text)
 	}
 	return SourceEdit{Resource: res, Title: title}, true, false
+}
+
+// citationPart is one follow-able resource in a citation entry: the resource,
+// and, when the entry names it with a markdown link, that link span and its
+// text.
+type citationPart struct {
+	resource string
+	link     string // the whole `[text](target)` span, or "" for a bare URL
+	linkText string
+}
+
+// citationResources returns the distinct follow-able resources of an entry
+// (list marker already removed) in the order they appear, and the entry text
+// with every link span blanked. A resource is the target of an inline link
+// (not an image or an in-page anchor) or a bare or <angle-wrapped> absolute
+// URL. Two spellings of one DOI count once (canonicalResource).
+//
+// A URL inside a code span is an example, a command, or a template
+// (`curl https://...`, `https://host/v0/servers?search=<term>`), not a source,
+// so it is never counted next to a resource outside code. Only when the
+// entry has no resource outside code does a code span count, and then only a
+// lone one: `VERIFIED — Docs, `https://docs.example/`: ...` keeps the single
+// source it always had, and two code-span URLs stay for judgment.
+func citationResources(text string) (parts []citationPart, rest string, fromCode bool) {
+	masked := []byte(text)
+	for _, loc := range inlineCodeSpanRe.FindAllStringIndex(text, -1) {
+		for i := loc[0]; i < loc[1]; i++ {
+			masked[i] = ' '
+		}
+	}
+	type found struct {
+		at int
+		citationPart
+	}
+	var all []found
+	restB := []byte(text)
+	for _, m := range citationLinkSpanRe.FindAllSubmatchIndex(masked, -1) {
+		span := text[m[0]:m[1]]
+		target := text[m[4]:m[5]]
+		for i := m[0]; i < m[1]; i++ {
+			masked[i], restB[i] = ' ', ' '
+		}
+		if strings.HasPrefix(span, "!") || strings.HasPrefix(target, "#") {
+			continue // an image or an in-page anchor names no source
+		}
+		// Link text holds no `[`: a match that opened at an enclosing
+		// bracket (`[GRADE — see the [node](/x.md)]`) starts at the last one.
+		lt := text[m[2]:m[3]]
+		if j := strings.LastIndexByte(lt, '['); j >= 0 {
+			lt = lt[j+1:]
+			span = "[" + lt + "](" + target + ")"
+		}
+		all = append(all, found{m[0], citationPart{resource: target, link: span, linkText: lt}})
+	}
+	for _, loc := range citationURLRe.FindAllIndex(masked, -1) {
+		all = append(all, found{loc[0], citationPart{resource: trimURL(text[loc[0]:loc[1]])}})
+	}
+	if len(all) == 0 {
+		var code []string
+		seen := map[string]bool{}
+		for _, span := range inlineCodeSpanRe.FindAllString(text, -1) {
+			for _, u := range citationURLRe.FindAllString(span, -1) {
+				if k := canonicalResource(trimURL(u)); !seen[k] {
+					seen[k] = true
+					code = append(code, trimURL(u))
+				}
+			}
+		}
+		if len(code) == 1 {
+			return []citationPart{{resource: code[0]}}, string(restB), true
+		}
+		if len(code) > 1 {
+			// Several code-span URLs: two resources the author must choose
+			// between, never zero (which would read as "no URL at all").
+			return []citationPart{{resource: code[0]}, {resource: code[1]}}, string(restB), true
+		}
+		return nil, string(restB), false
+	}
+	sort.SliceStable(all, func(i, j int) bool { return all[i].at < all[j].at })
+	var out []citationPart
+	seen := map[string]bool{}
+	for _, f := range all {
+		if k := canonicalResource(f.resource); f.resource != "" && !seen[k] {
+			seen[k] = true
+			out = append(out, f.citationPart)
+		}
+	}
+	return out, string(restB), false
+}
+
+// citationSourcesFrom splits an entry that names two or more follow-able
+// resources into one §5.1 source per resource, in the order they appear;
+// §5.1 allows one `resource` per source. ok is false for an entry with fewer
+// than two. Each part's `title` follows the name-only rule (citationName): the
+// first part takes the name the entry marks, or else its own link text, and a
+// later part takes its link text when the entry names it with a link. A bare
+// URL part gets no title. Ids are assigned by the planner.
+func citationSourcesFrom(entry string) ([]SourceEdit, bool) {
+	text := strings.TrimSpace(entry)
+	text = citationMarkerRe.ReplaceAllString(text, "")
+	text = strings.TrimSpace(orderedMarkerRe.ReplaceAllString(text, ""))
+	parts, _, fromCode := citationResources(text)
+	if len(parts) < 2 || fromCode {
+		return nil, false
+	}
+	out := make([]SourceEdit, len(parts))
+	for i, p := range parts {
+		out[i].Resource = p.resource
+		if p.link != "" {
+			out[i].Title, _ = citationName(p.link)
+		}
+	}
+	if name, ok := citationName(text); ok {
+		out[0].Title = name
+	}
+	return out, true
 }
 
 // citationHasProse reports whether a single-resource entry says anything
