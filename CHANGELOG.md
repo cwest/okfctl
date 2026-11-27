@@ -11,18 +11,36 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-27
+
+`migrate` now deletes a node's body `# Citations` list (§4.2) when the
+sources and footnotes it wrote hold everything in it. A list it can't prove
+safe to delete stays put and gets reported. A source title someone annotated
+by hand doesn't lose its extra text anymore.
+
 ### Added
 
+- `migrate` deletes a node's body `# Citations` list (§4.2, Appendix B) if
+  four things hold: each entry's text, with whitespace collapsed, is the
+  footnote definition of its first source; each URL or bundle path the entry
+  names is the `resource` of some source; the section holds nothing but
+  entries; no body `[k]` still points at it. The check looks at what the
+  other planned edits produce. At apply time it looks again at the bytes on
+  disk, where a list edited since planning gets caught. If any check fails the
+  list is kept, with a new `citations-kept` judgment item that names each
+  entry and what deleting it would lose. Bytes outside the section
+  don't change. A `citation lists: removed N, kept M` line joins the
+  summary. (#262)
 - `migrate` also moves a hand-annotated source `title` (one that opens with
-  its entry's `[key]` but says more than the entry, such as `[S8] iCIMS, AI
+  its entry's `[key]` but says more than the entry, like `[S8] iCIMS, AI
   recruiting software page (fetched 2026-11-27). VENDOR-DOC. VERIFIED.`)
   into the footnote definition it writes for that entry, then cuts the
   title to the work's name or removes and reports it. A footnote the author
-  already wrote is never edited; such a title is kept and reported
+  wrote is never edited. In that case the title is kept and reported
   (`source-title-unpreserved`). A bracketed name like `[Beta] Auto Routing`
-  is left alone. A footnote that holds its entry's text followed by a
-  moved annotation still counts as holding the entry, so the node's
-  `# Citations` list can still be removed.
+  isn't touched. A footnote holding its entry's text followed by a
+  moved annotation still counts as holding the entry. The node's
+  `# Citations` list can still be removed. (#261)
 
 ## [0.7.0] - 2026-11-27
 
@@ -598,7 +616,8 @@ Open Knowledge Format (OKF) bundles, targeting OKF v0.1.
   (`okf-authoring`, `okf-curation-health`, `okf-semantic-search`), and a
   spec-conformance suite proving okfctl's output validates clean.
 
-[Unreleased]: https://github.com/cwest/okfctl/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/cwest/okfctl/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/cwest/okfctl/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/cwest/okfctl/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/cwest/okfctl/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/cwest/okfctl/compare/v0.4.0...v0.5.0
