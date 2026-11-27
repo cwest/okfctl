@@ -21,14 +21,12 @@ import (
 	"testing"
 )
 
-// TestSpecVersion_TargetsV02 pins the build's targeted OKF spec version at 0.2.
-// The corpus migrated to v0.2 (§13), so the tool that consumes it must advertise
-// and scaffold against v0.2 — closing the version gap that AGENTS.md tracked. A
-// scaffolded bundle's .okf sidecar and any SpecVersion-sourced marker follow
-// this constant, so the assertion guards the whole version-pin surface.
-func TestSpecVersion_TargetsV02(t *testing.T) {
-	if SpecVersion != "0.2" {
-		t.Fatalf("SpecVersion = %q, want \"0.2\" (corpus is v0.2 per §13)", SpecVersion)
+// TestSpecVersion_TargetsV03 pins the build's targeted OKF spec version at 0.3
+// (OKF v0.3 §12). `bundle init` declares it and `migrate` upgrades to it; the
+// §12.1 fallbacks key on the declared version, never on this constant.
+func TestSpecVersion_TargetsV03(t *testing.T) {
+	if SpecVersion != "0.3" {
+		t.Fatalf("SpecVersion = %q, want \"0.3\" (OKF v0.3 §12)", SpecVersion)
 	}
 }
 
@@ -84,16 +82,14 @@ func TestRenderIndex_PreservesExistingOkfVersion(t *testing.T) {
 }
 
 // TestRenderIndex_EmitsSidecarOkfVersionWhenIndexLacksIt covers Option C's
-// second precedence rule: when the index does not carry okf_version but a .okf
-// sidecar declares one, the regenerated index adopts the sidecar's value.
+// second precedence rule: when the index does not carry okf_version but a
+// legacy .okf sidecar declares one, the regenerated index adopts the sidecar's
+// value.
 func TestRenderIndex_EmitsSidecarOkfVersionWhenIndexLacksIt(t *testing.T) {
 	dir := t.TempDir()
-	if err := Scaffold(dir); err != nil {
+	writeBundleRootIndex(t, dir, "# Knowledge Base\n")
+	if err := os.WriteFile(filepath.Join(dir, ".okf"), []byte("okf_version: 0.2\n"), 0o644); err != nil {
 		t.Fatal(err)
-	}
-	// Scaffold writes a .okf pin (okf_version: 0.1) and an index.md WITHOUT the key.
-	if _, err := os.Stat(filepath.Join(dir, ".okf")); err != nil {
-		t.Fatalf("expected Scaffold to write a .okf sidecar: %v", err)
 	}
 	writeNode(t, dir, "wine/tannin.md", "Reference", "Tannin")
 
@@ -107,8 +103,8 @@ func TestRenderIndex_EmitsSidecarOkfVersionWhenIndexLacksIt(t *testing.T) {
 	if line == "" {
 		t.Fatalf("regenerated index omitted okf_version despite a .okf sidecar; got:\n%s", got)
 	}
-	if !strings.Contains(line, SpecVersion) {
-		t.Errorf("okf_version not sourced from sidecar (want %s); got line %q", SpecVersion, line)
+	if !strings.Contains(line, "0.2") {
+		t.Errorf("okf_version not sourced from sidecar (want 0.2); got line %q", line)
 	}
 }
 

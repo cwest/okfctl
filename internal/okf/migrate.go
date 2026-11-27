@@ -20,16 +20,22 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Migration from OKF v0.1 to v0.2. It applies the §13.1 breaking renames
-// (`timestamp` → `generated.at`; body `# Citations` → frontmatter `sources`)
-// plus the §8/§12 version markers, and does so in TWO phases so the tool never
-// acquires a model dependency:
+// Migration of a v0.1 or v0.2 bundle (or one that declares no version) to the
+// target version, OKF v0.3. It applies the v0.1 -> v0.2 renames (v0.3 Appendix
+// B: `timestamp` → `generated.at`; body `# Citations` → frontmatter `sources`),
+// the v0.2 -> v0.3 edits (§13.1, see migrate_v03.go: bare paths that resolve
+// only through the §12.1 bundle-root fallback become `/`-rooted, and §5
+// timestamps are respelled where the instant is unambiguous), plus the §8.1/§12
+// version markers. It does so in TWO phases so the tool never acquires a model
+// dependency:
 //
 //   - MigratePlan is PURE READ. It computes every DETERMINISTIC edit and
 //     enumerates every JUDGMENT item (a citation with no follow-able resource,
@@ -43,10 +49,9 @@ import (
 // one — the one thing this migration must not do (§11 favors ignoring over
 // discarding, but never inventing).
 
-// TargetOkfVersion is the version this migrator upgrades a bundle TO. It is a
-// migrate-local constant, deliberately independent of SpecVersion (the build's
-// pinned version): closing the SpecVersion gap is separate, tracked work.
-const TargetOkfVersion = "0.2"
+// TargetOkfVersion is the version this migrator upgrades a bundle TO: the
+// version this build targets.
+const TargetOkfVersion = SpecVersion
 
 // JudgmentKind classifies why an item could not be migrated deterministically.
 type JudgmentKind string
@@ -92,13 +97,38 @@ type NodeMigration struct {
 	Path      string         `json:"path"`
 	Generated *GeneratedEdit `json:"generated,omitempty"`
 	Sources   []SourceEdit   `json:"sources,omitempty"`
+	// Paths are the v0.3 §6 rewrites of values that resolve only through the
+	// §12.1 bundle-root fallback.
+	Paths []PathEdit `json:"paths,omitempty"`
+	// Timestamps are the v0.3 §5 rewrites to the RFC 3339 form.
+	Timestamps []TimestampEdit `json:"timestamps,omitempty"`
+}
+
+func (nm NodeMigration) hasEdits() bool {
+	return nm.Generated != nil || len(nm.Sources) > 0 || len(nm.Paths) > 0 || len(nm.Timestamps) > 0
+}
+
+// EditCount is the number of deterministic edits planned for the node.
+func (nm NodeMigration) EditCount() int {
+	n := len(nm.Sources) + len(nm.Paths) + len(nm.Timestamps)
+	if nm.Generated != nil {
+		n++
+	}
+	return n
 }
 
 // MigratePlan is the full, JSON-serializable migration plan: the deterministic
 // per-node edits, the enumerated judgment items, and the target version. It is
 // the review surface — for Casey and for a solo user alike.
 type MigratePlan struct {
-	TargetVersion string          `json:"target_version"`
+	TargetVersion string `json:"target_version"`
+	// DeclaredVersion is the okf_version the bundle declared when planned, or
+	// "" when it declared none.
+	DeclaredVersion string `json:"declared_version"`
+	// VersionAction is VersionBump (the markers move to TargetVersion) or
+	// VersionKeep (the bundle is left at the version it declares, §12). A plan
+	// file without the field (written before it existed) is a bump.
+	VersionAction string          `json:"version_action,omitempty"`
 	Nodes         []NodeMigration `json:"nodes"`
 	Judgment      []JudgmentItem  `json:"judgment"`
 }
@@ -114,19 +144,42 @@ var bareURLRe = regexp.MustCompile(`^<?(https?://[^\s>]+)>?`)
 // mdLinkOnlyRe matches a markdown link and captures its target.
 var mdLinkTargetRe = regexp.MustCompile(`\[[^\]]*\]\(([^)\s]+)`)
 
-// PlanMigration computes the v0.1 → v0.2 migration plan for a loaded bundle. It
-// is PURE: it reads the bundle and writes nothing. generatedBy is the actor (§7)
-// used for every `timestamp` rename; when empty and no actor is inferable, each
-// such node becomes a JudgmentMissingActor item instead of a guessed rename.
+// PlanMigration computes the migration plan to TargetOkfVersion for a loaded
+// bundle. It is PURE: it reads the bundle and writes nothing. generatedBy is
+// the actor (§7) used for every `timestamp` rename; when empty and no actor is
+// inferable, each such node becomes a JudgmentMissingActor item instead of a
+// guessed rename.
+//
+// A bundle that declares a version later than the target, or one this build
+// does not know, gets an empty VersionKeep plan: §12 says a consumer SHOULD
+// consume it best-effort and SHOULD NOT refuse it, and rewriting it toward an
+// older version would be a downgrade. A bundle that already declares the
+// target gets content edits only; its markers stay.
 func PlanMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
-	plan := MigratePlan{TargetVersion: TargetOkfVersion}
+	plan := MigratePlan{
+		TargetVersion:   TargetOkfVersion,
+		DeclaredVersion: b.DeclaredOkfVersion,
+		VersionAction:   planVersionAction(b),
+	}
+	if plan.VersionAction == VersionKeep && !sameVersion(b.DeclaredOkfVersion, TargetOkfVersion) {
+		return plan, nil
+	}
+
+	byPath := map[string]*NodeMigration{}
+	nodeFor := func(rel string) *NodeMigration {
+		if nm, ok := byPath[rel]; ok {
+			return nm
+		}
+		byPath[rel] = &NodeMigration{Path: rel}
+		return byPath[rel]
+	}
 
 	for _, rel := range sortedNodePaths(b) {
 		n := b.Nodes[rel]
 		if n.Frontmatter == nil {
 			continue // unparseable frontmatter is a different failure class
 		}
-		nm := NodeMigration{Path: rel}
+		nm := nodeFor(rel)
 
 		// §13.1: timestamp -> generated { by, at }. Only when generated is not
 		// already present (idempotence) and a legacy timestamp exists.
@@ -174,18 +227,84 @@ func PlanMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 				})
 				continue
 			}
+			// §6.2/§12.1: a bare resource that resolves only from the bundle
+			// root is written `/`-rooted, the form its body link is rewritten
+			// to, so it resolves in the v0.3 bundle and a re-plan finds it.
+			if r := b.ResolvePathField(rel, res); r.Kind == RefBundle && r.Form == FormRootFallback {
+				res = rootedURL(res, r.Path)
+			}
 			if existing[res] {
 				continue // already migrated (idempotent)
 			}
 			nm.Sources = append(nm.Sources, SourceEdit{Resource: res})
 			existing[res] = true
 		}
+	}
 
-		if nm.Generated != nil || len(nm.Sources) > 0 {
-			plan.Nodes = append(plan.Nodes, nm)
+	// v0.3 §6/§12.1 and §5 edits. Links are rewritten in every Markdown file
+	// that carries them (concepts, §3.2 rule 2 non-concepts, and the reserved
+	// index/log files); path fields and timestamps only in concepts.
+	files := append(sortedLinkSourcePaths(b), sortedReservedPaths(b)...)
+	sort.Strings(files)
+	for _, rel := range files {
+		n, concept := b.Nodes[rel], true
+		if n == nil {
+			concept = false
+			if n = b.NonConcepts[rel]; n == nil {
+				n = b.Reserved[rel]
+			}
+		}
+		if n == nil {
+			continue
+		}
+		pn := *n
+		var raw []byte
+		if concept && n.Frontmatter != nil {
+			var err error
+			raw, err = os.ReadFile(filepath.Join(b.Root, filepath.FromSlash(rel))) //nolint:gosec // G304: reading a node from the user's own bundle
+			if err != nil {
+				return MigratePlan{}, fmt.Errorf("read %s: %w", rel, err)
+			}
+		} else {
+			pn.Frontmatter = nil // path fields and timestamps are concept families
+		}
+		paths, stamps := planV03Node(b, rel, &pn, raw, &plan.Judgment)
+		if len(paths) == 0 && len(stamps) == 0 {
+			continue
+		}
+		nm := nodeFor(rel)
+		nm.Paths, nm.Timestamps = paths, stamps
+	}
+
+	order := make([]string, 0, len(byPath))
+	for rel := range byPath {
+		order = append(order, rel)
+	}
+	sort.Strings(order)
+	for _, rel := range order {
+		if nm := byPath[rel]; nm.hasEdits() {
+			plan.Nodes = append(plan.Nodes, *nm)
 		}
 	}
+	sort.SliceStable(plan.Judgment, func(i, j int) bool { return plan.Judgment[i].Path < plan.Judgment[j].Path })
 	return plan, nil
+}
+
+// sortedReservedPaths returns the bundle's reserved file paths, sorted.
+func sortedReservedPaths(b *Bundle) []string {
+	out := make([]string, 0, len(b.Reserved))
+	for p := range b.Reserved {
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// sameVersion reports whether two okf_version values name the same version
+// (§12), tolerating a leading "v".
+func sameVersion(a, b string) bool {
+	norm := func(s string) string { return strings.TrimPrefix(strings.TrimSpace(s), "v") }
+	return norm(a) != "" && norm(a) == norm(b)
 }
 
 // rawTimestampScalar returns the VERBATIM source scalar of a node's legacy
@@ -247,27 +366,75 @@ func migrateTimeString(v any) string {
 // MigrateApply applies a plan's deterministic edits to disk, order-preserving
 // and additive-only. root is the bundle root; b is the loaded bundle the plan
 // was computed against. It writes each edited node in place, then bumps the
-// version markers (.okf sidecar and bundle-root index.md). It never touches a
+// version markers (bundle-root index.md, §8.1; and the legacy .okf sidecar
+// when present) unless the plan is VersionKeep. b's declared version decides
+// which values still resolve through the §12.1 fallback. It never touches a
 // judgment item — those stay for the plan's consumer.
 func MigrateApply(root string, b *Bundle, plan MigratePlan) error {
 	for _, nm := range plan.Nodes {
-		abs := filepath.Join(root, filepath.FromSlash(nm.Path))
-		raw, err := os.ReadFile(abs) //nolint:gosec // G304: reading a node from the user's own bundle
+		raw, out, err := RenderMigration(root, b, nm)
 		if err != nil {
-			return fmt.Errorf("read %s: %w", nm.Path, err)
-		}
-		out, err := renderMigratedNode(raw, nm)
-		if err != nil {
-			return fmt.Errorf("migrate %s: %w", nm.Path, err)
+			return err
 		}
 		if bytes.Equal(out, raw) {
 			continue
 		}
+		abs := filepath.Join(root, filepath.FromSlash(nm.Path))
 		if err := os.WriteFile(abs, out, 0o644); err != nil { //nolint:gosec // G306: a bundle node is a shareable knowledge document; 0o644 is intended
 			return fmt.Errorf("write %s: %w", nm.Path, err)
 		}
 	}
+	if plan.VersionAction == VersionKeep {
+		return nil
+	}
 	return bumpVersionMarkers(root, plan.TargetVersion)
+}
+
+// RenderMigration returns a file's current bytes and its bytes with the
+// planned edits applied. It is PURE (it writes nothing) and it is the single
+// renderer MigrateApply and `migrate --apply --dry-run` share, so a dry run
+// shows exactly what an apply writes.
+func RenderMigration(root string, b *Bundle, nm NodeMigration) ([]byte, []byte, error) {
+	abs := filepath.Join(root, filepath.FromSlash(nm.Path))
+	raw, err := os.ReadFile(abs) //nolint:gosec // G304: reading a node from the user's own bundle
+	if err != nil {
+		return nil, nil, fmt.Errorf("read %s: %w", nm.Path, err)
+	}
+	out, err := renderMigratedNode(raw, nm)
+	if err != nil {
+		return nil, nil, fmt.Errorf("migrate %s: %w", nm.Path, err)
+	}
+	if len(nm.Paths) > 0 || len(nm.Timestamps) > 0 {
+		if out, err = renderV03Node(b, nm.Path, out, nm); err != nil {
+			return nil, nil, fmt.Errorf("migrate %s: %w", nm.Path, err)
+		}
+	}
+	return raw, out, nil
+}
+
+// RenderVersionMarkers returns the current and migrated bytes of each version
+// marker file (index.md, .okf) that a plan changes, keyed by bundle-relative
+// path. It writes nothing.
+func RenderVersionMarkers(root string, plan MigratePlan) (map[string][2][]byte, error) {
+	out := map[string][2][]byte{}
+	if plan.VersionAction == VersionKeep {
+		return out, nil
+	}
+	before, after, err := renderOkfSidecar(root, plan.TargetVersion)
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(before, after) {
+		out[".okf"] = [2][]byte{before, after}
+	}
+	before, after, err = declareRootIndexVersion(root, plan.TargetVersion)
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(before, after) {
+		out["index.md"] = [2][]byte{before, after}
+	}
+	return out, nil
 }
 
 // renderMigratedNode returns the node file bytes with the planned deterministic
@@ -451,10 +618,9 @@ func citationResource(item string) (string, bool) {
 	return "", false
 }
 
-// bumpVersionMarkers sets the bundle's declared version to target in both the
-// .okf sidecar (§12) and the bundle-root index.md okf_version marker (§8.1 —
-// the only index whose frontmatter is permitted). Each is a no-op when already
-// at target (idempotence) or absent.
+// bumpVersionMarkers declares target in the bundle-root index.md (§8.1, §12)
+// and in the legacy .okf sidecar when one exists. Each is a no-op when it
+// already declares target (idempotence).
 func bumpVersionMarkers(root, target string) error {
 	if err := bumpOkfSidecar(root, target); err != nil {
 		return err
@@ -462,94 +628,55 @@ func bumpVersionMarkers(root, target string) error {
 	return bumpRootIndexMarker(root, target)
 }
 
-// bumpOkfSidecar rewrites the okf_version line of the .okf sidecar to target,
-// preserving every other line. Absent sidecar is a no-op.
+// bumpOkfSidecar rewrites the okf_version line of the .okf sidecar to the
+// quoted target (§4: quote number-like values), preserving every other line.
+// A sidecar that already declares target, quoted or not, is left alone. An
+// absent sidecar is a no-op: it is a legacy fallback and is never created.
 func bumpOkfSidecar(root, target string) error {
+	before, after, err := renderOkfSidecar(root, target)
+	if err != nil || bytes.Equal(before, after) {
+		return err
+	}
+	return os.WriteFile(filepath.Join(root, ".okf"), after, 0o644) //nolint:gosec // G306: the .okf sidecar is a shareable bundle artifact; 0o644 is intended
+}
+
+// renderOkfSidecar returns the sidecar's current bytes and its bytes with
+// okf_version set to target. Both are nil when the sidecar is absent.
+func renderOkfSidecar(root, target string) ([]byte, []byte, error) {
 	abs := filepath.Join(root, ".okf")
 	if escapesBundleRoot(root, abs) { // §3.2 rule 5, §11.2
-		return fmt.Errorf("%s is a symlink that resolves outside the bundle root; not read (OKF §3.2, §11.2)", ".okf")
+		return nil, nil, fmt.Errorf("%s is a symlink that resolves outside the bundle root; not read (OKF §3.2, §11.2)", ".okf")
 	}
 	data, err := os.ReadFile(abs) //nolint:gosec // G304: reading the user's own bundle .okf sidecar
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil
+			return nil, nil, nil
 		}
-		return fmt.Errorf("read .okf: %w", err)
+		return nil, nil, fmt.Errorf("read .okf: %w", err)
 	}
 	lines := strings.Split(string(data), "\n")
-	changed := false
 	for i, line := range lines {
-		key, _, ok := strings.Cut(line, ":")
-		if ok && strings.TrimSpace(key) == "okf_version" {
-			newLine := "okf_version: " + target
-			if lines[i] != newLine {
-				lines[i] = newLine
-				changed = true
-			}
+		key, val, ok := strings.Cut(line, ":")
+		if !ok || strings.TrimSpace(key) != "okf_version" {
+			continue
 		}
+		if strings.Trim(strings.TrimSpace(val), `"'`) == target {
+			continue
+		}
+		lines[i] = "okf_version: " + strconv.Quote(target)
 	}
-	if !changed {
-		return nil
-	}
-	return os.WriteFile(abs, []byte(strings.Join(lines, "\n")), 0o644) //nolint:gosec // G306: the .okf sidecar is a shareable bundle artifact; 0o644 is intended
+	return data, []byte(strings.Join(lines, "\n")), nil
 }
 
-// bumpRootIndexMarker rewrites the bundle-root index.md okf_version marker to
-// target. Absent index or absent marker is a no-op — this never invents a
-// marker where the author had none.
-//
-// The rewrite is a splice, not a re-encode: only the bytes of the okf_version
-// value change, and every other byte of the file (comments, key order, quoting,
-// spacing, line endings, other keys) is kept. OKF v0.3 §8.1 says a producer
-// MUST keep the existing root frontmatter, and §4 says it SHOULD NOT
-// re-serialize values it did not change. The new value is double-quoted, as §4
-// recommends for number-like values.
+// bumpRootIndexMarker declares okf_version target on the bundle-root index.md
+// (§8.1: "Producers SHOULD put a bundle-root index.md with okf_version in each
+// bundle"). Only the marker changes (see declareRootIndexVersion), so §8.1's
+// MUST keep the existing root frontmatter and §4's SHOULD NOT re-serialize
+// unchanged values both hold.
 func bumpRootIndexMarker(root, target string) error {
-	abs := filepath.Join(root, "index.md")
-	if escapesBundleRoot(root, abs) { // §3.2 rule 5, §11.2
-		return fmt.Errorf("%s is a symlink that resolves outside the bundle root; not read (OKF §3.2, §11.2)", "index.md")
+	before, after, err := declareRootIndexVersion(root, target)
+	if err != nil || bytes.Equal(before, after) {
+		return err
 	}
-	raw, err := os.ReadFile(abs) //nolint:gosec // G304: reading the user's own bundle index.md
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("read index.md: %w", err)
-	}
-	yamlBlock, _, ok := splitFrontmatterRaw(raw)
-	if !ok {
-		return nil // no frontmatter: nothing to bump
-	}
-	var doc yaml.Node
-	if err := yaml.Unmarshal(yamlBlock, &doc); err != nil {
-		return fmt.Errorf("parse index.md frontmatter: %w", err)
-	}
-	m := frontmatterMapping(&doc)
-	if m == nil {
-		return nil
-	}
-	var val *yaml.Node
-	for i := 0; i+1 < len(m.Content); i += 2 {
-		if m.Content[i].Value == "okf_version" {
-			val = m.Content[i+1]
-		}
-	}
-	if val == nil || val.Kind != yaml.ScalarNode || val.Value == "" || val.Value == target {
-		return nil // no marker to bump, or already at target (idempotent no-op)
-	}
-	out, err := editFrontmatter(raw, func(m *yaml.Node) {
-		setScalar(m, "okf_version", target)
-		for i := 0; i+1 < len(m.Content); i += 2 {
-			if m.Content[i].Value == "okf_version" {
-				m.Content[i+1].Style = yaml.DoubleQuotedStyle
-			}
-		}
-	})
-	if err != nil {
-		return fmt.Errorf("rewrite index.md okf_version: %w", err)
-	}
-	if bytes.Equal(out, raw) {
-		return nil
-	}
-	return os.WriteFile(abs, out, 0o644) //nolint:gosec // G306: a bundle node is a shareable knowledge document; 0o644 is intended
+	return os.WriteFile(filepath.Join(root, "index.md"), after, 0o644) //nolint:gosec // G306: a bundle node is a shareable knowledge document; 0o644 is intended
 }

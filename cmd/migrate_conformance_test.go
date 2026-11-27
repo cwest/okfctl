@@ -20,11 +20,11 @@ import (
 	"testing"
 )
 
-// TestConformance_MigrateCommandV01ToV02Validates drives the FULL command path
+// TestConformance_MigrateCommandV01ToV03Validates drives the FULL command path
 // (plan then apply) end to end and asserts the migrated bundle validates clean
-// as v0.2 (§11/§13.1). It carries the `Conformance` name so the card's
+// as v0.3 (§11, §13.1). It carries the `Conformance` name so the card's
 // `go test ./cmd/ -run Conformance` gate exercises it.
-func TestConformance_MigrateCommandV01ToV02Validates(t *testing.T) {
+func TestConformance_MigrateCommandV01ToV03Validates(t *testing.T) {
 	dir := mkPromoteCLIBundle(t, migrateFixtureFiles())
 	planPath := filepath.Join(t.TempDir(), "migrate-plan.json")
 
@@ -35,8 +35,8 @@ func TestConformance_MigrateCommandV01ToV02Validates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("§13.1 apply phase must exit 0: err=%v out=%q", err, out)
 	}
-	if !strings.Contains(out, "bundle valid as v0.2") {
-		t.Fatalf("apply did not report v0.2 validity:\n%s", out)
+	if !strings.Contains(out, "bundle valid as v0.3") {
+		t.Fatalf("apply did not report v0.3 validity:\n%s", out)
 	}
 	if vout, verr := runOKF(t, "validate", dir); verr != nil {
 		t.Fatalf("§11 validate must pass after migrate: err=%v out=%q", verr, vout)

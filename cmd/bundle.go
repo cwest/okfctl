@@ -27,8 +27,8 @@ func newBundleCmd() *cobra.Command {
 		Use:   "init [dir]",
 		Short: "Scaffold a minimal conformant OKF bundle",
 		Long: "init scaffolds a minimal bundle that conforms to the OKF spec floor: the two " +
-			"reserved files (index.md and log.md, OKF §3.1) plus a bundle-root .okf sidecar " +
-			"whose okf_version marks the target version (§12). It doesn't create any concept " +
+			"reserved files (index.md and log.md, OKF §3.1). The bundle-root index.md declares " +
+			"okf_version \"0.3\" in its frontmatter (§8.1, §12). It doesn't create any concept " +
 			"nodes — a fresh bundle has zero nodes; use `okfctl node new` to add them. It refuses " +
 			"to overwrite an existing bundle.",
 		Example: "  # Scaffold a new bundle in the current directory\n" +

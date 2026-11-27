@@ -84,7 +84,7 @@ Example:
 
 Scaffold a minimal conformant OKF bundle
 
-init scaffolds a minimal bundle that conforms to the OKF spec floor: the two reserved files (index.md and log.md, OKF §3.1) plus a bundle-root .okf sidecar whose okf_version marks the target version (§12). It doesn't create any concept nodes — a fresh bundle has zero nodes; use `okfctl node new` to add them. It refuses to overwrite an existing bundle.
+init scaffolds a minimal bundle that conforms to the OKF spec floor: the two reserved files (index.md and log.md, OKF §3.1). The bundle-root index.md declares okf_version "0.3" in its frontmatter (§8.1, §12). It doesn't create any concept nodes — a fresh bundle has zero nodes; use `okfctl node new` to add them. It refuses to overwrite an existing bundle.
 
 ```
 okfctl bundle init [dir]
@@ -502,9 +502,9 @@ Example:
 
 ## okfctl migrate
 
-Upgrade a bundle from OKF v0.1 to v0.2 (two-phase, consumer-agnostic)
+Upgrade a bundle to OKF v0.3 from v0.1 or v0.2 (two-phase, consumer-agnostic)
 
-migrate is the supported v0.1 -> v0.2 upgrade path. It runs in two phases so it never acquires a model dependency. Phase 1 (default) is PURE READ: it computes every deterministic §13.1 edit (timestamp -> generated.at; body # Citations with a follow-able resource -> frontmatter sources) and enumerates every judgment item (a prose citation with no resource per §5.1; a timestamp rename with no actor per §7), writing only the plan file. Phase 2 (--apply) reads the plan back and applies its deterministic edits order-preserving and additive-only, then re-validates. --dry-run writes nothing and is byte-identical to the real apply. Judgment items are never guessed — they stay in the plan for its consumer (agent, colleague, shell loop, or a human) to resolve.
+migrate is the supported upgrade path to OKF v0.3 for a bundle that declares v0.1, v0.2, or no version. It runs in two phases so it never acquires a model dependency. Phase 1 (default) is PURE READ: it computes every deterministic edit and enumerates every judgment item, writing only the plan file. The v0.1 renames (Appendix B): timestamp -> generated.at; body # Citations with a follow-able resource -> frontmatter sources. The v0.2 -> v0.3 edits (§13.1): a bare link or path field that resolves only from the bundle root (the §12.1 fallback) is rewritten with a leading / so it resolves the same way under v0.3 (§6); a §5 timestamp that carries an offset but is not RFC 3339 is respelled. Judgment items: a prose citation with no resource (§5.1), a timestamp rename with no actor (§7), and a date-time with no offset (§5, §13.2: it names no instant). Phase 2 (--apply) applies the deterministic edits, declares okf_version "0.3" on the bundle-root index.md (§8.1), and re-validates. --dry-run writes nothing and prints the unified diff the real apply would write. A bundle that declares v0.3, a later version, or one okfctl does not know is never refused and never rewritten toward an older version (§12). Judgment items are never guessed — they stay in the plan for its consumer (agent, colleague, shell loop, or a human) to resolve.
 
 ```
 okfctl migrate <bundle> [flags]
@@ -516,7 +516,7 @@ Example:
 # Phase 1 (default): compute the plan (pure read), writing only the plan file
   okfctl migrate ./bundles/knowledge --plan migrate-plan.json --generated-by "casey"
 
-  # Phase 2: preview the apply without writing (byte-identical to the real apply)
+  # Phase 2: preview the apply as a unified diff, writing nothing
   okfctl migrate ./bundles/knowledge --apply --plan migrate-plan.json --dry-run
 
   # Phase 2: apply the plan's deterministic edits, then re-validate
@@ -527,7 +527,7 @@ Flags:
 
 ```
       --apply                 phase 2: read the plan and apply it (default is phase 1: plan only)
-      --dry-run               with --apply: write nothing; byte-identical to the real apply
+      --dry-run               with --apply: write nothing; print the diff the real apply would write
       --generated-by string   actor (§7) recorded as generated.by for each timestamp rename
       --plan string           migration plan file (written in phase 1, read in phase 2) (default "migrate-plan.json")
 ```

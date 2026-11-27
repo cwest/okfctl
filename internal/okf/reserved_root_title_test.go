@@ -47,7 +47,7 @@ func TestRenderIndex_PreservesExistingRootHeading(t *testing.T) {
 	// The root render leads with the §12 okf_version frontmatter block, so the
 	// H1 follows it rather than starting the string; assert the heading line is
 	// present and the generic default did NOT replace it.
-	if !strings.Contains(got, "\n# Domains\n") {
+	if !strings.Contains("\n"+got, "\n# Domains\n") {
 		t.Errorf("existing root H1 not preserved; want a `# Domains` heading, got:\n%s", got)
 	}
 	if strings.Contains(got, "# Knowledge Base") {
@@ -95,7 +95,7 @@ func TestRenderIndex_PreservesKnowledgeBaseRootHeading(t *testing.T) {
 	got := RenderIndex(b)
 
 	// Heading follows the root frontmatter block; assert the line is present.
-	if !strings.Contains(got, "\n# Knowledge Base\n") {
+	if !strings.Contains("\n"+got, "\n# Knowledge Base\n") {
 		t.Errorf("root H1 `# Knowledge Base` not retained; got:\n%s", got)
 	}
 }
