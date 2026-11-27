@@ -18,6 +18,21 @@ is one.
   it exits nonzero if any nested index is stale, missing, or orphaned—wire it
   into CI to keep the index honest.
 
+Each subdirectory entry ends with a shape suffix the tool owns, so a reader can
+pick a branch without opening it:
+
+```
+* [Concepts](concepts/) (4 concepts · Concept, Reference)
+```
+
+The suffix gives the child's own concept count, its types, the tags at least
+`--shape-tag-min` (default 2) of its concepts share, up to `--shape-tag-max`
+(default 12), and a `· N in subtree` total when the child nests deeper.
+`--no-shape` drops it. A description you write on a subdirectory entry
+(`* [Concepts](concepts/) - tasting vocabulary`) survives every rebuild, and so
+does an existing H1. An index checked out with CRLF line endings stays CRLF and
+doesn't read as stale.
+
 ## Git drift
 
 `okfctl validate` also reports **git drift**—any node whose frontmatter
@@ -41,7 +56,7 @@ mirroring `git blame --ignore-revs-file`—a convention users already understand
 ```
 # Mechanical migration commits — opt these out of git drift.
 # One commit SHA per line; blank lines and #-comments are ignored.
-3f9a1c2e8b7d6a5c4e3f2a1b0c9d8e7f6a5b4c3d   # v0.2 frontmatter key sweep
+3f9a1c2e8b7d6a5c4e3f2a1b0c9d8e7f6a5b4c3d   # okfctl migrate to v0.3
 ```
 
 When a node's last-touching commit is on the list, the drift comparison **walks
@@ -49,4 +64,5 @@ back to the prior real commit** for that file. Incremental edits (commits *not*
 on the list) still drift normally—the check isn't narrowed into uselessness.
 Full or abbreviated (≥7-char) SHAs both match. This is the recommended cure when
 `node refresh` refuses a bulk-dominated plan (the guardrail against collapsing
-real authoring dates into one migration date).
+real authoring dates into one migration date). `okfctl migrate --apply` prints
+the same reminder after it edits files.

@@ -1,7 +1,7 @@
 ---
 name: okf-authoring
 description: Use when creating or maintaining nodes in an OKF bundle with okfctl — scaffolding concept nodes, applying type templates, running the bundle lifecycle, and keeping the reserved index.md and log.md files current.
-version: 1.1.0
+version: 1.2.0
 author: okfctl
 license: Apache-2.0
 metadata:
@@ -79,12 +79,14 @@ $ okfctl node new concepts/tannin.md --type Reference --title "Tannin" --bundle 
 Created mykb/concepts/tannin.md
 ```
 
-The file it writes:
+The file it writes (`created` and `modified` are stamped in your local offset):
 
 ```markdown
 ---
 type: Reference
 title: Tannin
+created: 2026-11-27T07:24:59-05:00
+modified: 2026-11-27T07:24:59-05:00
 ---
 
 # Tannin
@@ -138,7 +140,7 @@ Inspect the templates a bundle declares:
 
 ```sh
 $ okfctl template list mykb
-Playbook	3 required field(s), 4 body section(s)
+Playbook	3 required field(s), 4 body section(s)	(source: templates/playbook.md)
 
 $ okfctl template show Playbook mykb
 target_type: Playbook
@@ -162,6 +164,8 @@ Created mykb/playbooks/restart.md (from Playbook template)
 ---
 type: Playbook
 title: Restart Service
+created: 2026-11-27T07:24:59-05:00
+modified: 2026-11-27T07:24:59-05:00
 description: TODO
 owner: TODO
 tags:
@@ -242,15 +246,20 @@ contents; regenerate it whenever nodes change, and verify it is current in CI:
 
 ```sh
 $ okfctl index build mykb
-Wrote mykb/index.md
+Wrote 4 index.md file(s) under mykb
 
 $ okfctl index check mykb          # exit 0 when current
 OK: index.md is current
 
-$ okfctl node new concepts/oak.md --type Concept --title Oak --bundle mykb
+$ $EDITOR mykb/concepts/ash.md     # a node added by hand, outside okfctl
 $ okfctl index check mykb          # exit 1 when stale
 index.md is out of date; run `okfctl index build` to regenerate
+okfctl: index.md is out of date
 ```
+
+`index build` writes one `index.md` per directory that holds concepts (§8).
+`node new`, `node mv`, and `node rm` regenerate the index for you, so a stale
+index usually means a file was added or moved by hand.
 
 A rebuilt `index.md` links every node, which is also how a bundle's nodes stop
 reading as orphans — `index.md` confers reachability (see `okf-curation-health`).
@@ -264,8 +273,14 @@ Appended log entry
 $ okfctl log show mykb
 # Change Log
 
-- 2026-07-26 — added oak node
+## 2026-11-27
+* added oak node
+* moved concepts/oak.md -> concepts/oak-aging.md
+* created concepts/oak.md
 ```
+
+`log.md` groups entries under `## YYYY-MM-DD` headings, newest first (§9), and
+the node verbs record their own changes.
 
 ## Common Pitfalls
 
@@ -290,9 +305,10 @@ $ okfctl log show mykb
    nodes the removal orphans *before* you commit to it — cheap insurance against
    silently cutting a node loose from the graph.
 
-6. **Forgetting to rebuild index.md after adding nodes.** New nodes are absent
-   from the table of contents and read as orphans until `index build` links them.
-   Run `index build` (and `index check` in CI) as part of the authoring loop.
+6. **Forgetting to rebuild index.md after adding files by hand.** The node verbs
+   keep `index.md` current, but a file created or moved outside okfctl is absent
+   from the table of contents and reads as an orphan until `index build` links
+   it. Run `index check` in CI to catch it.
 
 ## Verification Checklist
 

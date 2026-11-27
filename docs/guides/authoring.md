@@ -41,7 +41,7 @@ okfctl index check mykb      # confirm they are current
 ```sh
 okfctl log append mykb --message "added tannin node"
 okfctl validate mykb         # OK: bundle conforms to the OKF spec floor
-okfctl bundle info mykb      # nodes: 1, reserved: 3, okf_version: 0.3
+okfctl bundle info mykb      # nodes: 1, reserved: 3, okf_version: 0.3 (declared in index.md)
 ```
 
 ## Moving and removing nodes

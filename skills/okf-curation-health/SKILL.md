@@ -1,7 +1,7 @@
 ---
 name: okf-curation-health
-description: Use when keeping an OKF bundle healthy with okfctl — running validate for spec-floor and type-template conformance, and lint for curation findings (orphans, missing cross-references, broken internal links, coverage gaps, type hygiene), including as a CI or pre-commit gate.
-version: 1.0.0
+description: Use when keeping an OKF bundle healthy with okfctl — running validate for spec-floor and type-template conformance, and lint for curation findings (orphans, missing cross-references, broken links and path fields, coverage gaps, type and tag hygiene, OKF v0.3 §5 frontmatter checks), including as a CI or pre-commit gate.
+version: 1.1.0
 author: okfctl
 license: Apache-2.0
 metadata:
@@ -84,14 +84,14 @@ $ okfctl validate mykb --templates
 warning playbooks/rollback.md: missing required field: owner (template Playbook)
 warning playbooks/rollback.md: missing body section: Rollback (template Playbook)
 warning playbooks/rollback.md: missing body section: Verification (template Playbook)
-3 template drift warning(s)
+3 drift warning(s)
 $ echo $?
 0
 
 $ okfctl validate mykb --templates --strict
 warning playbooks/rollback.md: missing required field: owner (template Playbook)
 ...
-okfctl: 3 template drift warning(s)
+okfctl: 3 drift warning(s)
 $ echo $?
 1
 ```
@@ -113,8 +113,10 @@ With findings, `lint` prints one line per finding and a count. By default it is
 $ okfctl lint mykb
 coverage-gap: "Malolactic Fermentation" is referenced by 3 nodes but has no node of its own
 type-hygiene: near-duplicate type values likely refer to one type: Concept, Concepts
+tag-hygiene: near-duplicate tag values likely refer to one tag: Wine (1 node), wine (1 node), wines (1 node)
 orphan: concepts/aging.md has no inbound links (unreachable by traversal)
 missing-xref: concepts/wine.md mentions "Tannin" but does not link to concepts/tannin.md
+broken-link: concepts/wine.md path field sources[0].resource: tannin.md resolves to no node (§6.2); did you mean /reference/tannin.md?
 9 lint finding(s)
 $ echo $?
 0
@@ -126,9 +128,11 @@ $ echo $?
 |---|---|---|
 | `orphan` | a concept node no node (or `index.md`) links to — unreachable by traversal | link it from a relevant node, or from `index.md` via `index build` |
 | `missing-xref` | a node's prose names another node's title as a whole word but doesn't link it | add the `[Title](path.md)` link, or reword if the mention is incidental |
-| `broken-link` | a node links to a `.md` target that resolves to no node, **and a node with that basename exists elsewhere** — a moved or mistyped path (a defect, not an unwritten concept) | fix the path to the resolved candidate the finding names |
+| `broken-link` | a body link or a §6.2 path field (`sources[].resource`, `superseded_by`, …) resolves to no node, **and a node with that basename exists elsewhere** — a moved or mistyped path (a defect, not an unwritten concept). Values resolve by §6: a leading `/` from the bundle root, anything else from the file's directory | fix the path to the candidate the finding names; the hint is already written in a form that resolves from the linking file |
 | `coverage-gap` | a **known concept term** (declared as a title/alias) is referenced by ≥ threshold distinct nodes but has no node of its own — a node whose title *is* the term or *leads with* it counts as its home | author the missing node — it's a real to-do, prioritized by mention count |
 | `type-hygiene` | two `type` values fold to the same canonical form (case / trailing-`s` plural), e.g. `Concept` vs `Concepts` | pick one spelling and normalize the drifting nodes |
+| `tag-hygiene` | two or more `tags` spellings fold to one form: case, separators (`run-book`, `run_book`, `runbook`), and a plural that folds onto a singular the bundle already uses. Each spelling is listed with its node count, most common first | review it (the fold is a heuristic), then normalize toward the leading spelling |
+| `spec-version` | a concept carries a per-node `okf_spec_version`; the version is declared once, as `okf_version` on the bundle-root `index.md` (§12) | remove the per-node key |
 | `source-missing-resource` | a `sources` entry has no `resource` (or a null/empty one). OKF v0.3 §5.1 requires it, so the entry is ignored as provenance (§11.2 rule 3) | add the `resource` the entry cites, or remove the entry |
 | `timestamp-form` | a §5 timestamp key (`generated.at`, `verified[].at`, `stale_after`, `sources[].last_modified`, `usage_window.from`/`to`) holds something other than an RFC 3339 date-time *with an offset* or a full-date. A date-time without an offset (`2026-06-20T10:00:00`) is not valid, and an unparseable `stale_after` makes the concept read as stale, never fresh | add the offset (`2026-06-20T10:00:00Z`) or use a date only (`2026-06-20`) |
 | `verified-event` | a `verified` event lacks `by` or `at`; consumers ignore it, so it gives no trust | add the missing actor or timestamp, or remove the event |

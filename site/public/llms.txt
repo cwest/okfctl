@@ -15,6 +15,7 @@ reports on its health and link graph.
 - [Concepts](https://okfctl.dev/concepts/): Bundles, nodes, the link graph, and the reserved files.
 - [Authoring a bundle](https://okfctl.dev/guides/authoring/): From an empty directory to a validated bundle.
 - [Curation health](https://okfctl.dev/guides/curation-health/): Using `lint`, `analyze`, and `--strict` in CI.
+- [Migrating to OKF v0.3](https://okfctl.dev/guides/migrating/): The two-phase `migrate` plan and apply for v0.1 and v0.2 bundles.
 
 ## Specification
 

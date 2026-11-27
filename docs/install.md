@@ -40,13 +40,13 @@ cosign verify-blob \
 ## Confirming the install
 
 ```sh
-okfctl version        # e.g. okfctl v0.2.0 (commit <sha>, built <date>)
+okfctl version        # okfctl v<release> (commit <sha>, built <date>)
 okfctl --version      # same string
 ```
 
 ## Building from source
 
 ```sh
-go build -o okfctl .                    # dynamic build; version reports "dev"
+go build -o okfctl .                    # no release tag: version reports a git pseudo-version, or "dev" without VCS info
 CGO_ENABLED=0 go build -o okfctl .      # static, no cgo
 ```

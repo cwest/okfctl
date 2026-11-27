@@ -44,7 +44,7 @@ okfctl index build mykb                                              # generate 
 okfctl index check mykb                                              # confirm the index is current
 okfctl log append mykb --message "added tannin node"                # record the change
 okfctl validate mykb                                                 # check against the OKF spec floor
-okfctl bundle info mykb                                              # nodes: 1, reserved: 3, okf_version: 0.3
+okfctl bundle info mykb                                              # nodes: 1, reserved: 3, okf_version: 0.3 (declared in index.md)
 ```
 
 From here, `okfctl search "tannin" mykb` finds nodes lexically, `okfctl graph

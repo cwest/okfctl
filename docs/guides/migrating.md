@@ -56,6 +56,7 @@ items that lose the fallback.
 - a `timestamp` rename with no actor (§7)
 - a date-time with no offset, for example `2026-06-20T10:00:00` (§5, §13.2: it
   names no instant, and only the author knows which offset was meant)
+- a §5 timestamp value that isn't a date at all (`timestamp-invalid`)
 
 ## Phase 1—compute the plan (pure read)
 
@@ -93,6 +94,11 @@ okfctl migrate ./mykb --apply --plan migrate-plan.json
 A second plan on the migrated bundle carries no edits, and re-applying the same
 plan file changes nothing (every edit re-checks the file first), so `migrate` is
 safe to re-run.
+
+When an apply edits files, it ends with a hint: commit the result, then list that
+commit's SHA in `.okf-drift-ignore-revs`. Otherwise `validate --strict` reports
+git drift on every file the migration touched. The
+[index and freshness guide](index-and-freshness.md) explains the file.
 
 ## Bundles migrate leaves alone
 

@@ -3,10 +3,37 @@
 ## `lint`—curation-health findings
 
 `okfctl lint <dir>` reports curation-health findings (orphans, missing
-cross-references, broken internal links, coverage gaps, type-value hygiene). It
-is **advisory by default** (exits 0 even with findings); `--strict` exits nonzero
-on any finding, so wire `lint --strict` into CI as a gate. `--coverage-threshold
-N` tunes the coverage-gap check (default 3). `lint` never mutates the bundle.
+cross-references, broken internal links, coverage gaps, type and tag hygiene,
+and the OKF v0.3 §5 frontmatter checks below). It's **advisory by default**
+(exits 0 even with findings); `--strict` exits nonzero on any finding, so wire
+`lint --strict` into CI as a gate. `--coverage-threshold N` tunes the
+coverage-gap check (default 3). `lint` never mutates the bundle.
+
+`broken-link` covers body links and the §6.2 path fields (`sources[].resource`,
+`superseded_by`, and the rest), resolved by the §6 rules: a leading `/` from the
+bundle root, anything else from the file's own directory. In a bundle that
+declares 0.2 or earlier, or no version, a bare value that only resolves from the
+root still counts as resolved (§12.1). The "did you mean" hint names the
+candidate in a form that resolves from the linking file.
+
+`tag-hygiene` works like `type-hygiene` on `tags`: it reports spellings that fold
+to one tag (`Wine`, `wine`, `wines`; `run-book`, `runbook`), with a per-node count
+for each, most common first. A plural folds onto its singular only when the
+singular is itself a tag in the bundle. The fold is a heuristic, so review a
+finding before you normalize.
+
+Four checks report frontmatter that OKF v0.3 still accepts but consumers read
+differently than the author probably meant. None of them fails `validate`:
+
+| check | finding |
+|---|---|
+| `timestamp-form` | a §5 timestamp (`generated.at`, `verified[].at`, `stale_after`, `sources[].last_modified`, `usage_window`) that isn't an RFC 3339 date-time with an offset or a full-date. An unparseable `stale_after` reads as stale. |
+| `verified-event` | a `verified` event missing `by` or `at`; consumers ignore it (§5.2) |
+| `superseded-by` | a `superseded_by` that resolves to no concept, or is set on a concept that isn't `deprecated` (§5.4) |
+| `status-lifecycle` | a `status` outside `draft`, `stable`, `deprecated`; the concept isn't stable and filters to current knowledge drop it (§5.4) |
+
+`source-missing-resource` reports a `sources` entry with no `resource`. §5.1
+requires one, so consumers ignore the entry (§11.2 rule 3).
 
 `okfctl analyze <dir>` reports where a bundle is *weak* rather than *wrong*:
 freshness, clusters, gaps, connectivity, and structure. Where `lint` asks "is
