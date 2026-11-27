@@ -258,7 +258,7 @@ const goInstallCmd = version.tag
             </p>
 
             <div class="specstrip">
-              <span>pure Go</span><span>no CGO</span><span>no Python</span><span>no model runtime</span><span>CGO_ENABLED=0 static build</span>
+              <span>pure Go</span><span>runs offline</span>
             </div>
           </div>
 
@@ -522,7 +522,7 @@ const goInstallCmd = version.tag
               <div><span class="n">01—install</span><h3>One binary, no runtime underneath it.</h3></div>
               <div>
                 <p>A knowledge-base tool that needs a Python environment or a model server is a tool your CI will fight. okfctl is a single static Go binary that runs with nothing installed alongside it: <code class="mono" style="color:var(--fg)">go install</code> it, or drop the binary on <code class="mono" style="color:var(--fg)">PATH</code>, and it runs.</p>
-                <p class="ev"><b>CGO_ENABLED=0 go build -o okfctl .</b>—static, no cgo. Prebuilt for macOS, Linux, and Windows, amd64 and arm64.</p>
+                <p class="ev"><b>{goInstallCmd}</b>. Prebuilt for macOS, Linux, and Windows, amd64 and arm64.</p>
               </div>
             </article>
 

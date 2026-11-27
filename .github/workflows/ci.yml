@@ -37,6 +37,8 @@ jobs:
               - 'README.md'
               - 'CONTRIBUTING.md'
               - 'docs/**/*.md'
+              - 'site/public/llms.txt'
+              - 'plugin.json'
               - 'site/scripts/scan_page_prose.py'
               - 'site/scripts/scan_page_prose_test.py'
               - '.github/workflows/ci.yml'
@@ -211,7 +213,13 @@ jobs:
       - name: prose gate — scan the shipped Markdown surfaces
         # Scans exactly the reader-facing Markdown: README.md, CONTRIBUTING.md,
         # docs/*.md, docs/guides/*.md, docs/commands/README.md — excluding the
-        # internal PRD/adr/plans/specs. A finding fails the build; the fix is to
+        # internal PRD/adr/plans/specs — plus two shipped files that are not
+        # .md: site/public/llms.txt (Markdown by the llms.txt convention, served
+        # verbatim at okfctl.dev) and the plugin.json description (the blurb an
+        # agent client shows for the plugin). Same detectors, same thresholds,
+        # including the build-internals class (no CGO / CGO_ENABLED / no model
+        # runtime / no Python sold as features; allowlist in the scanner).
+        # A finding fails the build; the fix is to
         # rewrite the flagged prose to a plain positive statement with every
         # technical fact preserved (never to weaken the pattern).
         if: needs.changes.outputs.prose == 'true' || github.ref == 'refs/heads/main'
@@ -223,6 +231,7 @@ jobs:
                     -not -path 'docs/adr/*' \
                     -not -path 'docs/plans/*' \
                     -not -path 'docs/specs/*')
+          files="$files site/public/llms.txt plugin.json"
           echo "Scanning:"; echo "$files"
           python3 site/scripts/scan_page_prose.py $files
 
