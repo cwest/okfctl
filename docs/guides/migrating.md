@@ -7,10 +7,36 @@ that plan, except for the one citation it wouldn't guess at. No step needs a mod
 
 ## A migration, start to finish
 
-The bundle has two nodes. Its `.okf` sidecar declares `okf_version: 0.1`.
-`wine/tannin.md` carries every v0.1 habit at once (the `timestamp` key, the body
-`# Citations` list, the link written from the bundle root) plus one citation
-that's just a sentence with no link in it.
+The bundle is five files. Its `.okf` sidecar declares `okf_version: 0.1`.
+
+```text
+mykb/.okf
+mykb/index.md         links to both nodes
+mykb/log.md
+mykb/wine/acidity.md
+mykb/wine/tannin.md
+```
+
+`wine/acidity.md` still has a `timestamp` key and a body
+`# Citations` list:
+
+```markdown
+---
+type: Reference
+title: Acidity
+timestamp: 2026-06-02T09:15:00Z
+---
+
+# Acidity
+
+Acidity makes a wine taste fresh.
+
+# Citations
+- https://en.wikipedia.org/wiki/Acids_in_wine
+```
+
+`wine/tannin.md` has those two, plus a link written from the bundle root and a
+citation that's only a sentence:
 
 ```markdown
 ---
@@ -43,9 +69,10 @@ judgment: 1 item(s); prose-citation 1
 1 item(s) need a decision before they can migrate; see the plan file.
 ```
 
-Five edits are mechanical. The Montalcino line isn't. It names nothing a reader
-can follow, and `migrate` won't invent a source for it. The plan files it under
-`judgment`:
+`acidity.md` gets two of the five edits. `tannin.md` gets three, counting the
+link. The Montalcino line is another matter. It
+names nothing a reader can follow, and `migrate` won't invent a source for it.
+The plan files it under `judgment`:
 
 ```json
 "judgment": [
@@ -74,6 +101,19 @@ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
 ```
 
 ```diff
+--- a/wine/acidity.md
++++ b/wine/acidity.md
+@@ -1,7 +1,9 @@
+ ---
+ type: Reference
+ title: Acidity
+-timestamp: 2026-06-02T09:15:00Z
++generated: {by: "human:casey", at: "2026-06-02T09:15:00Z"}
++sources:
++  - resource: "https://en.wikipedia.org/wiki/Acids_in_wine"
+ ---
+
+ # Acidity
 --- a/wine/tannin.md
 +++ b/wine/tannin.md
 @@ -1,13 +1,15 @@
@@ -96,8 +136,8 @@ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
  - https://en.wikipedia.org/wiki/Tannin
 ```
 
-The run prints the same kind of diff for `wine/acidity.md`, then the plan
-summary and `2 file(s) would change (dry run; nothing written).` The body
+After the diffs it repeats the plan summary and ends with
+`2 file(s) would change (dry run; nothing written).` The body
 `# Citations` list stays where it was. `migrate` adds frontmatter and never
 deletes the prose it came from.
 
@@ -218,14 +258,14 @@ downgrade.
 
 Those two judgment kinds (`prose-citation` and `missing-actor`) can still be
 read through a v0.1 fallback. A consumer MAY parse the body `# Citations` list,
-or use a legacy `timestamp` (Appendix B). But §12.1 grants those fallbacks only
-to a bundle that declares 0.2 or an older version, or nothing. Declare 0.3 with
-one of those items left and every v0.3 consumer drops it.
+or use a legacy `timestamp` (Appendix B). §12.1 allows that only for a bundle
+that declares 0.2 or older, or no version at all. Declare 0.3 with one of those
+items left and a v0.3 consumer drops it.
 
 The plan's `version_action` says `hold` until they're gone. Apply still writes
-the content edits, but `index.md` and `.okf` stay untouched. Fix the items,
-plan again: the next apply declares v0.3. You can also let them go. Plan
-with `--force-declare` and the plan records that you chose it while the summary
+the content edits, but `index.md` and `.okf` stay untouched. Fix the items and
+plan again, and the next apply declares v0.3. Or let them go: plan with
+`--force-declare`, and the plan records that you chose it while the summary
 counts how many items lose the fallback.
 
-`okfctl migrate --help` lists every flag.
+`okfctl migrate --help` lists the flags.

@@ -19,36 +19,39 @@ show what that looks like.
 
 ## Inventory and scores
 
-Score is the aidetector prose model, 0 (reads human) to 100 (reads machine),
-with 40 as the target. It describes the text, not who wrote it. "Em dash"
-is the share of prose paragraphs carrying one; the house limit is 10%.
-"Output shown" counts blocks of real command output on the page.
+Score is the aidetector prose model, from 0 (reads human) to 100 (reads
+machine). Under 40 passes. It grades the text, never the author. Words means
+the count aidetector prints as `words:` after it drops code, headings, and
+tables. The PR body counts the same way. Em dash is the share of prose
+paragraphs with one in them (the house cap is 10%). Output shown counts blocks
+of real command output.
 
 | Doc | Words | Score | Em dash | Output shown | First-time reader hits it |
 | :-- | --: | --: | --: | --: | :-- |
-| `README.md` | 1,011 | 97 | 52% | 0 | yes, first |
-| okfctl.dev homepage (`index.astro`, visible text of the build) | 937 | 95 | 12% | 5 tabs | yes, first |
-| `okfctl --help` (root; 206 words of output, mostly the command list) | 6 | too short | n/a | n/a | yes |
-| `docs/install.md` | 199 | 87 | 67% | 0 | yes |
-| `docs/README.md` | 292 | 75 | 60% | 0 | yes |
-| `docs/concepts.md` | 624 | 95 | 25% | 0 | yes ("read this first") |
-| `docs/guides/authoring.md` | 285 | 45 | 14% | 0 | yes (the quickstart guide) |
-| `docs/guides/migrating.md` | 776 | 96 | 0% | 1 (not reproducible from the page) | upgrade path |
-| `docs/guides/curation-health.md` | 1,314 | 99 | 30% | 0 | |
-| `docs/guides/index-and-freshness.md` | 530 | 98 | 62% | 0 | |
-| `docs/guides/search.md` | 670 | 96 | 44% | 0 | |
-| `docs/guides/remote-sources.md` | 205 | 44 | 50% | 0 | |
-| `docs/guides/plugins.md` | 196 | 53 | 25% | 0 | |
-| CLI help, all 49 commands' Short/Long (source of `docs/commands/README.md`) | 3,115 | 98 | 41% (27 spaced) | n/a | yes, via `--help` |
-| `okfctl migrate --help` | 282 | 91 | 100% (one paragraph, spaced dash) | n/a | upgrade path |
-| `skills/okf-authoring/SKILL.md` | 1,601 | 98 | 44% | some | agents |
-| `skills/okf-curation-health/SKILL.md` | 2,012 | 98 | 36% | some | agents |
-| `skills/okf-migrate-plan/SKILL.md` | 3,334 | 100 | 54% | some | agents |
-| `skills/okf-semantic-search/SKILL.md` | 1,489 | 99 | 33% | some | agents |
-| `site/public/llms.txt` | 200 | 89 | 40% (2 spaced) | n/a | answer engines |
-| `plugin.json` description | 33 | too short | 1 spaced | n/a | agent clients |
+| `README.md` | 1,121 | 97 | 52% | 0 | yes, first |
+| okfctl.dev homepage (visible text of `site/dist/index.html`) | 907 | 95 | 12% | 5 tabs | yes, first |
+| `okfctl --help` (root; the rest of the output is the command list) | 6 | too short | n/a | n/a | yes |
+| `docs/install.md` | 93 | 87 | 67% | 0 | yes |
+| `docs/README.md` | 352 | 75 | 60% | 0 | yes |
+| `docs/concepts.md` | 644 | 95 | 25% | 0 | yes ("read this first") |
+| `docs/guides/authoring.md` | 176 | 45 | 14% | 0 | yes (the quickstart guide) |
+| `docs/guides/migrating.md` | 724 | 96 | 0% | 1 (not reproducible from the page) | upgrade path |
+| `docs/guides/curation-health.md` | 1,040 | 99 | 30% | 0 | |
+| `docs/guides/index-and-freshness.md` | 503 | 98 | 62% | 0 | |
+| `docs/guides/search.md` | 668 | 96 | 44% | 0 | |
+| `docs/guides/remote-sources.md` | 131 | 44 | 50% | 0 | |
+| `docs/guides/plugins.md` | 160 | 53 | 25% | 0 | |
+| CLI help, all 49 commands' Short/Long (source of `docs/commands/README.md`) | 3,303 | 98 | 41% (27 spaced) | n/a | yes, via `--help` |
+| `okfctl migrate --help` | 304 | 91 | 100% (one paragraph, spaced dash) | n/a | upgrade path |
+| `skills/okf-authoring/SKILL.md` | 1,085 | 98 | 44% | some | agents |
+| `skills/okf-curation-health/SKILL.md` | 1,066 | 98 | 36% | some | agents |
+| `skills/okf-migrate-plan/SKILL.md` | 2,335 | 100 | 54% | some | agents |
+| `skills/okf-semantic-search/SKILL.md` | 1,061 | 99 | 33% | some | agents |
+| `site/public/llms.txt` | 199 | 89 | 40% (2 spaced) | n/a | answer engines |
+| `plugin.json` description | 37 | too short | 1 spaced | n/a | agent clients |
 
-Totals: about 18,800 words of reader-facing prose. Of the 19 rows with a score,
+Totals: about 15,600 scored words of reader-facing prose (the `migrate --help`
+row is inside the all-commands row and isn't counted twice). Of the 19 rows with a score,
 16 are above 70. The three that score under 60 (`authoring`, `remote-sources`,
 `plugins`) are the three shortest guides, and short pages carry less of the
 signal the model counts. Read those three as unknown, not as good.
@@ -116,7 +119,7 @@ the page around one bundle the reader can see whole.
 
 ### F6. Help text is one paragraph per command, written for the author
 
-`okfctl migrate --help` was 282 words in a single paragraph, with
+`okfctl migrate --help` was 304 words in a single paragraph, with
 "PURE READ", "consumer-agnostic", "deterministic edit", and "the plan's
 consumer (agent, colleague, shell loop, or a human)". It's accurate and hard to
 read at a terminal. Over all 49 commands, 27 paragraphs use a spaced em dash.
@@ -146,9 +149,9 @@ shipped twice. It got through because the file is `.txt`.
 - `docs/concepts.md` opens "Read this first; it makes every other page make
   sense." The sentence promises the page is important. The page should
   just start.
-- The four skills score 98-100 at 1,489-3,334 words. Agents are the readers,
+- The four skills score 98-100 at 1,061-2,335 words. Agents are the readers,
   and the register can stay denser than a guide's, but the length is worth a
-  look: `okf-migrate-plan` runs 3,334 words, more than twice the longest guide.
+  look: `okf-migrate-plan` runs 2,335 words, more than twice the longest guide.
 
 ### Checked and correct
 
@@ -199,39 +202,38 @@ reader could reproduce.
 
 ## The three samples
 
-This PR carries each one as a before/after diff.
+Each sample is a before/after diff in this PR.
 
-Round counts are accepted rounds over recorded rounds, read from each loop
-state file. A rework round starts a fresh state file, so the two rounds are
-counted apart. Counts are taken before the closing round that re-scores the
-committed bytes.
+A round count is accepted rounds over recorded rounds, straight from the loop's
+state file. A rework starts a new state file and its rounds are listed on their own.
+The closing re-score of the committed bytes isn't counted.
 
 | Sample | Before | After | Loop result |
 | :-- | --: | --: | :-- |
 | README top section (to `## Install`) | 97 | 25 | PASS (round 1: 2/2; round 2: 1/1) |
-| `docs/guides/migrating.md` | 96 | 45 | STOP-PLATEAU (round 1: 18/21; round 2: 14/16) |
+| `docs/guides/migrating.md` | 96 | 43 | STOP-PLATEAU (round 1: 18/21; round 2: 14/16; round 3: 11/11) |
 | `okfctl migrate --help` (Long text, regenerated into `docs/commands/README.md`) | 91 | 39 | PASS (round 1: 11/14, STOP-PLATEAU at 42; round 2: 19/22) |
 
-The guide missed the 40 target. Its opening paragraph stayed the hottest
-segment through both rounds, and the rest of the page has to repeat spec terms
-and quote output verbatim, which leaves few sentences free to change.
+The guide missed 40. Its opening paragraph was the hottest segment in all three
+rounds. Most of the rest is spec terms and pasted output that can't change.
 
-The README opener now says who the tool is for, what it does, and one thing
-`lint --strict` catches in CI. Its quickstart is a run that hits a real
+The README opener now tells you who the tool is for and what it does, then names
+one thing `lint --strict` catches in CI. The quickstart under it hits a real
 `missing-xref` finding. `validate` passes, `lint` reports the finding, and
-`lint --strict` fails on it, with a sentence on each result. The redundant
-`index build` is gone, and one line says why a reader can skip it. Nothing
-under `## Install` changed, so the whole file still scores 90.
+`lint --strict` fails on it, and each result gets one sentence. The redundant
+`index build` is gone, replaced by a line on why you can skip it. Nothing
+under `## Install` changed. The whole file still scores 90.
 
 An earlier draft of the opener said a mistyped link or a stale index fails CI.
-Neither does with the line the README gives. `lint` reports `broken-link` only
+Neither one does, with the CI line the README gives. `lint` reports `broken-link` only
 when a node with the same basename exists elsewhere (§11.2 bars rejecting a
 bundle for broken links), and a stale index fails `index check`, not
 `lint --strict`. The opener now claims only what the run beneath it shows.
 
-In the migrating guide, one two-node v0.1 bundle goes through the plan, the
-preview, the apply, one resolved judgment item, and the v0.3 declaration, and
-you see every file and every line of output (all from v0.5.0). The reference
+The migrating guide walks one two-node v0.1 bundle from plan to the v0.3
+declaration, with one judgment item fixed by hand on the way. Both nodes are on
+the page, so you can find the plan's five edits yourself (two in `acidity.md`,
+three in `tannin.md`). The output came from v0.5.0. The reference
 sections come after, carrying the old page's facts, with `human:casey` as the
 example actor (F4).
 
