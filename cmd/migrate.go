@@ -61,7 +61,9 @@ func newMigrateCmd() *cobra.Command {
 			"or openlibrary.org. Nothing is fetched to check it. Each converted entry's " +
 			"source gets an id (its plain key, else its list number, else cite-<n>; unique " +
 			"with case folded), the entry's full text becomes the footnote definition " +
-			"[^id], and body [k] references become [^id] (§5.1, §4.2). An entry that names " +
+			"[^id], and body [k] references become [^id] (§5.1, §4.2). A source title that " +
+			"holds its whole entry is cut to the work's name, or removed when the entry " +
+			"names none, once that footnote holds the text. An entry that names " +
 			"two or more resources (code spans aside) is split into one source per resource, " +
 			"with ids <id>, <id>-2, <id>-3; the first holds the full entry text as its " +
 			"footnote, a later one its link text or resource, and each body [k] becomes " +
@@ -74,8 +76,10 @@ func newMigrateCmd() *cobra.Command {
 			"another entry, so it cannot be split (§5.1). missing-actor marks a timestamp " +
 			"rename with no actor (§7). timestamp-no-offset is a date-time with no offset " +
 			"(§5, §13.2), and timestamp-invalid is a §5 value where no date can be found. " +
-			"source-title-unnamed marks an entry whose untitled source gets no name, and " +
-			"source-title-conflict one that names a different work than its source's title. " +
+			"source-title-unnamed marks an entry whose untitled source gets no name, " +
+			"source-title-conflict one that names a different work than its source's title, " +
+			"and source-title-unpreserved a whole-entry title kept because no footnote " +
+			"holds its text. " +
 			"citation-ref-unclear marks a body [k] near \"brief\", \"citation\", \"node\", or a " +
 			"link, citation-unattached a second entry for one resource, and " +
 			"source-id-collision a node whose ids would collide. " +
