@@ -96,9 +96,7 @@ func splitFrontmatter(src []byte) (split, bool) {
 			found = true
 			break
 		}
-		// Strip a trailing \r so CRLF sources parse cleanly.
-		yamlBuf.Write(bytes.TrimSuffix(bytes.TrimSuffix(line, []byte("\n")), []byte("\r")))
-		yamlBuf.WriteByte('\n')
+		writeYAMLLine(&yamlBuf, line)
 	}
 	if !found {
 		return split{}, false
@@ -107,6 +105,20 @@ func splitFrontmatter(src []byte) (split, bool) {
 	after = bytes.TrimPrefix(after, []byte("\r\n"))
 	after = bytes.TrimPrefix(after, []byte("\n"))
 	return split{yamlBlock: yamlBuf.Bytes(), body: after}, true
+}
+
+// writeYAMLLine appends one source line to the YAML block with every line
+// break normalized to LF. YAML 1.2 §5.4: CR, LF and CRLF are each one line
+// break, and a processor normalizes each to a single LF. Stripping only the
+// line's CRLF/LF terminator is not enough: in `x\r\r\n` the bare CR is a break
+// of its own, and leaving it next to the appended LF would fuse the two breaks
+// into one CRLF, so the block would parse differently from the verbatim source
+// (a plain scalar continued across the empty line would fold to "x y" instead
+// of keeping its "x\ny" break).
+func writeYAMLLine(buf *bytes.Buffer, line []byte) {
+	content := bytes.TrimSuffix(bytes.TrimSuffix(line, []byte("\n")), []byte("\r"))
+	buf.Write(bytes.ReplaceAll(content, []byte("\r"), []byte("\n")))
+	buf.WriteByte('\n')
 }
 
 // splitFrontmatterRaw is the byte-preserving variant of splitFrontmatter. It
@@ -136,8 +148,7 @@ func splitFrontmatterRaw(src []byte) (yamlBlock, rawAfter []byte, ok bool) {
 			found = true
 			break
 		}
-		yamlBuf.Write(bytes.TrimSuffix(bytes.TrimSuffix(line, []byte("\n")), []byte("\r")))
-		yamlBuf.WriteByte('\n')
+		writeYAMLLine(&yamlBuf, line)
 	}
 	if !found {
 		return nil, nil, false
