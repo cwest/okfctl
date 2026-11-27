@@ -1,7 +1,7 @@
 ---
 name: okf-curation-health
-description: Use when keeping an OKF bundle healthy with okfctl — running validate for spec-floor and type-template conformance, and lint for curation findings (orphans, missing cross-references, broken links and path fields, coverage gaps, type and tag hygiene, OKF v0.3 §5 frontmatter checks), including as a CI or pre-commit gate.
-version: 1.1.0
+description: Use when checking an OKF bundle with okfctl. validate checks spec-floor conformance and opt-in type templates; lint reports curation findings (orphans, missing links, broken links and path fields, coverage gaps, type and tag drift, OKF v0.3 §5 frontmatter). Both gate CI.
+version: 2.0.0
 author: okfctl
 license: Apache-2.0
 metadata:
@@ -11,199 +11,188 @@ metadata:
     sharing: shareable
 ---
 
-# Keeping an OKF corpus healthy with okfctl
+# Checking an OKF bundle with okfctl
 
 ## Overview
 
-Two okfctl commands keep a bundle healthy, and they answer different questions:
+Build a bundle in which one node names another in its prose but never links to
+it, then check it both ways:
 
-- **`validate`** — *is this a conformant OKF bundle?* Spec-floor conformance
-  (hard failures), plus an opt-in type-template overlay for team conventions.
-- **`lint`** — *is this a well-curated corpus?* Judgment-worthy findings
-  (orphans, missing cross-references, broken internal links, coverage gaps, type
-  hygiene). Never a format failure; `lint` never mutates the bundle.
+<!-- transcript: exit 1 okfctl lint --strict mykb -->
+```text
+$ okfctl bundle init mykb
+Initialized OKF bundle in mykb
+$ okfctl node new wine/tannin.md --type Concept --title Tannin --bundle mykb
+Created mykb/wine/tannin.md
+$ okfctl node new wine/oak.md --type Concept --title Oak --bundle mykb
+Created mykb/wine/oak.md
+$ echo 'Oak barrels add tannin to red wine.' >> mykb/wine/oak.md
+$ okfctl validate mykb
+OK: bundle conforms to the OKF spec floor
+$ okfctl lint mykb
+missing-xref: wine/oak.md mentions "Tannin" but does not link to wine/tannin.md
+1 lint finding(s)
+$ okfctl lint --strict mykb
+missing-xref: wine/oak.md mentions "Tannin" but does not link to wine/tannin.md
+1 lint finding(s)
+okfctl: 1 lint finding(s)
+```
 
-**`lint` and structural `validate` require NO model and NO index.** They work on
-a fresh clone with zero setup — pure graph and text analysis. (The one exception,
-`lint --semantic`, is covered by `okf-semantic-search`.)
+`validate` answers one question: does the bundle meet the OKF spec floor? This
+one does: `validate` exits 0. `lint` asks if the corpus is well curated. It
+found the unlinked mention but still exited 0, as lint is advisory by default.
+Pass `--strict` to turn any finding into exit 1. Neither command edits a file.
+
+Both commands need nothing besides the `okfctl` binary (they read no index and
+load no model). The one exception is `lint --semantic`, covered in
+`okf-semantic-search`.
 
 ## When to Use
 
-- You want to know whether a bundle conforms to OKF before publishing/merging.
-- You want curation guidance: what to link, what to write next, what to clean up.
-- You want a nonzero-exit gate for CI or a pre-commit hook.
+- You need to know if a bundle conforms to OKF ahead of a merge or publish.
+- You want a list of what to link, what to write next, what to clean up.
+- You want a CI step or pre-commit hook that fails on problems.
 
-Don't use for: authoring/scaffolding nodes — see `okf-authoring`; similarity
-checks — see `okf-semantic-search`.
+To create or move nodes, use `okf-authoring`. For similarity checks, use
+`okf-semantic-search`.
 
-## validate — conformance
+## validate: the spec floor
 
-Spec-floor validation checks that every concept's frontmatter parses as a YAML
-mapping and that reserved `index.md`/`log.md` files follow OKF §8/§9. Unknown
-type *values* are allowed — OKF is anti-taxonomy at the floor.
+A floor violation fails with exit 1 on each run, whatever flags you pass.
+Frontmatter that doesn't parse is one:
 
-A `.md` file with no frontmatter or no `type` (a `README.md`, an `AGENTS.md`) is
-not a concept (OKF v0.3 §3.2): every command skips it, and `validate` prints a
-**warning** for it without failing. Files and directories whose names start with
-`.` are not part of the bundle at all.
-
-```sh
-$ okfctl validate mykb
-OK: bundle conforms to the OKF spec floor
-```
-
-A floor violation always fails (exit 1), regardless of any flag:
-
-```sh
-$ okfctl validate mykb        # a node whose frontmatter does not parse
-FAIL concepts/bad.md: unparseable frontmatter
+<!-- transcript: exit 1 okfctl validate ./mykb -->
+```text
+$ printf -- '---\ntitle: [unclosed\n---\n\n# Bad\n' > mykb/wine/bad.md
+$ okfctl validate ./mykb
+FAIL wine/bad.md: unparseable frontmatter
 okfctl: 1 conformance finding(s)
-$ echo $?
-1
+$ rm mykb/wine/bad.md
 ```
 
-A type-less `.md` warns and still exits 0:
+A `.md` file that lacks frontmatter (a `README.md`, say) or that has no `type`
+isn't a concept under OKF v0.3 §3.2. All commands skip it; `validate` prints a
+warning and still exits 0:
 
-```sh
+```text
+$ printf '# Notes\n\nNot a concept.\n' > mykb/wine/README.md
 $ okfctl validate mykb
-warning concepts/README.md: not a concept (no frontmatter); skipped, does not affect conformance (OKF v0.3 §3.2)
+warning wine/README.md: not a concept (no frontmatter); skipped, does not affect conformance (OKF v0.3 §3.2)
 OK: bundle conforms to the OKF spec floor
-$ echo $?
-0
+$ rm mykb/wine/README.md
 ```
 
-### Type-template overlay (`--templates`)
+Files and directories whose names start with `.` don't belong to the bundle at
+all. An unknown `type` value passes too, as OKF leaves `type` open (§4.1).
 
-`--templates` additionally checks each node against its governing type template
-(if the bundle declares one — see `okf-authoring`). Template drift (a missing
-required field or body section) is reported as a **warning**, advisory by default
-(exit 0). Add `--strict` to make drift fail:
+### Type templates: --templates
 
-```sh
+`--templates` also checks each node against the type template that governs its
+`type` (templates are covered in `okf-authoring`). Drift prints a warning and
+exits 0. Add `--strict` and drift exits 1:
+
+<!-- transcript: exit 1 okfctl validate mykb --templates --strict -->
+```text
+$ mkdir -p mykb/templates
+$ printf -- '---\ntype: Type Template\ntarget_type: Playbook\nrequired_fields: [title, description, owner]\nbody_sections: [Trigger, Steps, Rollback]\n---\n\n# Playbook Template\n' > mykb/templates/playbook.md
+$ printf -- '---\ntype: Playbook\ntitle: Rollback\ndescription: undo a deploy\n---\n\n# Rollback\n\n## Trigger\n\n## Rollback\n' > mykb/wine/rollback.md
 $ okfctl validate mykb --templates
-warning playbooks/rollback.md: missing required field: owner (template Playbook)
-warning playbooks/rollback.md: missing body section: Rollback (template Playbook)
-warning playbooks/rollback.md: missing body section: Verification (template Playbook)
-3 drift warning(s)
-$ echo $?
-0
-
+warning wine/rollback.md: missing required field: owner (template Playbook)
+warning wine/rollback.md: missing body section: Steps (template Playbook)
+2 drift warning(s)
 $ okfctl validate mykb --templates --strict
-warning playbooks/rollback.md: missing required field: owner (template Playbook)
-...
-okfctl: 3 drift warning(s)
-$ echo $?
-1
+warning wine/rollback.md: missing required field: owner (template Playbook)
+warning wine/rollback.md: missing body section: Steps (template Playbook)
+2 drift warning(s)
+okfctl: 2 drift warning(s)
+$ rm mykb/wine/rollback.md mykb/templates/playbook.md
 ```
 
-The overlay never leaks into the floor: unknown type values still pass, and
-spec-floor violations still fail even without `--templates`.
+Templates never change the floor: leave off `--templates` and a missing `owner`
+is fine and an unparseable node still fails.
 
-## lint — curation findings
+## lint: curation findings
 
-```sh
+Here the bundle gains a concept term with no node of its own, two spellings of
+one type, plus a link to a path that moved. The two new files were written by
+hand; the index doesn't list them until you rebuild it:
+
+```text
+$ printf -- '---\ntype: Concepts\ntitle: Acidity\n---\n\n# Acidity\n\nMalolactic Fermentation lowers acidity. See [tannin](reference/tannin.md).\n' > mykb/wine/acidity.md
+$ printf -- '---\ntype: Concept\ntitle: Barrel Aging\naliases: [Malolactic Fermentation]\n---\n\n# Barrel Aging\n' > mykb/wine/aging.md
+$ echo 'Malolactic Fermentation softens it.' >> mykb/wine/oak.md
+$ echo 'Grip drops after Malolactic Fermentation.' >> mykb/wine/tannin.md
 $ okfctl lint mykb
-OK: no lint findings          # when clean
-```
-
-With findings, `lint` prints one line per finding and a count. By default it is
-**advisory and exits 0 even with findings** — so it never blocks by accident:
-
-```sh
-$ okfctl lint mykb
-coverage-gap: "Malolactic Fermentation" is referenced by 3 nodes but has no node of its own
+coverage-gap: "Malolactic Fermentation" is referenced by 4 nodes but has no node of its own
 type-hygiene: near-duplicate type values likely refer to one type: Concept, Concepts
-tag-hygiene: near-duplicate tag values likely refer to one tag: Wine (1 node), wine (1 node), wines (1 node)
-orphan: concepts/aging.md has no inbound links (unreachable by traversal)
-missing-xref: concepts/wine.md mentions "Tannin" but does not link to concepts/tannin.md
-broken-link: concepts/wine.md path field sources[0].resource: tannin.md resolves to no node (§6.2); did you mean /reference/tannin.md?
-9 lint finding(s)
-$ echo $?
-0
+broken-link: wine/acidity.md links to reference/tannin.md which resolves to no node; did you mean /wine/tannin.md?
+missing-xref: wine/acidity.md mentions "Tannin" but does not link to wine/tannin.md
+orphan: wine/acidity.md has no inbound links (unreachable by traversal)
+orphan: wine/aging.md has no inbound links (unreachable by traversal)
+missing-xref: wine/oak.md mentions "Tannin" but does not link to wine/tannin.md
+7 lint finding(s)
+$ okfctl index build mykb
+Wrote 2 index.md file(s) under mykb
+$ okfctl lint mykb
+coverage-gap: "Malolactic Fermentation" is referenced by 4 nodes but has no node of its own
+type-hygiene: near-duplicate type values likely refer to one type: Concept, Concepts
+broken-link: wine/acidity.md links to reference/tannin.md which resolves to no node; did you mean /wine/tannin.md?
+missing-xref: wine/acidity.md mentions "Tannin" but does not link to wine/tannin.md
+missing-xref: wine/oak.md mentions "Tannin" but does not link to wine/tannin.md
+5 lint finding(s)
 ```
 
-### What each finding means and what to do
+Both orphans went away after `index build` listed them, as `index.md` counts
+as a linker. Malolactic Fermentation is a known term because `aging.md` declares
+it as an alias. An alias doesn't give the term a home node; lint reports the
+missing node as a coverage finding.
+`--coverage-threshold N` sets how many distinct nodes have to mention a term for
+it to be reported (the default is 3).
 
-| finding | means | action |
+### Each finding and its fix
+
+| finding | means | fix |
 |---|---|---|
-| `orphan` | a concept node no node (or `index.md`) links to — unreachable by traversal | link it from a relevant node, or from `index.md` via `index build` |
-| `missing-xref` | a node's prose names another node's title as a whole word but doesn't link it | add the `[Title](path.md)` link, or reword if the mention is incidental |
-| `broken-link` | a body link or a §6.2 path field (`sources[].resource`, `superseded_by`, …) resolves to no node, **and a node with that basename exists elsewhere** — a moved or mistyped path (a defect, not an unwritten concept). Values resolve by §6: a leading `/` from the bundle root, anything else from the file's directory | fix the path to the candidate the finding names; the hint is already written in a form that resolves from the linking file |
-| `coverage-gap` | a **known concept term** (declared as a title/alias) is referenced by ≥ threshold distinct nodes but has no node of its own — a node whose title *is* the term or *leads with* it counts as its home | author the missing node — it's a real to-do, prioritized by mention count |
-| `type-hygiene` | two `type` values fold to the same canonical form (case / trailing-`s` plural), e.g. `Concept` vs `Concepts` | pick one spelling and normalize the drifting nodes |
-| `tag-hygiene` | two or more `tags` spellings fold to one form: case, separators (`run-book`, `run_book`, `runbook`), and a plural that folds onto a singular the bundle already uses. Each spelling is listed with its node count, most common first | review it (the fold is a heuristic), then normalize toward the leading spelling |
-| `spec-version` | a concept carries a per-node `okf_spec_version`; the version is declared once, as `okf_version` on the bundle-root `index.md` (§12) | remove the per-node key |
-| `source-missing-resource` | a `sources` entry has no `resource` (or a null/empty one). OKF v0.3 §5.1 requires it, so the entry is ignored as provenance (§11.2 rule 3) | add the `resource` the entry cites, or remove the entry |
-| `timestamp-form` | a §5 timestamp key (`generated.at`, `verified[].at`, `stale_after`, `sources[].last_modified`, `usage_window.from`/`to`) holds something other than an RFC 3339 date-time *with an offset* or a full-date. A date-time without an offset (`2026-06-20T10:00:00`) is not valid, and an unparseable `stale_after` makes the concept read as stale, never fresh | add the offset (`2026-06-20T10:00:00Z`) or use a date only (`2026-06-20`) |
-| `verified-event` | a `verified` event lacks `by` or `at`; consumers ignore it, so it gives no trust | add the missing actor or timestamp, or remove the event |
-| `superseded-by` | `superseded_by` resolves to no concept in the bundle, or is set on a concept whose `status` is not `deprecated` (§5.4: it has a meaning only there) | point it at the replacing concept, or set `status: deprecated` |
-| `status-lifecycle` | `status` holds a value §5.4 does not define. That is permitted; the concept is not stable and is excluded from current knowledge | if the value is an epistemic grade, move it to `epistemic`; otherwise use `draft`, `stable`, or `deprecated` |
+| `orphan` | no node and no `index.md` links to this concept | link it from a related node, or run `okfctl index build` |
+| `missing-xref` | a node's prose names another node's title as a whole word without linking it | add `[Title](path.md)`, or reword an incidental mention |
+| `broken-link` | a body link or §6.2 path field (`sources[].resource`, `superseded_by`, …) resolves to no node, and a node with the same basename exists elsewhere | change the path to the one the finding suggests |
+| `coverage-gap` | a known term (some node's `title` or `aliases` entry) is mentioned by at least the threshold of nodes, and no node's title is the term or starts with it | write that node |
+| `type-hygiene` | two `type` values fold to one form by case or a trailing `s` | pick one spelling |
+| `tag-hygiene` | two or more `tags` spellings fold to one form by case, separators (`run-book`, `run_book`, `runbook`), or a plural of a tag already in use; each is listed with its node count | review it, since the fold is a guess, then use the leading spelling |
+| `spec-version` | a concept has its own `okf_spec_version` key; the version belongs once, as `okf_version` on the root `index.md` (§12) | delete the key |
+| `source-missing-resource` | a `sources` entry has no `resource`; §5.1 requires one, so the entry is ignored (§11.2 rule 3) | add the resource, or delete the entry |
+| `timestamp-form` | a §5 timestamp (`generated.at`, `verified[].at`, `stale_after`, `sources[].last_modified`, `usage_window.from`/`to`) isn't an RFC 3339 date-time with an offset or a plain date; an unparseable `stale_after` reads as stale | add the offset (`2026-06-20T10:00:00Z`) or use a date |
+| `verified-event` | a `verified` event lacks `by` or `at`, so consumers ignore it (§5.2) | add the missing field, or delete the event |
+| `superseded-by` | `superseded_by` points at no concept, or sits on a concept whose `status` isn't `deprecated` (§5.4) | fix the target, or set `status: deprecated` |
+| `status-lifecycle` | `status` holds a value §5.4 doesn't define, so the concept isn't treated as stable | use `draft`, `stable`, or `deprecated`; move an epistemic grade to `epistemic` |
 
-None of these checks makes `validate` fail. OKF v0.3 §11 keeps a bundle with
-these values conformant, so they are curation guidance only, and they trip
-`lint --strict` like every other finding.
+None of these makes `validate` fail, as OKF v0.3 §11 leaves such a bundle
+conformant. Each of them fails `lint --strict`.
 
-Two accuracy notes that keep you from chasing ghosts:
+The §5 checks look like this on one node:
 
-- **`orphan` treats `index.md` as a linker.** A node listed in a freshly built
-  `index.md` is *not* an orphan. If everything shows as orphaned, run `okfctl
-  index build` first (see `okf-authoring`).
-- **`coverage-gap` only fires for *known* concepts** — a term some node declares
-  as a `title` or `aliases:` entry. Arbitrary capitalized prose ("Google Cloud",
-  a sentence-initial "The") is deliberately *not* a candidate; this is what makes
-  the check act on real gaps rather than noise. A concept is considered to *have
-  a node* when some node's title equals the term or leads with it (e.g. a node
-  titled "Block Buzz vs. Discord…" is the home for "Block Buzz"); an alias on an
-  otherwise-unrelated node marks the term as known but does not, by itself, give
-  it a home. If you expect a gap and don't get one, the term probably already has
-  a home node — or isn't declared as a concept anywhere yet.
-
-### `broken-link` vs a dangling link — defect, not gap
-
-A `.md` link that resolves to no node is one of two very different things, and
-`lint` reports only the dangerous one:
-
-- **The concept doesn't exist yet** — a referenced-but-unwritten node. That's a
-  *coverage gap*: correctly advisory, and it stays out of `lint`. `analyze`
-  surfaces it under `coverage_gaps.dangling_links` where it belongs (a research
-  to-do, not a defect).
-- **The concept exists and the path is wrong** — a typo, a moved file, a bad
-  find-and-replace. That's a *defect*, and it's dangerous because it's silent:
-  everything still validates, nothing is orphaned, yet a link points nowhere.
-  `broken-link` is the gate for exactly this case.
-
-The discriminator is basename: `lint` reports a dangling target as `broken-link`
-**only when a node with the same basename lives elsewhere in the bundle** — the
-signature of a moved or mistyped path. This is the check to lean on before a bulk
-migration (`node mv`, a directory reorg, a wikilink→Markdown rewrite): those
-operations produce exactly the defect signature, and `lint --strict` will catch
-them in CI. `analyze`'s advisory dangling-link reporting is unchanged — this
-check only *adds* a gate.
-
-### Tuning the coverage-gap threshold
-
-Default threshold is 3 distinct nodes. Lower it to surface gaps earlier, raise it
-to only flag heavily-referenced missing concepts:
-
-```sh
-$ okfctl lint mykb --coverage-threshold 2
+```text
+$ printf -- '---\ntype: Concept\ntitle: Body\nstatus: verified\nsources:\n  - title: notes\nverified:\n  - by: human:casey\n---\n\n# Body\n\nSee [aging](aging.md).\n' > mykb/wine/body.md
+$ okfctl lint mykb | grep body.md
+orphan: wine/body.md has no inbound links (unreachable by traversal)
+source-missing-resource: wine/body.md sources entry #1 has no resource, so it is ignored (§5.1 requires resource; §11.2 rule 3)
+status-lifecycle: wine/body.md has status "verified", which §5.4 does not define (draft|stable|deprecated); per §5.4 the concept is not stable and filters to current knowledge exclude it. If this is an epistemic grade, move it to `epistemic`
+verified-event: wine/body.md verified[0] = { by: human:casey } has no at; §5.2 requires both by and at, so consumers ignore this event and it does not count toward the trust tier
 ```
 
-## Gate CI / pre-commit with --strict
+### broken-link only fires when the target exists elsewhere
 
-`lint` is advisory by default; `--strict` makes *any* finding exit non-zero so it
-can gate a pipeline:
+A link to a path with no node means one of two things. If no node by that
+name exists anywhere, the link points at a concept no one has written; lint
+says nothing about it, but `okfctl analyze` lists it under
+`coverage_gaps.dangling_links`. If a node with the same basename lives at
+another path, the link is a typo or left over from a move. Lint reports that
+case as `broken-link`. Run `lint --strict` after a bulk move, directory
+reorganization, or wikilink rewrite, as those are what produce the second case.
 
-```sh
-$ okfctl lint mykb --strict
-orphan: concepts/mouthfeel.md has no inbound links (unreachable by traversal)
-1 lint finding(s)
-okfctl: 1 lint finding(s)
-$ echo $?
-1
-```
+## Gate CI and pre-commit
 
-A pre-commit hook, for example:
+Add `--strict` to make findings fail the run. This pre-commit hook does that:
 
 ```yaml
 - repo: local
@@ -215,40 +204,33 @@ A pre-commit hook, for example:
       pass_filenames: false
 ```
 
-Because structural `lint` needs no model and no index, this gate runs on a fresh
-clone with nothing installed but the `okfctl` binary. For a CI conformance gate,
-pair it with `okfctl validate . --templates --strict` and `okfctl index check .`.
+For the complete CI gate, add `okfctl validate . --templates --strict` and
+`okfctl index check .` to it. All three commands run on a fresh clone with
+nothing but the `okfctl` binary installed. For machine output, run
+`okfctl lint --json` to get findings as a JSON array sorted by path, then
+check.
 
 ## Common Pitfalls
 
-1. **Everything shows as `orphan`.** You haven't run `okfctl index build`.
-   `index.md` confers reachability; without a current index, nodes linked only
-   from the (stale/empty) table of contents read as orphaned.
+If the whole bundle comes back flagged as `orphan`, you likely skipped the index
+step. Run `okfctl index build` and lint again (`index.md` counts as a linker).
 
-2. **Expecting `coverage-gap` on any repeated word.** It only reports *known*
-   concept terms (declared as a title or `aliases:`). Lowercase prose and
-   undeclared proper nouns are intentionally excluded — the check targets real
-   authoring to-dos, not vocabulary frequency.
+Repeating a word won't trigger `coverage-gap` by itself; the check looks
+only at terms that some node declares as a `title` or an `aliases` entry.
 
-3. **Assuming `lint` blocks CI by default.** It exits 0 even with findings unless
-   you pass `--strict`. A pipeline that forgot `--strict` will go green on a
-   corpus full of findings.
+Plain `lint` won't fail CI. It exits 0 with findings unless you pass `--strict`.
 
-4. **Using `lint` to catch format errors.** `lint` is curation guidance, never
-   conformance. Spec-floor violations (unparseable frontmatter, malformed
-   reserved files) surface only in `validate`, which fails on them regardless of
-   flags. A `.md` with no `type` is not a floor violation: it is not a concept,
-   and `validate` only warns about it.
+Look for unparseable frontmatter and malformed reserved files in `validate`
+output. They never show up in `lint`.
 
-5. **Confusing `--templates` warnings with floor failures.** Template drift is
-   advisory (exit 0) unless `--strict`; a genuine spec-floor violation fails
-   unconditionally. They are separate exit paths.
+Drift from `--templates` is only a warning and exits 0 unless you add
+`--strict`. In contrast, any floor violation exits 1 on each run.
 
 ## Verification Checklist
 
-- [ ] `okfctl validate <dir>` exits 0 (spec floor clean)
-- [ ] If the bundle declares type templates, `okfctl validate <dir> --templates`
-      reviewed; `--strict` used where drift must block
-- [ ] `okfctl lint <dir>` reviewed; each finding class understood and actioned
-- [ ] `okfctl index build` run before trusting `orphan` findings
-- [ ] CI/pre-commit gate uses `--strict` so findings actually block
+- [ ] `okfctl validate <dir>` exits 0
+- [ ] If the bundle has type templates, `okfctl validate <dir> --templates`
+      got looked over, plus `--strict` where drift should block
+- [ ] `okfctl index build` ran ahead of trusting any `orphan` findings
+- [ ] Each `okfctl lint <dir>` finding got fixed or left on purpose
+- [ ] The CI or pre-commit gate passes `--strict`
