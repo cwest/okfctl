@@ -37,6 +37,12 @@ import (
 // renderer checks the bytes it is about to write. A title whose text is in no
 // footnote is kept and reported as JudgmentSourceTitleUnpreserved. Every
 // other key of the source (`note`, `x-` keys) keeps its bytes (§4.1).
+//
+// A title annotated by hand opens with its entry's `[key]` but says more than
+// the entry does. Its text is in no other place, so the plan appends it to the
+// footnote definition it writes for the source's id, and only then shortens
+// the title the same way. A footnote already in the body is the author's and
+// is never edited: such a title is kept and reported as unpreserved.
 
 // JudgmentSourceTitleUnpreserved: a source whose title holds its `# Citations`
 // entry, but no footnote definition with the source's id holds that text (the
@@ -65,6 +71,33 @@ type retitleCandidate struct {
 	entry int
 	cur   sourceTitle
 	name  string
+	// moved: the title is annotated beyond the entry's text, so its text is
+	// appended to the footnote this plan writes before the title changes.
+	moved bool
+}
+
+// annotatedTitle reports whether title was annotated by hand from entry: it
+// opens with the entry's own `[key]` but is not the entry's text. A title
+// that opens with any other bracket ("[Beta] Auto Routing") is a name. A
+// link reference definition carries no prose to annotate.
+func annotatedTitle(title, entry string) bool {
+	key := entryKey(entry)
+	if key == "" || linkRefDefRe.MatchString(entry) || isEntryText(title, entry) {
+		return false
+	}
+	t := strings.TrimSpace(title)
+	return len(t) > len(key)+2 && strings.EqualFold(t[:len(key)+2], "["+key+"]")
+}
+
+// annotationText is the text of an annotated title that goes into the
+// footnote definition labeled id: the title with whitespace collapsed, less
+// a leading `[id]`, which is the footnote's own label.
+func annotationText(title, id string) string {
+	t := collapseSpace(title)
+	if rest, ok := strings.CutPrefix(t, "["+id+"]"); ok && strings.TrimSpace(rest) != "" {
+		return strings.TrimSpace(rest)
+	}
+	return t
 }
 
 // collapseSpace joins s's whitespace runs into single spaces.
@@ -124,17 +157,24 @@ func planRetitles(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, ent
 	if len(cands) == 0 {
 		return
 	}
-	planned := map[string]string{}
-	for _, f := range nm.Footnotes {
-		planned[strings.ToLower(f.ID)] = f.Text
+	planned := map[string]int{}
+	for i, f := range nm.Footnotes {
+		planned[strings.ToLower(f.ID)] = i
 	}
 	defs := footnoteDefinitions(n.Body)
 	for _, c := range cands {
 		entry := entries[c.entry]
 		id := ids[c.entry]
-		def, ok := planned[strings.ToLower(id)]
-		if !ok {
-			def = defs[strings.ToLower(id)]
+		j, ok := planned[strings.ToLower(id)]
+		def := defs[strings.ToLower(id)]
+		if ok {
+			// An annotated title's text is in no other place: append it to
+			// the footnote this plan writes. A footnote already in the body
+			// is the author's and is never edited.
+			if c.moved && id != "" && !titlePreserved(c.cur.title, id, nm.Footnotes[j].Text) {
+				nm.Footnotes[j].Text += " " + annotationText(c.cur.title, id)
+			}
+			def = nm.Footnotes[j].Text
 		}
 		if id == "" || !titlePreserved(c.cur.title, id, def) {
 			plan.Judgment = append(plan.Judgment, JudgmentItem{
@@ -143,7 +183,7 @@ func planRetitles(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, ent
 			continue
 		}
 		nm.Retitles = append(nm.Retitles, SourceRetitleEdit{
-			Resource: c.cur.resource, Old: c.cur.title, Title: c.name, Footnote: id,
+			Resource: c.cur.resource, Old: c.cur.title, Title: c.name, Footnote: id, Moved: c.moved,
 		})
 	}
 }
