@@ -27,27 +27,28 @@ func newValidateCmd() *cobra.Command {
 	var noIgnore *bool
 	c := &cobra.Command{
 		Use:   "validate [bundle-dir]",
-		Short: "Check a bundle for OKF spec-floor conformance (optionally overlay team type-templates)",
-		Long: "validate enforces the OKF spec floor: every concept's frontmatter parses and carries a " +
-			"non-empty type, and reserved index.md/log.md files follow §8/§9. A .md file with no " +
-			"frontmatter or no type is not a concept (OKF v0.3 §3.2): it is reported as a warning and " +
-			"never fails the run. " +
-			"It also reports git drift: a node whose frontmatter `modified` contradicts " +
-			"its git last-commit date (read-only — it never rewrites the file, and " +
-			"degrades to nothing outside a git repo). With --templates it runs the opt-in " +
-			"team overlay (PRD §9.4) as well, reporting template drift; templates may be " +
-			"referenced from a separate bundle via the .okf `templates:` key or " +
-			"--templates-from (PRD §9.2). All drift is " +
-			"advisory by default (exit 0); pass --strict to exit non-zero on any drift. " +
-			"Floor violations always fail regardless of --strict.",
-		Example: "  # Check the spec floor for the bundle in the current directory\n" +
+		Short: "Check a bundle against the OKF spec floor, and optionally your team's type templates",
+		Long: "validate checks a bundle against the floor every OKF bundle has to meet (§11.1). " +
+			"Every frontmatter block has to parse as a YAML mapping. Each reserved index.md and " +
+			"log.md has to follow §8 and §9. A floor failure prints FAIL and always exits 1.\n\n" +
+			"It never edits a file. A .md file with no frontmatter or no type isn't a concept " +
+			"(OKF v0.3 §3.2). validate warns about it and the run still passes. It also warns " +
+			"about drift: a node whose modified date disagrees with its last git commit (outside " +
+			"a git repo it's silent), or an okf_version in the legacy .okf sidecar that disagrees " +
+			"with the one in index.md (§8.1, §12).\n\n" +
+			"Drift is advice: the run exits 0 unless you pass --strict.\n\n" +
+			"--templates checks each node against your team's type template (PRD §9.4) and " +
+			"reports where a node strays as more drift. The templates can live in another " +
+			"bundle, named by the .okf templates: key or by --templates-from (PRD §9.2). An " +
+			"unknown type or an extra key never fails the floor (§11.2).",
+		Example: "  # Check the bundle in the current directory\n" +
 			"  okfctl validate\n\n" +
 			"  # Check a bundle elsewhere\n" +
-			"  okfctl validate ./bundles/knowledge\n\n" +
-			"  # Also run the opt-in team template overlay, failing CI on any drift\n" +
-			"  okfctl validate --templates --strict ./bundles/knowledge\n\n" +
-			"  # Overlay templates from a specific bundle, overriding the .okf reference\n" +
-			"  okfctl validate --templates --templates-from ../okf-type-templates ./bundles/knowledge",
+			"  okfctl validate ./mykb\n\n" +
+			"  # Also check type templates, and fail CI on any drift\n" +
+			"  okfctl validate --templates --strict ./mykb\n\n" +
+			"  # Take the templates from another bundle instead of the .okf reference\n" +
+			"  okfctl validate --templates --templates-from ../okf-type-templates ./mykb",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."
@@ -80,7 +81,7 @@ func newValidateCmd() *cobra.Command {
 
 			var drift []okf.DriftFinding
 			if templates {
-				// Resolve the effective templates (PRD §9.2): a referenced bundle
+				// Resolve the effective templates (§9.2): a referenced bundle
 				// (--templates-from, or the .okf `templates:` key) folded in,
 				// local Type Template nodes overlaid. A broken reference is a
 				// hard error here — the overlay was explicitly requested.
