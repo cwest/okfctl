@@ -80,12 +80,13 @@ const (
 // StatusStable is the default lifecycle status when `status` is absent (§5.4).
 const StatusStable = "stable"
 
-// LifecycleStatuses is the §5.4 status lifecycle enum: the only values `status`
-// may hold. Absent ⇒ stable. This is a spec-DEFINED closed set, unlike the
-// open `type` vocabulary (§7.4) or the unknown `epistemic` key (§11): status is
-// named and enumerated by §5.4, so a value outside this set is a genuine defect.
-// It drives lint's status-lifecycle check (soft guidance), never a validate
-// floor rejection — §11 forbids rejecting a bundle for an optional field.
+// LifecycleStatuses is the set of status values that §5.4 defines. Absent ⇒
+// stable. Unlike the open `type` vocabulary (§7.4), §5.4 names these values,
+// and it also DEFINES what any other value means: the concept is not stable,
+// and filters to current knowledge exclude it. So a value outside this set is
+// permitted and keeps that meaning (§11.2 rule 4: keep the value, MAY warn).
+// It drives lint's advisory status-lifecycle note and IsStable/StatusKnown,
+// never a validate rejection.
 var LifecycleStatuses = map[string]bool{
 	"draft":      true,
 	"stable":     true,
@@ -137,13 +138,14 @@ func (n *Node) Sources() []Source {
 // date.
 func (n *Node) Generated() (Generation, bool) {
 	if m, ok := asStringMap(n.Frontmatter["generated"]); ok {
-		by := stringField(m, "by") // §5.2: by is REQUIRED within generated.
-		at, dated := frontmatterTime(m["at"])
+		by := stringField(m, "by")    // §5.2: by is REQUIRED within generated.
+		at, dated := okfTime(m["at"]) // §5: an RFC 3339 date-time or full-date.
 		if by != "" || dated {
 			return Generation{By: Actor(by), At: at}, true
 		}
 	}
-	// §13.1: legacy timestamp fallback.
+	// §12.1 / Appendix B: legacy timestamp fallback. It keeps its historical
+	// reader: it is a v0.1 key, not one of the §5 timestamp keys.
 	if at, ok := frontmatterTime(n.Frontmatter["timestamp"]); ok {
 		return Generation{By: "", At: at}, true
 	}
@@ -180,11 +182,14 @@ func (n *Node) Verified() []Verification {
 	return out
 }
 
-// TrustTier derives the trust tier from `verified` (§5.3): no verified ⇒
-// unverified; non-human actors only ⇒ machine-confirmed; any human:<id> ⇒
-// human-reviewed. Derived, never stored.
+// TrustTier derives the trust tier from the CURRENT verification events (v0.3
+// §5.3, a §13.1 breaking change): no current event ⇒ unverified; current events
+// from non-human actors only ⇒ machine-confirmed; a current human:<id> event ⇒
+// human-reviewed. Earlier events stay in the file as history and never raise
+// the tier, so the tier can only go down relative to v0.2 (the safe direction).
+// Derived, never stored.
 func (n *Node) TrustTier() TrustTier {
-	events := n.Verified()
+	events := n.CurrentVerified()
 	if len(events) == 0 {
 		return TrustUnverified
 	}
@@ -196,13 +201,54 @@ func (n *Node) TrustTier() TrustTier {
 	return TrustMachineConfirmed
 }
 
-// Status returns the lifecycle status (§5.4). Absent ⇒ stable.
+// CurrentVerified returns the verification events that are current (v0.3
+// §5.3): an event is current when its `at` is equal to or later than
+// `generated.at`, or when `generated` is absent. Consumers MUST calculate the
+// trust tier only from these (§11.2).
+//
+// The basis is Generated(), so a v0.1 bundle's legacy `timestamp` stands in
+// for generated.at (§12.1 fallback). A `generated` family that is present but
+// has no usable `at` gives no basis to compare against; okfctl then treats no
+// event as current. §5.3 names only "generated is absent" as the everything-is-
+// current case, and when a concept says it was generated at an unknown time,
+// claiming a human reviewed the current text would be the unsafe reading.
+func (n *Node) CurrentVerified() []Verification {
+	events := n.Verified()
+	g, hasGen := n.Generated()
+	if !hasGen {
+		return events // §5.3: generated is absent ⇒ every event is current.
+	}
+	if g.At.IsZero() {
+		return nil
+	}
+	var out []Verification
+	for _, e := range events {
+		if !e.At.Before(g.At) { // at >= generated.at
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// Status returns the raw lifecycle status (§5.4). Absent ⇒ stable. An unknown
+// value is returned as written: §5.4 and §11.2 say consumers SHOULD show the
+// raw value. Use IsStable for its meaning.
 func (n *Node) Status() string {
 	if v, ok := n.Frontmatter["status"].(string); ok && v != "" {
 		return v
 	}
 	return StatusStable // §5.4: absent status ⇒ stable.
 }
+
+// StatusKnown reports whether the status is one of the §5.4 values (draft,
+// stable, deprecated), counting an absent status as stable.
+func (n *Node) StatusKnown() bool { return LifecycleStatuses[n.Status()] }
+
+// IsStable reports whether the concept is stable (§5.4): status absent or
+// `stable`. "A value that is not in this list is not stable", so an unknown
+// value, like draft and deprecated, is not stable. Filters to current knowledge
+// exclude every concept for which IsStable is false.
+func (n *Node) IsStable() bool { return n.Status() == StatusStable }
 
 // Epistemic returns the node's `epistemic` grade value, and whether the key is
 // present. `epistemic` is NOT an OKF-defined field: it is an unknown frontmatter
@@ -222,52 +268,36 @@ func (n *Node) Epistemic() (string, bool) {
 	return scalarString(v), true
 }
 
-// StaleAfter returns the absolute stale-after instant (§5.5; RFC 3339 date-time
-// or full-date, §5). ok is false when the field is absent or unparseable; use
-// StaleAfterMalformed to tell the two apart.
+// StaleAfter returns the absolute stale-after instant (§5.5). ok is false when
+// the field is absent or unparseable; StaleAfterMalformed tells those apart.
 func (n *Node) StaleAfter() (time.Time, bool) {
-	return frontmatterTime(n.Frontmatter["stale_after"])
+	return okfTime(n.Frontmatter["stale_after"])
 }
 
-// hasStaleAfter reports whether the node carries a non-empty stale_after. Per
-// §5.5 and §11.2 rule 1, a null value, an empty string, and an empty list are
-// the same as an absent key.
-func (n *Node) hasStaleAfter() bool {
-	v, ok := n.Frontmatter["stale_after"]
-	if !ok || v == nil {
-		return false
-	}
-	switch t := v.(type) {
-	case string:
-		return strings.TrimSpace(t) != ""
-	case []any:
-		return len(t) > 0
-	}
-	return true
-}
-
-// StaleAfterMalformed reports whether the node carries a stale_after value that
-// does not parse as an RFC 3339 timestamp (§5). §5.5: a consumer SHOULD show
-// such a value as malformed.
+// StaleAfterMalformed reports whether stale_after is present but is not a §5
+// timestamp. §5.5: a consumer SHOULD show such a value as malformed. An empty
+// or null stale_after is the same as an absent key (§5.5, §11.2 rule 1) and is
+// not malformed.
 func (n *Node) StaleAfterMalformed() bool {
-	if !n.hasStaleAfter() {
+	raw, present := n.Frontmatter["stale_after"]
+	if !present || isAbsentValue(raw) {
 		return false
 	}
-	_, ok := n.StaleAfter()
+	_, ok := okfTime(raw)
 	return !ok
 }
 
 // IsStale reports whether the node is stale as of `now` (§5.5): stale when
 // now >= stale_after. A node with no stale_after (absent, null, or empty) is
-// never stale. A stale_after that does not parse is reported stale, because
-// §5.5 and §11.2 say a consumer MUST NOT treat an unparseable value as fresh.
+// never stale. A stale_after that does not parse is ALWAYS stale: §5.5 and
+// §11.2 say a consumer MUST NOT treat it as fresh.
 func (n *Node) IsStale(now time.Time) bool {
-	if !n.hasStaleAfter() {
-		return false
+	if n.StaleAfterMalformed() {
+		return true // §5.5: never fresh.
 	}
 	sa, ok := n.StaleAfter()
 	if !ok {
-		return true // §5.5: unparseable is never fresh
+		return false
 	}
 	return !now.Before(sa) // now >= stale_after
 }
@@ -282,12 +312,15 @@ func (n *Node) SourceCitations() int {
 	return citationCount(n.Body) // §13.1: legacy body fallback for v0.1 docs.
 }
 
-// parseVerification reads a { by, at } mapping into a Verification. ok is false
-// when neither field is usable.
+// parseVerification reads a { by, at } mapping into a Verification. v0.3 §5.2:
+// both keys are REQUIRED in an event, and consumers ignore an event that does
+// not have both. ok is false unless `by` is a non-empty actor AND `at` is a
+// valid §5 timestamp. lintVerifiedEvents warns about each ignored event
+// (§11.2 rule 3).
 func parseVerification(m map[string]any) (Verification, bool) {
 	by := stringField(m, "by")
-	at, dated := frontmatterTime(m["at"])
-	if by == "" && !dated {
+	at, dated := okfTime(m["at"])
+	if by == "" || !dated {
 		return Verification{}, false
 	}
 	return Verification{By: Actor(by), At: at}, true

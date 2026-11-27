@@ -159,6 +159,26 @@ func writeAnalyzeHuman(w io.Writer, rep okf.AnalyzeReport) {
 	}
 	fmt.Fprintf(w, "  (%d node(s) with no epistemic key)\n", rep.Epistemic.Untagged)
 
+	// Lifecycle (§5.4). Observational like the epistemic distribution: the raw
+	// status values, and the concepts a filter to current knowledge excludes.
+	// An unknown status is shown raw and marked; §5.4 counts it as not stable.
+	fmt.Fprintln(w, "\n## Lifecycle — status distribution (observational — not a gate)")
+	for _, s := range rep.Lifecycle.Distribution {
+		mark := ""
+		if !s.Known {
+			mark = " (not a §5.4 value; not stable)"
+		}
+		fmt.Fprintf(w, "  - %s: %d%s\n", s.Value, s.Count, mark)
+	}
+	fmt.Fprintf(w, "  (%d node(s) excluded from current knowledge: status not stable, §5.4)\n", len(rep.Lifecycle.NotCurrent))
+	for _, n := range rep.Lifecycle.NotCurrent {
+		line := fmt.Sprintf("  - %s (status: %s", n.Path, n.Status)
+		if n.SupersededBy != "" {
+			line += ", superseded_by: " + n.SupersededBy
+		}
+		fmt.Fprintln(w, line+")")
+	}
+
 	// Freshness. Staleness is decided only by stale_after (OKF §5.5, §11.2);
 	// the age-based list is an advisory and is labeled so it never claims a
 	// node is stale.

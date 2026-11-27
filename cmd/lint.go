@@ -87,6 +87,15 @@ func newLintCmd() *cobra.Command {
 			"it never rejects a value: it only reports spellings that fold together, so a curator " +
 			"can pick one. Because the fold is heuristic, review a finding before normalizing — it " +
 			"groups spellings that look like one tag, not a proof that they are.\n\n" +
+			"OKF §5 checks (advisory; the bundle stays conformant, so validate never fails on them): " +
+			"timestamp-form reports a §5 timestamp key (generated.at, verified[].at, stale_after, " +
+			"sources[].last_modified, usage_window.from/to) whose value is not an RFC 3339 date-time " +
+			"with an offset or a full-date — a date-time without an offset is not valid, and an " +
+			"unparseable stale_after is treated as stale, never fresh. verified-event reports a " +
+			"verified event missing by or at, which consumers ignore. superseded-by reports a " +
+			"superseded_by that resolves to no concept, or that is set on a concept whose status is " +
+			"not deprecated. status-lifecycle notes a status §5.4 does not define; such a concept " +
+			"is not stable and is excluded from current knowledge.\n\n" +
 			"--semantic adds similarity-driven checks (similar-but-unlinked pairs, nodes with " +
 			"no semantic neighbors) by reading the index built by 'okfctl-search index build'. " +
 			"Core only reads that index, so no embedding model is needed to lint.",

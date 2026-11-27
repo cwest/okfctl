@@ -19,15 +19,17 @@ import (
 	"strings"
 )
 
-// lintStatusLifecycle flags a `status` value outside the §5.4 lifecycle enum
-// (draft|stable|deprecated). This is a LINT finding, not a validate floor
-// rejection: §5.4 names status as an OPTIONAL field and §11 forbids rejecting a
-// bundle for an optional-field problem, so an out-of-enum value is soft guidance
-// (it trips `lint --strict`, never `validate`). The check fires only when the
-// key is PRESENT — absent ⇒ stable (§5.4) is silent, and the well-formed enum
-// values are silent. This is exactly what the migration's status/epistemic split
-// guards: an old conflated grade (verified, decision, …) left in `status` instead
-// of moved to `epistemic` is the defect this catches.
+// lintStatusLifecycle notes a `status` value outside the values §5.4 defines
+// (draft|stable|deprecated). v0.3 §5.4 DEFINES such a value: "A value that is
+// not in this list is not stable. Consumers that filter to current knowledge
+// exclude the concept." It is permitted, and §11.2 rule 4 says the consumer
+// keeps the value and MAY warn. So the finding states that meaning rather than
+// calling the value a defect, and it is a LINT note, never a validate
+// rejection. It stays in the `lint --strict` set because the most common cause
+// is a slip worth a curator's look: an old conflated grade (verified,
+// decision, …) left in `status` instead of moved to `epistemic`. The check
+// fires only when the key is PRESENT; absent ⇒ stable (§5.4) is silent, and
+// the §5.4 values are silent.
 func lintStatusLifecycle(b *Bundle) []LintFinding {
 	var out []LintFinding
 	for _, p := range sortedNodePaths(b) {
@@ -37,13 +39,13 @@ func lintStatusLifecycle(b *Bundle) []LintFinding {
 		}
 		val := strings.TrimSpace(scalarString(raw))
 		if LifecycleStatuses[val] {
-			continue // a valid §5.4 enum value.
+			continue // a §5.4 value.
 		}
 		out = append(out, LintFinding{
 			Check: "status-lifecycle",
 			Path:  p,
 			Message: fmt.Sprintf(
-				"status-lifecycle: %s has status %q, not in the §5.4 lifecycle enum (draft|stable|deprecated); an epistemic grade belongs under `epistemic`",
+				"status-lifecycle: %s has status %q, which §5.4 does not define (draft|stable|deprecated); per §5.4 the concept is not stable and filters to current knowledge exclude it. If this is an epistemic grade, move it to `epistemic`",
 				p, val),
 		})
 	}

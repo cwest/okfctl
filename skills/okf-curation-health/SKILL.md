@@ -130,6 +130,14 @@ $ echo $?
 | `coverage-gap` | a **known concept term** (declared as a title/alias) is referenced by ≥ threshold distinct nodes but has no node of its own — a node whose title *is* the term or *leads with* it counts as its home | author the missing node — it's a real to-do, prioritized by mention count |
 | `type-hygiene` | two `type` values fold to the same canonical form (case / trailing-`s` plural), e.g. `Concept` vs `Concepts` | pick one spelling and normalize the drifting nodes |
 | `source-missing-resource` | a `sources` entry has no `resource` (or a null/empty one). OKF v0.3 §5.1 requires it, so the entry is ignored as provenance (§11.2 rule 3) | add the `resource` the entry cites, or remove the entry |
+| `timestamp-form` | a §5 timestamp key (`generated.at`, `verified[].at`, `stale_after`, `sources[].last_modified`, `usage_window.from`/`to`) holds something other than an RFC 3339 date-time *with an offset* or a full-date. A date-time without an offset (`2026-06-20T10:00:00`) is not valid, and an unparseable `stale_after` makes the concept read as stale, never fresh | add the offset (`2026-06-20T10:00:00Z`) or use a date only (`2026-06-20`) |
+| `verified-event` | a `verified` event lacks `by` or `at`; consumers ignore it, so it gives no trust | add the missing actor or timestamp, or remove the event |
+| `superseded-by` | `superseded_by` resolves to no concept in the bundle, or is set on a concept whose `status` is not `deprecated` (§5.4: it has a meaning only there) | point it at the replacing concept, or set `status: deprecated` |
+| `status-lifecycle` | `status` holds a value §5.4 does not define. That is permitted; the concept is not stable and is excluded from current knowledge | if the value is an epistemic grade, move it to `epistemic`; otherwise use `draft`, `stable`, or `deprecated` |
+
+None of these checks makes `validate` fail. OKF v0.3 §11 keeps a bundle with
+these values conformant, so they are curation guidance only, and they trip
+`lint --strict` like every other finding.
 
 Two accuracy notes that keep you from chasing ghosts:
 

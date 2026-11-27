@@ -26,7 +26,7 @@ import (
 // validate Finding (a spec-floor violation), a lint finding is curation
 // guidance — never a format failure.
 type LintFinding struct {
-	Check   string `json:"check"` // "orphan" | "missing-xref" | "coverage-gap" | "type-hygiene" | "tag-hygiene" | "broken-link" | "status-lifecycle" | "spec-version" | "source-missing-resource"
+	Check   string `json:"check"` // "orphan" | "missing-xref" | "coverage-gap" | "type-hygiene" | "tag-hygiene" | "broken-link" | "status-lifecycle" | "spec-version" | "source-missing-resource" | "timestamp-form" | "verified-event" | "superseded-by"
 	Path    string `json:"path"`  // node path the finding is about ("" for bundle-level findings)
 	Message string `json:"message"`
 }
@@ -59,6 +59,9 @@ func Lint(b *Bundle, opts LintOptions) []LintFinding {
 	findings = append(findings, lintStatusLifecycle(b)...)
 	findings = append(findings, lintSpecVersion(b)...)
 	findings = append(findings, lintSourceMissingResource(b)...)
+	findings = append(findings, lintTimestampForms(b)...)
+	findings = append(findings, lintVerifiedEvents(b)...)
+	findings = append(findings, lintSupersededBy(b)...)
 
 	sort.SliceStable(findings, func(i, j int) bool {
 		if findings[i].Path != findings[j].Path {
@@ -311,51 +314,8 @@ func isWordByte(c byte) bool {
 // names the field. Scope descriptors (§5.1), URLs, assets, and values outside
 // the bundle root are never broken links.
 func lintBrokenLinks(b *Bundle) []LintFinding {
-	// basename -> sorted node paths carrying that basename.
-	byBase := map[string][]string{}
-	for p := range b.Nodes {
-		base := path.Base(p)
-		byBase[base] = append(byBase[base], p)
-	}
-	for base := range byBase {
-		sort.Strings(byBase[base])
-	}
-	// hint returns the "did you mean" suggestion for a target dangling from the
-	// file from, or "" when no node shares its basename (a coverage gap, not a
-	// defect). Each candidate is written in the form that resolves from `from`
-	// under every declared version: the `/`-rooted path (§6 rule 2). A bare
-	// bundle-relative path would only resolve through the §12.1 fallback, so in
-	// a v0.3 bundle it can echo the very value that failed to resolve.
-	hint := func(from, tgt string) string {
-		link := tgt
-		if i := strings.IndexAny(link, "#?"); i >= 0 {
-			link = link[:i]
-		}
-		var candidates []string
-		for _, c := range byBase[path.Base(link)] {
-			// Prefer the `/`-rooted form, else the relative path from `from`.
-			// Keep the first that resolves to c and differs from what the
-			// author wrote; never suggest the unresolved value back.
-			for _, form := range []RefForm{FormRootAbs, FormFileRel} {
-				s := linkURLFor(from, c, form)
-				if s == link {
-					continue
-				}
-				if r := b.ResolveLink(from, s); r.Kind == RefBundle && r.Path == c {
-					candidates = append(candidates, s)
-					break
-				}
-			}
-		}
-		switch len(candidates) {
-		case 0:
-			return ""
-		case 1:
-			return fmt.Sprintf("did you mean %s?", candidates[0])
-		default:
-			return fmt.Sprintf("did you mean one of: %s?", strings.Join(candidates, ", "))
-		}
-	}
+	byBase := nodesByBasename(b)
+	hint := func(from, tgt string) string { return brokenLinkHint(b, byBase, from, tgt) }
 
 	var out []LintFinding
 	for _, p := range sortedNodePaths(b) {
@@ -381,6 +341,59 @@ func lintBrokenLinks(b *Bundle) []LintFinding {
 		}
 	}
 	return out
+}
+
+// nodesByBasename maps each node basename to the sorted node paths carrying it.
+func nodesByBasename(b *Bundle) map[string][]string {
+	byBase := map[string][]string{}
+	for p := range b.Nodes {
+		base := path.Base(p)
+		byBase[base] = append(byBase[base], p)
+	}
+	for base := range byBase {
+		sort.Strings(byBase[base])
+	}
+	return byBase
+}
+
+// brokenLinkHint returns the "did you mean" suggestion for a target dangling
+// from the file from, or "" when no node shares its basename (a coverage gap,
+// not a defect). A non-empty hint is exactly the condition under which
+// broken-link reports, so superseded-by shares this predicate to avoid a second
+// finding for the same value. Each candidate is written in the form that
+// resolves from `from` under every declared version: the `/`-rooted path (§6
+// rule 2). A bare bundle-relative path would only resolve through the §12.1
+// fallback, so in a v0.3 bundle it can echo the very value that failed to
+// resolve.
+func brokenLinkHint(b *Bundle, byBase map[string][]string, from, tgt string) string {
+	link := tgt
+	if i := strings.IndexAny(link, "#?"); i >= 0 {
+		link = link[:i]
+	}
+	var candidates []string
+	for _, c := range byBase[path.Base(link)] {
+		// Prefer the `/`-rooted form, else the relative path from `from`.
+		// Keep the first that resolves to c and differs from what the
+		// author wrote; never suggest the unresolved value back.
+		for _, form := range []RefForm{FormRootAbs, FormFileRel} {
+			s := linkURLFor(from, c, form)
+			if s == link {
+				continue
+			}
+			if r := b.ResolveLink(from, s); r.Kind == RefBundle && r.Path == c {
+				candidates = append(candidates, s)
+				break
+			}
+		}
+	}
+	switch len(candidates) {
+	case 0:
+		return ""
+	case 1:
+		return fmt.Sprintf("did you mean %s?", candidates[0])
+	default:
+		return fmt.Sprintf("did you mean one of: %s?", strings.Join(candidates, ", "))
+	}
 }
 
 // lintCoverageGaps reports KNOWN concept terms — terms some node declares as a
