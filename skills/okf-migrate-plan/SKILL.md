@@ -113,13 +113,13 @@ $ cat migrate-plan.json
 }
 ```
 
-`nodes[]` lists the edits per file, and you needn't touch them. `judgment[]`
-has one entry per refusal, with the node `path`, its `kind`, and the `context`
-you need to make the call (the timestamp value or the citation line as
-written).
+`nodes[]` lists the edits per file, and you can leave them as they are.
+`judgment[]` has one entry per refusal, with the node `path`, its `kind`, and
+the `context` you need to make the call (the timestamp value or the citation
+line as written).
 `version_action` is `hold` while any `missing-actor` or `prose-citation` item
 is left and `bump` when none are. You'll see `keep` when the bundle declares
-v0.3, or some version the tool doesn't know.
+v0.3, or a version the tool doesn't know.
 
 ### 2. Supply the actor
 
@@ -276,7 +276,7 @@ judgment: 1 item(s); prose-citation 1
 1 item(s) need a decision before they can migrate; see the plan file.
 ```
 
-Bundles that declare v0.3, something later, or any version the tool doesn't
+Bundles that declare v0.3, something later, or a version the tool doesn't
 recognize never get rewritten to an older one (§12). For those the plan says
 `keep`.
 
@@ -284,9 +284,9 @@ recognize never get rewritten to an older one (§12). For those the plan says
 
 §5.1 says each `sources` entry needs a `resource`. The tasting note with no
 public source doesn't have one, and putting it in `sources` would mean making
-one up. Nor will the tool guess who generated a node (§7). And a date-time with no offset (say, `2026-06-20T10:00:00`)
-doesn't name a single instant (§5, §13.2). Only the author knows if they meant
-UTC or local time.
+one up. Nor will the tool guess who generated a node (§7). And a date-time with
+no offset (say, `2026-06-20T10:00:00`) doesn't name a single instant (§5,
+§13.2). Only the author knows if they meant UTC or local time.
 
 ## Resolving judgment items
 
@@ -297,7 +297,7 @@ list. An item goes away when the node stops producing it.
   `- Winemaker interview, 2026. https://example.org/interviews/winemaker-2026`.
   The next plan makes it a `sources` entry with the text as `title`.
 - **A citation with no resource.** Move the claim out of `# Citations`, into
-  the body or some §5.2 `verified` event. Or delete it.
+  the body or a §5.2 `verified` event. Or delete it.
 - **A citation with two URLs.** Split it into one entry per resource. The tool
   won't pick one or split it for you.
 - **A timestamp with no offset.** Add the offset the author meant.
