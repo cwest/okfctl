@@ -29,9 +29,9 @@ func newPluginCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "plugin",
 		Short: "Find and install okfctl-<name> plugins",
-		Long: "A plugin is any executable named okfctl-<name> on your PATH. Run `okfctl <name>` " +
-			"when okfctl has no command of that name. okfctl passes the rest of your arguments " +
-			"to the plugin and exits with its status. git and kubectl do the same. okfctl's own " +
+		Long: "A plugin is any executable named okfctl-<name> on your PATH. When okfctl has no " +
+			"command called <name>, `okfctl <name>` runs okfctl-<name> with the rest of your " +
+			"arguments and exits with its status. git and kubectl do the same. okfctl's own " +
 			"commands always beat a plugin with the same name.",
 	}
 	c.AddCommand(newPluginListCmd())

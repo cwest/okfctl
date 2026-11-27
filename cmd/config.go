@@ -30,10 +30,10 @@ func newConfigCmd() *cobra.Command {
 		Use:   "config",
 		Short: "Read and write okfctl's own settings",
 		Long: "config reads and writes config.json, okfctl's settings file. Set " +
-			"$OKFCTL_CONFIG_HOME to choose its directory; without it okfctl uses okfctl under " +
-			"your OS's user config directory. Plugins read the file too (okfctl-search looks " +
-			"up model_path there). Names you save with `okfctl registry` go in it under the " +
-			"registry. prefix. No bundle content ever lands in it.",
+			"$OKFCTL_CONFIG_HOME to choose its directory; without it okfctl uses the okfctl " +
+			"directory under your OS's user config directory. Plugins read the file too " +
+			"(okfctl-search looks up model_path there). Names you save with `okfctl registry` " +
+			"go in it as keys that start with `registry.`. No bundle content lands in it.",
 	}
 	c.AddCommand(&cobra.Command{
 		Use: "set <key> <value>", Short: "Set a config value", Args: cobra.ExactArgs(2),
@@ -71,8 +71,8 @@ func newConfigCmd() *cobra.Command {
 	})
 	c.AddCommand(&cobra.Command{
 		Use: "list", Short: "List all config values", Args: cobra.NoArgs,
-		Long: "list prints each saved key as key = value, sorted by key. The registry. " +
-			"entries show up here too. `okfctl registry list` shows just those.",
+		Long: "list prints each saved key as key = value, sorted by key. Keys that " +
+			"start with `registry.` show up here too. `okfctl registry list` shows just those.",
 		Example: "  # Show every stored config key and value\n" +
 			"  okfctl config list",
 		RunE: func(cmd *cobra.Command, args []string) error {

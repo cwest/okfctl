@@ -131,7 +131,7 @@ Example:
 
 Read and write okfctl's own settings
 
-config reads and writes config.json, okfctl's settings file. Set $OKFCTL_CONFIG_HOME to choose its directory; without it okfctl uses okfctl under your OS's user config directory. Plugins read the file too (okfctl-search looks up model_path there). Names you save with `okfctl registry` go in it under the registry. prefix. No bundle content ever lands in it.
+config reads and writes config.json, okfctl's settings file. Set $OKFCTL_CONFIG_HOME to choose its directory; without it okfctl uses the okfctl directory under your OS's user config directory. Plugins read the file too (okfctl-search looks up model_path there). Names you save with `okfctl registry` go in it as keys that start with `registry.`. No bundle content lands in it.
 
 
 ### okfctl config get
@@ -156,7 +156,7 @@ Example:
 
 List all config values
 
-list prints each saved key as key = value, sorted by key. The registry. entries show up here too. `okfctl registry list` shows just those.
+list prints each saved key as key = value, sorted by key. Keys that start with `registry.` show up here too. `okfctl registry list` shows just those.
 
 ```
 okfctl config list
@@ -788,7 +788,7 @@ Flags:
 
 Find and install okfctl-<name> plugins
 
-A plugin is any executable named okfctl-<name> on your PATH. Run `okfctl <name>` when okfctl has no command of that name. okfctl passes the rest of your arguments to the plugin and exits with its status. git and kubectl do the same. okfctl's own commands always beat a plugin with the same name.
+A plugin is any executable named okfctl-<name> on your PATH. When okfctl has no command called <name>, `okfctl <name>` runs okfctl-<name> with the rest of your arguments and exits with its status. git and kubectl do the same. okfctl's own commands always beat a plugin with the same name.
 
 
 ### okfctl plugin install
@@ -1005,14 +1005,16 @@ Flags:
 
 Inspect the type templates a bundle uses
 
+A type template is just a node, typed `Type Template`, that says which fields and body sections a node of some type should have. Only two other commands read templates. `okfctl node new --type` builds the new node from the one for that type, and `okfctl validate --templates` warns when a node drifts. Try `okfctl template list` first to see what your bundle has.
+
 
 ### okfctl template list
 
 List each type template's target type, field and section counts, and source
 
-template list prints one line for each type template the bundle uses: the type it governs, how many required fields and body sections it asks for, and the file it came from. With no templates it prints a notice and exits 0.
+template list prints one line per type template in the bundle: the type it governs, how many fields and body sections it asks for, and its source file. With no templates it prints a notice and exits 0.
 
-A template is an ordinary node whose type is `Type Template`. It can sit in the bundle itself or in a separate template bundle, which the bundle's .okf file names with `templates: <path>`. --templates-from points at a different one for this run. When both define a type the local template wins, and its line ends with [shadows referenced template].
+A template can sit in the bundle itself or in a separate template bundle named by `templates: <path>` in the bundle's .okf file. --templates-from points at a different one for this run. If the bundle and the referenced one both define a type, the local template wins and its line ends with [shadows referenced template].
 
 list only reads. Templates are okfctl's own convention (PRD §9) and not part of the OKF spec. They never change what plain validate accepts. If the referenced template bundle can't be read, list exits 1 and names the path.
 
@@ -1044,9 +1046,9 @@ Flags:
 
 Print one type template's fields and body sections
 
-template show prints the template that governs one type. You get the file it came from, its required and recommended fields, and its body sections. `okfctl node new --type` scaffolds new nodes from it. `okfctl validate --templates` warns when a node drifts from it.
+template show prints the template that governs one type: its source file, its required and recommended fields, and its body sections. `okfctl node new --type` scaffolds new nodes from it. `okfctl validate --templates` warns if a node drifts from it.
 
-It finds templates the way template list does. A local `Type Template` node beats one from the bundle named by the .okf `templates:` key or by --templates-from. If no template governs the type, show exits 1. It never changes the bundle.
+It finds templates the way template list does, so your own `Type Template` node beats one from the bundle named by the .okf `templates:` key or by --templates-from. If no template governs the type, show exits 1. It never changes the bundle.
 
 ```
 okfctl template show <target-type> [bundle-dir] [flags]
