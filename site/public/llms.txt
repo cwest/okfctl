@@ -1,9 +1,9 @@
 # okfctl
 
 > A command-line tool for authoring and maintaining Open Knowledge Format (OKF)
-> bundles. It is pure Go and ships as one static binary with semantic search
-> built in. Search runs offline: okfctl never calls a service or downloads a
-> model. okfctl does not author the OKF specification; it is a conformant
+> bundles. It is pure Go and runs offline: okfctl never calls a service or
+> downloads a model. Semantic search runs in-process on a local model you point
+> it at. okfctl does not author the OKF specification; it is a conformant
 > consumer that enforces the spec floor and keeps anything stricter behind an
 > explicit opt-in overlay.
 
