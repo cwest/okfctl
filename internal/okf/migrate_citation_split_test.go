@@ -187,6 +187,26 @@ func TestConformance_MigrateSplit_Section5_1_LinkInsideAnnotationNamesOnlyItself
 	}
 }
 
+// A split entry titles its first part through the same name picker, so a
+// quoted excerpt (a deprecation notice) is no name there either: the first
+// part stays untitled (§5.1, title is the work's name). Real corpus shape,
+// with its wrapped lines joined by spaces as citationEntries joins them.
+func TestConformance_MigrateSplit_Section5_1_ExcerptIsNoPartTitle(t *testing.T) {
+	entry := "[19] VERIFIED — Generative AI module in the Vertex AI SDK, deprecation notice: " +
+		"\"deprecated and will no longer be available after June 24, 2026\". The removed " +
+		"modules include `vertexai.generative_models`. https://cloud.google.com/vertex-ai/docs/deprecations " +
+		"and https://pypi.org/project/google-genai/"
+	srcs, ok := citationSourcesFrom(entry)
+	if !ok || len(srcs) != 2 {
+		t.Fatalf("want 2 parts, got %+v ok=%v", srcs, ok)
+	}
+	for i, s := range srcs {
+		if s.Title != "" {
+			t.Errorf("§5.1: part %d title = %q, want none (the quote is an excerpt)", i+1, s.Title)
+		}
+	}
+}
+
 // Negative control: a part whose resource another entry in the node already
 // holds would need two ids on one source, so the entry stays a prose-citation
 // item and nothing is split; the body reference stays as written.

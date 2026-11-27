@@ -105,10 +105,20 @@ func TestConformance_CitationName_Section5_1_QuotedExcerptIsNotAName(t *testing.
 		// After a colon, a quote that is not title case is page text.
 		"[x] VERIFIED — Vercel — Fluid compute docs: \"As of April 23, 2025, fluid compute is enabled by default for new projects\". https://vercel.com/docs/fluid-compute",
 		"[x] VERIFIED — Gartner, `https://www.gartner.com/en/research/methodologies/gartner-hype-cycle`: \"The Hype Cycle research is reserved for paying clients\".",
+		// A deprecation notice (citationEntries joins wrapped lines with spaces).
+		"[19] VERIFIED — Generative AI module in the Vertex AI SDK, deprecation notice: \"deprecated and will no longer be available after June 24, 2026\". The removed modules include `vertexai.generative_models`. https://cloud.google.com/vertex-ai/x",
+		// A sentence quoted right after a leading URL and a dash.
+		"https://docs.acme.example/tokens — \"Tokens are scoped to one project. Rotate them often\" (docs page)",
 	} {
 		if got, ok := citationName(entry); ok {
 			t.Errorf("citationName(%q) = %q, want no name (the quote is an excerpt)", entry, got)
 		}
+	}
+	// After an italic container, a quoted excerpt is not the piece: the
+	// container is the only name the entry marks.
+	const container = "[3] Acme, *Acme API Reference*, \"Tokens expire after one hour. Refresh them before then\", 2025. https://acme.example/api"
+	if got, ok := citationName(container); !ok || got != "Acme API Reference" {
+		t.Errorf("citationName(%q) = %q ok=%v, want \"Acme API Reference\"", container, got, ok)
 	}
 }
 
