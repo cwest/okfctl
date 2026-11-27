@@ -198,3 +198,69 @@ func assertBodyValidSection9(t *testing.T, body string) {
 		t.Errorf("body must be valid §9; got findings %v for:\n%s", fs, body)
 	}
 }
+
+// A legacy `- YYYY-MM-DD — msg` bullet sitting INSIDE a date group (left behind
+// by a merge) is lifted into its own date's group on write, carrying its
+// continuation block, so `log append` clears the §9 legacy-bullet finding that
+// validate raises for it. Mirrors the corpus case of `- 2026-11-27 — …` entries
+// under `## 2026-11-26`.
+func TestAppendLog_RegroupsLegacyBulletInsideGroup(t *testing.T) {
+	withLogClock(t, "2026-11-28")
+	dir := t.TempDir()
+	seed := strings.Join([]string{
+		"# Change Log",
+		"",
+		"## 2026-11-27",
+		"* **Update**: migrated.",
+		"",
+		"## 2026-11-26",
+		"* **Sweep**: grouped entry.",
+		"- 2026-11-27 — misplaced sweep",
+		"",
+		"  **Ledger:**",
+		"  | node | reason |",
+		"  | ---- | ------ |",
+		"  | a | b |",
+		"- 2026-11-27 — second misplaced",
+		"- 2026-11-26 — same-date legacy",
+		"* **After**: grouped entry after the legacy run.",
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(dir, "log.md"), []byte(seed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	seedEntries := countEntries(seed)
+	if err := AppendLog(dir, "new entry"); err != nil {
+		t.Fatal(err)
+	}
+	got := readLogFile(t, dir)
+
+	if legacyDatedBulletRe.MatchString(got) || strings.Contains(got, "\n- 2026-") {
+		t.Errorf("legacy bullet survived regroup:\n%s", got)
+	}
+	if n := countEntries(got); n != seedEntries+1 {
+		t.Errorf("lossless: want %d entries, got %d in:\n%s", seedEntries+1, n, got)
+	}
+	seven := sectionFor(got, "2026-11-27")
+	for _, want := range []string{"migrated.", "* misplaced sweep", "| a | b |", "* second misplaced"} {
+		if !strings.Contains(seven, want) {
+			t.Errorf("2026-11-27 group missing %q:\n%s", want, seven)
+		}
+	}
+	if strings.Index(seven, "migrated.") > strings.Index(seven, "misplaced sweep") ||
+		strings.Index(seven, "misplaced sweep") > strings.Index(seven, "| a | b |") ||
+		strings.Index(seven, "| a | b |") > strings.Index(seven, "second misplaced") {
+		t.Errorf("2026-11-27 group order/continuation wrong:\n%s", seven)
+	}
+	six := sectionFor(got, "2026-11-26")
+	for _, want := range []string{"grouped entry.", "* **After**: grouped entry after the legacy run.", "* same-date legacy"} {
+		if !strings.Contains(six, want) {
+			t.Errorf("2026-11-26 group missing %q:\n%s", want, six)
+		}
+	}
+	if strings.Contains(six, "misplaced") || strings.Contains(six, "| a | b |") {
+		t.Errorf("2026-11-27 content stranded in 2026-11-26 group:\n%s", six)
+	}
+	assertHeadingOrder(t, got, []string{"2026-11-28", "2026-11-27", "2026-11-26"})
+	assertBodyValidSection9(t, got)
+}
