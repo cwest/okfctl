@@ -265,7 +265,7 @@ func TestConformance_MigrateCitationEntries_Section5_1_WrappedBracketKeyStaysInE
 // TestConformance_MigrateCitationEntries_Section5_1_WrappedBracketKeyPlansOneSource
 // drives the same defect through migrate: the whole entry becomes one source
 // and no fragment judgment item appears. The entry marks no work name, so the
-// source is untitled (§5.1, name only).
+// source is untitled (§5.1, name only) and only that is reported.
 func TestConformance_MigrateCitationEntries_Section5_1_WrappedBracketKeyPlansOneSource(t *testing.T) {
 	dir := mkMigrateBundle(t, map[string]string{
 		"index.md": "# KB\n",
@@ -275,9 +275,12 @@ func TestConformance_MigrateCitationEntries_Section5_1_WrappedBracketKeyPlansOne
 	})
 	_, plan := planFor(t, dir, "human:casey", false)
 	for _, j := range plan.Judgment {
-		if j.Kind == JudgmentProseCitation {
+		if j.Kind != JudgmentSourceTitleUnnamed {
 			t.Fatalf("§5.1: a wrapped [k] line split an entry into judgment items: %+v", plan.Judgment)
 		}
+	}
+	if len(plan.Judgment) != 1 {
+		t.Fatalf("want one source-title-unnamed item for the whole entry, got %+v", plan.Judgment)
 	}
 	nm := planNodeMigration(plan, "a.md")
 	if nm == nil {

@@ -63,6 +63,18 @@ const (
 	// JudgmentMissingActor: a `timestamp` rename with no actor supplied and none
 	// inferable (§7). The consumer must supply `generated.by`.
 	JudgmentMissingActor JudgmentKind = "missing-actor"
+	// JudgmentSourceTitleConflict: a `# Citations` entry that names a
+	// different work (citationName) than the `title` its source already has
+	// (§5.1). The existing title is kept; the consumer decides. The resource
+	// is already in frontmatter, so this needs no §12.1 fallback and does not
+	// hold the version declaration.
+	JudgmentSourceTitleConflict JudgmentKind = "source-title-conflict"
+	// JudgmentSourceTitleUnnamed: a `# Citations` entry whose source has no
+	// `title` and whose text marks no work name (citationName). §5.1 title is
+	// a label for humans, the work's name; the full entry text is not one, so
+	// the title stays unset until the consumer names it. The resource is in
+	// frontmatter, so this does not hold the version declaration.
+	JudgmentSourceTitleUnnamed JudgmentKind = "source-title-unnamed"
 )
 
 // JudgmentItem is one thing the migrator refuses to guess. Path is the node it
@@ -87,9 +99,17 @@ type GeneratedEdit struct {
 // bundle-relative path kept relative per §6).
 type SourceEdit struct {
 	Resource string `json:"resource"`
-	// Title is the optional §5.1 label: the citation entry's own text, so the
-	// claim the author wrote beside the resource is carried across.
+	// Title is the optional §5.1 label ("a label for humans"): the cited
+	// work's name (citationName), never the entry's full text.
 	Title string `json:"title,omitempty"`
+}
+
+// SourceTitleEdit sets the optional §5.1 `title` of a `sources` entry that is
+// already listed by Resource and has no title. Title is the name of the work
+// (citationName) the matching `# Citations` entry cites.
+type SourceTitleEdit struct {
+	Resource string `json:"resource"`
+	Title    string `json:"title"`
 }
 
 // NodeMigration is the set of deterministic frontmatter edits planned for one
@@ -99,6 +119,9 @@ type NodeMigration struct {
 	Path      string         `json:"path"`
 	Generated *GeneratedEdit `json:"generated,omitempty"`
 	Sources   []SourceEdit   `json:"sources,omitempty"`
+	// Titles fill in the missing title of sources already listed in
+	// frontmatter with the cited work's name.
+	Titles []SourceTitleEdit `json:"titles,omitempty"`
 	// Paths are the v0.3 §6 rewrites of values that resolve only through the
 	// §12.1 bundle-root fallback.
 	Paths []PathEdit `json:"paths,omitempty"`
@@ -107,12 +130,12 @@ type NodeMigration struct {
 }
 
 func (nm NodeMigration) hasEdits() bool {
-	return nm.Generated != nil || len(nm.Sources) > 0 || len(nm.Paths) > 0 || len(nm.Timestamps) > 0
+	return nm.Generated != nil || len(nm.Sources) > 0 || len(nm.Titles) > 0 || len(nm.Paths) > 0 || len(nm.Timestamps) > 0
 }
 
 // EditCount is the number of deterministic edits planned for the node.
 func (nm NodeMigration) EditCount() int {
-	n := len(nm.Sources) + len(nm.Paths) + len(nm.Timestamps)
+	n := len(nm.Sources) + len(nm.Titles) + len(nm.Paths) + len(nm.Timestamps)
 	if nm.Generated != nil {
 		n++
 	}
@@ -267,8 +290,10 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 		// that names exactly one follow-able resource is deterministic; a prose
 		// finding, or an entry with several resources, is a judgment item
 		// (§5.1 requires resource; never fabricate or pick one). Idempotence:
-		// skip a resource already present in the node's sources.
-		existing := existingSourceResources(n)
+		// a resource already present in the node's sources is not added
+		// again; its missing title is filled with the work's name instead.
+		existing := existingSourceTitles(n)
+		added := map[string]bool{}
 		entries := citationEntries(n.Body)
 		names := make([]map[string]bool, len(entries))
 		for i, item := range entries {
@@ -297,12 +322,21 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 			if r := b.ResolvePathField(rel, res); r.Kind == RefBundle && r.Form == FormRootFallback {
 				res = rootedURL(res, r.Path)
 			}
-			if existing[res] || existing[canonicalResource(res)] {
-				continue // already migrated (idempotent)
+			if added[res] || added[canonicalResource(res)] {
+				continue // a second entry for a source this plan adds
+			}
+			if cur, ok := lookupSourceTitle(existing, res); ok {
+				planSourceTitle(&plan, nm, existing, rel, item, cur, src.Title)
+				continue
+			}
+			if src.Title == "" && citationHasProse(item) {
+				plan.Judgment = append(plan.Judgment, JudgmentItem{
+					Path: rel, Kind: JudgmentSourceTitleUnnamed, Context: item,
+				})
 			}
 			nm.Sources = append(nm.Sources, SourceEdit{Resource: res, Title: src.Title})
-			existing[res] = true
-			existing[canonicalResource(res)] = true
+			added[res] = true
+			added[canonicalResource(res)] = true
 		}
 	}
 
@@ -509,8 +543,10 @@ func RenderVersionMarkers(root string, plan MigratePlan) (map[string][2][]byte, 
 // keys that change are `timestamp` (removed) and `generated` / `sources`
 // (added, appended after the existing keys). Each edit re-checks the current
 // frontmatter first: the rename is skipped once `generated` exists or
-// `timestamp` is gone, and a source whose resource is already listed is not
-// added again, so a stale plan re-applied to a migrated file is a no-op.
+// `timestamp` is gone, a source whose resource is already listed is not
+// added again, and a title is set only on a source that is still untitled
+// (applySourceTitles), so a stale plan re-applied to a migrated file is a
+// no-op.
 // The edit is a splice (OKF v0.3
 // §4): every untouched entry keeps its bytes, and the body is preserved
 // verbatim. It
@@ -541,9 +577,9 @@ func renderMigratedNode(raw []byte, nm NodeMigration) ([]byte, error) {
 		}
 	}
 	if !rename && len(add) == 0 {
-		return raw, nil
+		return applySourceTitles(raw, nm.Titles)
 	}
-	return editFrontmatter(raw, func(root *yaml.Node) {
+	out, err := editFrontmatter(raw, func(root *yaml.Node) {
 		if rename {
 			removeKey(root, "timestamp")
 			setMapping(root, "generated", []kv{{"by", nm.Generated.By}, {"at", nm.Generated.At}})
@@ -552,6 +588,10 @@ func renderMigratedNode(raw []byte, nm NodeMigration) ([]byte, error) {
 			appendSources(root, add)
 		}
 	})
+	if err != nil {
+		return nil, err
+	}
+	return applySourceTitles(out, nm.Titles)
 }
 
 // kv is an ordered key/value pair for building a small mapping node.
@@ -664,18 +704,6 @@ func citedElsewhere(names []map[string]bool, skip int, key string) bool {
 		}
 	}
 	return false
-}
-
-// existingSourceResources returns the set of resources already present in a
-// node's frontmatter `sources`, so a re-plan on an already-migrated node does
-// not re-add them (idempotence).
-func existingSourceResources(n *Node) map[string]bool {
-	out := map[string]bool{}
-	for _, s := range n.Sources() {
-		out[s.Resource] = true
-		out[canonicalResource(s.Resource)] = true
-	}
-	return out
 }
 
 // bumpVersionMarkers declares target in the bundle-root index.md (§8.1, §12)

@@ -57,7 +57,7 @@ call — the tool decides per item:
 | Old form | v0.3 form | Deterministic when… | Judgment when… |
 |---|---|---|---|
 | `timestamp:` frontmatter (v0.1) | `generated: {by, at}` (§7) | you pass `--generated-by <actor>` | no actor supplied → `missing-actor` |
-| body `# Citations` entry (v0.1) | `sources[]: {resource, title}` (§5.1) | the entry names exactly one follow-able resource — an absolute URL or a markdown link to a bundle path (§6.2) — anywhere in it, even across wrapped lines; the entry text becomes `title` | it names no resource, or two different ones → `prose-citation` |
+| body `# Citations` entry (v0.1) | `sources[]: {resource, title}` (§5.1) | the entry names exactly one follow-able resource — an absolute URL or a markdown link to a bundle path (§6.2) — anywhere in it, even across wrapped lines; `title` is the cited work's name only, when the entry marks one | it names no resource, or two different ones → `prose-citation`; it marks no name → `source-title-unnamed` (the source is still added, untitled) |
 | bare link or path field that resolves only from the bundle root (v0.2, §12.1) | the same target with a leading `/` (§6 rule 2) | always: the tool knows which file it resolves to today | never |
 | §5 timestamp not in RFC 3339 form | `"2026-06-20T10:00:00Z"` | it carries an offset (`Z`, `+0000`, `-05:00`), so the instant is fixed | no offset → `timestamp-no-offset`; not a date at all → `timestamp-invalid` |
 
@@ -102,7 +102,7 @@ bundle root.
 $ okfctl migrate mykb --plan migrate-plan.json
 Wrote migrate-plan.json: 2 file(s) with deterministic edits (5 edit(s)), 4 judgment item(s).
 version: 0.1 -> hold (4 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
-edits: 2 file(s); timestamp->generated 0, citations->sources 4, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 2 file(s); timestamp->generated 0, citations->sources 4, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
 judgment: 4 item(s); missing-actor 2, prose-citation 2
 4 item(s) need a decision before they can migrate; see the plan file.
 ```
@@ -151,8 +151,9 @@ Read the file top to bottom:
   got three `sources`: two links to bundle paths (the link text becomes `title`;
   the path keeps its form per §6) and a bare Wikipedia URL, which gets no
   `title` because the entry is nothing but the URL. An entry with words around its
-  one URL — `[1] Smith, Tannin chemistry, 2024. https://…` — keeps those words as
-  `title`, so the claim travels with the resource. `tannin` got its one bare URL, and its root-relative link
+  one URL — `[1] Smith, *Tannin chemistry*, 2024. https://…` — gets the work's
+  name as `title` (`Tannin chemistry`), never the authors, year, or URL; the full
+  entry stays in the body. `tannin` got its one bare URL, and its root-relative link
   `concepts/mouthfeel.md` becomes `/concepts/mouthfeel.md` (`paths[]`), which
   resolves to the same file once the bundle declares v0.3. You do not need to
   touch these.
@@ -172,7 +173,7 @@ Supplying the provenance actor turns every `missing-actor` item into a real
 $ okfctl migrate mykb --plan migrate-plan.json --generated-by "human:alex"
 Wrote migrate-plan.json: 2 file(s) with deterministic edits (7 edit(s)), 2 judgment item(s).
 version: 0.1 -> hold (2 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
-edits: 2 file(s); timestamp->generated 2, citations->sources 4, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 2 file(s); timestamp->generated 2, citations->sources 4, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
 judgment: 2 item(s); prose-citation 2
 2 item(s) need a decision before they can migrate; see the plan file.
 ```
@@ -237,7 +238,7 @@ choice, and the summary tells you how many items lose the fallback:
 $ okfctl migrate mykb --plan migrate-plan.json --generated-by "human:alex" --force-declare
 Wrote migrate-plan.json: 2 file(s) with deterministic edits (7 edit(s)), 2 judgment item(s).
 version: 0.1 -> declare v0.3 (forced: 2 prose-citation/missing-actor item(s) lose the §12.1 fallback)
-edits: 2 file(s); timestamp->generated 2, citations->sources 4, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 2 file(s); timestamp->generated 2, citations->sources 4, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
 judgment: 2 item(s); prose-citation 2
 2 item(s) need a decision before they can migrate; see the plan file.
 ```
@@ -287,7 +288,7 @@ $ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
  # Citations
  - https://en.wikipedia.org/wiki/Tannin
 version: 0.1 -> hold (2 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
-edits: 2 file(s); timestamp->generated 2, citations->sources 4, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 2 file(s); timestamp->generated 2, citations->sources 4, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
 judgment: 2 item(s); prose-citation 2
 2 file(s) would change (dry run; nothing written).
 ```
@@ -329,7 +330,7 @@ plan bumps, and the only edits left are the version markers:
 $ okfctl migrate mykb --plan migrate-plan.json
 Wrote migrate-plan.json: 0 file(s) with deterministic edits (0 edit(s)), 0 judgment item(s).
 version: 0.1 -> declare v0.3
-edits: 0 file(s); timestamp->generated 0, citations->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 0 file(s); timestamp->generated 0, citations->sources 0, citation titles->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
 judgment: 0 item(s); none
 $ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
 --- a/.okf
@@ -346,7 +347,7 @@ $ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
 +
  # Knowledge Base
 version: 0.1 -> declare v0.3
-edits: 0 file(s); timestamp->generated 0, citations->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 0 file(s); timestamp->generated 0, citations->sources 0, citation titles->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
 judgment: 0 item(s); none
 2 file(s) would change (dry run; nothing written).
 $ okfctl migrate mykb --apply --plan migrate-plan.json
