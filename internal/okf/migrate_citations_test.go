@@ -209,6 +209,169 @@ func TestConformance_MigrateCitationEntries_Section5_1_NumberedListStillSplits(t
 	}
 }
 
+// TestConformance_MigrateCitationEntries_Section5_1_WrappedBracketKeyStaysInEntry
+// is the positive control for hard-wrapped entries whose continuation line
+// begins with a bracket token: an inline back-reference (`[9]: C4 provides`,
+// `[4]).`), a bold status tag (`**[2026-11-25 corrected]**`), or bracketed
+// prose. A `[key]` line inside an open entry is wrapped text unless its key is
+// the next citation key in sequence (see the negative control). Splitting
+// there turns one Appendix B citation into a fragment §5.1 title plus a bogus
+// judgment item.
+func TestConformance_MigrateCitationEntries_Section5_1_WrappedBracketKeyStaysInEntry(t *testing.T) {
+	for name, tc := range map[string]struct {
+		body string
+		want []string
+	}{
+		"back-reference after a bracket entry": {
+			"# Citations\n\n[10] VERIFIED — Raffel et al. 2019 (C4), same source as\n[9]: C4 provides web text. https://arxiv.org/abs/1910.10683\n",
+			[]string{"[10] VERIFIED — Raffel et al. 2019 (C4), same source as [9]: C4 provides web text. https://arxiv.org/abs/1910.10683"},
+		},
+		"back-reference after a bullet entry": {
+			"# Citations\n\n- [2] Attestation semantics, W3C WebAuthn (see\n[1]); key held by the authenticator. https://w3.org/TR/webauthn-2/\n- [3] Next https://c\n",
+			[]string{"- [2] Attestation semantics, W3C WebAuthn (see [1]); key held by the authenticator. https://w3.org/TR/webauthn-2/", "- [3] Next https://c"},
+		},
+		"bold status tag after a bracket entry": {
+			"# Citations\n\n[7] SST §18 applies to all managed models.\n**[2026-11-25 corrected]** Grounding stores queries. https://cloud.google.com/terms\n",
+			[]string{"[7] SST §18 applies to all managed models. **[2026-11-25 corrected]** Grounding stores queries. https://cloud.google.com/terms"},
+		},
+		"back-reference to a later key": {
+			"# Citations\n\n[1] Context — HIPAA BAA scope is verified in citation\n[21].\n",
+			[]string{"[1] Context — HIPAA BAA scope is verified in citation [21]."},
+		},
+		"indented back-reference inside an ordered entry": {
+			"# Citations\n\n4. Orca, OSDI '22 — quoted in the PagedAttention primary\n   [1] (which implements Orca). https://example.com/orca\n5. Next https://b\n",
+			[]string{"4. Orca, OSDI '22 — quoted in the PagedAttention primary [1] (which implements Orca). https://example.com/orca", "5. Next https://b"},
+		},
+		"back-reference after a non-numeric key": {
+			"# Citations\n\n[V] SOURCE VIDEO — claims checked (see [1]); not in\n[2]; others. https://youtu.be/x\n",
+			[]string{"[V] SOURCE VIDEO — claims checked (see [1]); not in [2]; others. https://youtu.be/x"},
+		},
+		"bracketed prose after an ordered entry": {
+			"# Citations\n\n1. Harley, \"Icon Usability,\" NN/g 2014\n[\"universal\" icons rare]. https://nngroup.com/icons\n2. Second https://b\n",
+			[]string{"1. Harley, \"Icon Usability,\" NN/g 2014 [\"universal\" icons rare]. https://nngroup.com/icons", "2. Second https://b"},
+		},
+	} {
+		got := citationEntries(tc.body)
+		if len(got) != len(tc.want) {
+			t.Errorf("§5.1 %s: entries = %q, want %q", name, got, tc.want)
+			continue
+		}
+		for i := range tc.want {
+			if got[i] != tc.want[i] {
+				t.Errorf("§5.1 %s: entry %d = %q, want %q", name, i, got[i], tc.want[i])
+			}
+		}
+	}
+}
+
+// TestConformance_MigrateCitationEntries_Section5_1_WrappedBracketKeyPlansOneSource
+// drives the same defect through migrate: the whole entry becomes one source
+// titled with its full text, and no fragment judgment item appears.
+func TestConformance_MigrateCitationEntries_Section5_1_WrappedBracketKeyPlansOneSource(t *testing.T) {
+	dir := mkMigrateBundle(t, map[string]string{
+		"index.md": "# KB\n",
+		"log.md":   "# Log\n",
+		"a.md": "---\ntype: Paper\n---\n\n# Def\n\n# Citations\n\n" +
+			"[2] VERIFIED — origin binding (see\n[1]); phishing resistance follows. https://w3.org/TR/webauthn-2/\n",
+	})
+	_, plan := planFor(t, dir, "human:casey", false)
+	if len(plan.Judgment) != 0 {
+		t.Fatalf("§5.1: a wrapped [k] line split an entry into judgment items: %+v", plan.Judgment)
+	}
+	nm := planNodeMigration(plan, "a.md")
+	if nm == nil {
+		t.Fatalf("no migration planned for a.md")
+	}
+	want := SourceEdit{Resource: "https://w3.org/TR/webauthn-2/",
+		Title: "[2] VERIFIED — origin binding (see [1]); phishing resistance follows. https://w3.org/TR/webauthn-2/"}
+	if len(nm.Sources) != 1 || nm.Sources[0] != want {
+		t.Fatalf("§5.1: sources = %+v, want [%+v]", nm.Sources, want)
+	}
+}
+
+// TestConformance_MigrateCitationEntries_Section5_1_BracketKeyListStillSplits
+// is the negative control: bracket-key entries separated by blank lines, a
+// bracket entry right after a status-key or legend line, a tight bulleted
+// `- [1]` / `- [2]` list, a run of markdown link reference definitions
+// (`[label]: url`, each its own definition in CommonMark), a tight unbulleted
+// `[1]` / `[2]` list, and lettered sub-entries (`[1]` / `[1a]` / `[1b]`) on
+// consecutive lines each still yield one entry per citation.
+func TestConformance_MigrateCitationEntries_Section5_1_BracketKeyListStillSplits(t *testing.T) {
+	for name, tc := range map[string]struct {
+		body string
+		want []string
+	}{
+		"first line after the heading": {
+			"# Citations\n[1] First https://a\n\n[2] Second https://b\n",
+			[]string{"[1] First https://a", "[2] Second https://b"},
+		},
+		"blank-separated wrapped entries": {
+			"# Citations\n\n[1] First source, long\nwrapped tail https://a\n\n[2] Second https://b\n\n**[3]** Third https://c\n",
+			[]string{"[1] First source, long wrapped tail https://a", "[2] Second https://b", "**[3]** Third https://c"},
+		},
+		"after a status-key line": {
+			"# Citations\n\nStatus key: **VERIFIED** = checked.\n[1] VERIFIED — x https://a\n",
+			[]string{"[1] VERIFIED — x https://a"},
+		},
+		"after a legend line": {
+			"# Citations\n\n[V] = verified\n[1] VERIFIED — x https://a\n",
+			[]string{"[1] VERIFIED — x https://a"},
+		},
+		"tight bulleted list": {
+			"# Citations\n- [1] First https://a\n- [2] Second https://b\n* **[3]** Third https://c\n",
+			[]string{"- [1] First https://a", "- [2] Second https://b", "* **[3]** Third https://c"},
+		},
+		"consecutive link reference definitions": {
+			"# Citations\n\n[gh]: https://github.com/o/r\n[docs]: <https://o.example/docs/>\n[kb]: https://kb.example/1 \"KB 1\"\n",
+			[]string{"[gh]: https://github.com/o/r", "[docs]: <https://o.example/docs/>", "[kb]: https://kb.example/1 \"KB 1\""},
+		},
+		"tight unbulleted list": {
+			"# Citations\n\n[1] First Work. https://example.com/one\n[2] Second Work. https://example.com/two\n**[3]** Third Work. https://example.com/three\n",
+			[]string{"[1] First Work. https://example.com/one", "[2] Second Work. https://example.com/two", "**[3]** Third Work. https://example.com/three"},
+		},
+		"tight list after a status-key paragraph": {
+			"# Citations\n\nStatus key: **VERIFIED** = checked.\n[1] VERIFIED — x https://a\n[2] VERIFIED — y https://b\n",
+			[]string{"[1] VERIFIED — x https://a", "[2] VERIFIED — y https://b"},
+		},
+		"tight list after an unkeyed bullet": {
+			"# Citations\n- https://wiki.acme/handbook\n[1] VERIFIED — checked on-box.\n",
+			[]string{"- https://wiki.acme/handbook", "[1] VERIFIED — checked on-box."},
+		},
+		// The layout of domains/dns-security-dnssec-caa.md: lettered
+		// sub-entries on consecutive lines under a parent key, each wrapped.
+		"lettered sub-entries under a parent key": {
+			"# Citations\n\n[1] VERIFIED — DNSSEC RFCs.\n[1a] RFC 4033 (introduction —\n§2, verbatim). <https://www.rfc-editor.org/rfc/rfc4033.txt>\n" +
+				"[1b] RFC 4034 (records\n§5.1, verbatim). <https://www.rfc-editor.org/rfc/rfc4034.txt>\n" +
+				"[1c] RFC 4035 (validation).\n<https://www.rfc-editor.org/rfc/rfc4035.txt>\nNUANCED — naming is RFC 6781.\n" +
+				"[2] VERIFIED — CAA, RFC 8659.\n<https://www.rfc-editor.org/rfc/rfc8659.txt>\n",
+			[]string{
+				"[1] VERIFIED — DNSSEC RFCs.",
+				"[1a] RFC 4033 (introduction — §2, verbatim). <https://www.rfc-editor.org/rfc/rfc4033.txt>",
+				"[1b] RFC 4034 (records §5.1, verbatim). <https://www.rfc-editor.org/rfc/rfc4034.txt>",
+				"[1c] RFC 4035 (validation). <https://www.rfc-editor.org/rfc/rfc4035.txt> NUANCED — naming is RFC 6781.",
+				"[2] VERIFIED — CAA, RFC 8659. <https://www.rfc-editor.org/rfc/rfc8659.txt>",
+			},
+		},
+		// The layout of domains/email-authentication-spf-dkim-dmarc.md: a
+		// wrapped parent entry, then its first lettered sub-entry.
+		"first lettered sub-entry after a wrapped parent": {
+			"# Citations\n\n[2] VERIFIED — DKIM, RFC 6376 (Signatures,\n**Standards Track**).\n[2a] RFC 6376: abstract. https://www.rfc-editor.org/rfc/rfc6376\n",
+			[]string{"[2] VERIFIED — DKIM, RFC 6376 (Signatures, **Standards Track**).", "[2a] RFC 6376: abstract. https://www.rfc-editor.org/rfc/rfc6376"},
+		},
+	} {
+		got := citationEntries(tc.body)
+		if len(got) != len(tc.want) {
+			t.Errorf("§5.1 %s: entries = %q, want %q", name, got, tc.want)
+			continue
+		}
+		for i := range tc.want {
+			if got[i] != tc.want[i] {
+				t.Errorf("§5.1 %s: entry %d = %q, want %q", name, i, got[i], tc.want[i])
+			}
+		}
+	}
+}
+
 // fallbackBundle is undeclared and carries a single-URL citation, a prose
 // citation, and (when withTimestamp) a legacy timestamp.
 func fallbackBundle(t *testing.T, prose, withTimestamp bool) string {

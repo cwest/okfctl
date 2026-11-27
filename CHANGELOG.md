@@ -21,6 +21,17 @@ tagged release, goreleaser generates the release notes from the commit log
   `sources` already hold (in any letter case, or under `dx.doi.org`) is not
   added again.
 
+### Fixed
+
+- `migrate` and `analyze` no longer split a `# Citations` entry at a
+  hard-wrapped line that begins with a back-reference (`[9]: C4 provides …`,
+  `[4]).`, `[21].`) or a bracket tag. The split wrote a fragment as a §5.1
+  `title` and a bogus judgment item. Inside an open entry, an unbulleted
+  `[key]` line now starts a new entry only when its key is the next citation
+  key in sequence (`[2]` after `[1]`, `[1b]` after `[1a]`), so tight lists
+  and lettered sub-entries still split. A run of link reference definitions
+  (`[label]: url`) still yields one entry each.
+
 ## [0.5.0] - 2026-11-27
 
 okfctl now targets **OKF v0.3**. New bundles declare `okf_version: "0.3"` on
