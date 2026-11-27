@@ -400,7 +400,7 @@ const goInstallCmd = version.tag
             </div>
             <div>
               <p class="lede">
-                The binary printed every line here. A test replays every tab against the current build and fails on the first line that drifts.
+                The binary printed all of this. A test replays each tab against the current build and fails on the first line that drifts.
                 The first four tabs build on one bundle.
               </p>
             </div>
@@ -457,7 +457,7 @@ const goInstallCmd = version.tag
 <span class="o">uncited: concepts/tannin.md carries no citations (no sources, no # Citations, no internal reference)</span>
 <span class="o">4 transparency finding(s)</span>
 <span class="bad">okfctl: 4 transparency finding(s)</span></pre>
-                <p class="term-note">Both notes pass the spec, and neither one cites a source or grades its confidence. Checking that a source really backs a claim takes a person. <code class="mono">okfctl eval sample</code> picks the nodes and writes that person a worksheet.</p>
+                <p class="term-note">The two notes pass the spec. Neither one cites a source or grades its confidence. Checking that a source really backs a claim takes a person. <code class="mono">okfctl eval sample</code> picks the nodes and writes that person a worksheet.</p>
               </div>
 
               <div role="tabpanel" id="t-val" aria-labelledby="tab-val" tabindex="0" hidden>
@@ -526,7 +526,7 @@ const goInstallCmd = version.tag
             <article class="why-item">
               <div><span class="n">02 integrity</span><h3>Path is identity, so moving is safe.</h3></div>
               <div>
-                <p>Move a Markdown file by hand and you have to find every link to it yourself. <code class="mono" style="color:var(--fg)">node mv</code> rewrites every link that pointed at the old path, with the right relative path for each file. <code class="mono" style="color:var(--fg)">node rm</code> deletes a node and lists any node left with nothing linking to it.</p>
+                <p>Move a Markdown file by hand and you have to hunt down the links to it yourself. <code class="mono" style="color:var(--fg)">node mv</code> rewrites each link that pointed at the old path, with the right relative path for each file. <code class="mono" style="color:var(--fg)">node rm</code> deletes a node and lists any node left with nothing linking to it.</p>
                 <p class="ev"><b>Moved concepts/tannin.md -&gt; reference/tannin.md (4 inbound link(s) rewritten)</b></p>
               </div>
             </article>
@@ -534,8 +534,8 @@ const goInstallCmd = version.tag
             <article class="why-item">
               <div><span class="n">03 conformance</span><h3>You choose which checks fail the build.</h3></div>
               <div>
-                <p>Some things fail <code class="mono" style="color:var(--fg)">validate</code> no matter what, because they break the spec: frontmatter that won't parse, and an <code class="mono" style="color:var(--fg)">index.md</code> or <code class="mono" style="color:var(--fg)">log.md</code> that ignores §8 or §9. A <code class="mono" style="color:var(--fg)">log.md</code> with no title heading is enough to get exit 1 from a fresh bundle. Everything past that is your call. Say git has a node changing after its <code class="mono" style="color:var(--fg)">modified</code> date. okfctl warns you and exits 0. Template drift and anything <code class="mono" style="color:var(--fg)">lint</code> catches get the same treatment. <code class="mono" style="color:var(--fg)">--strict</code> turns all three into exit 1.</p>
-                <p class="ev">With <code class="mono">--json</code>, <b>okfctl lint ./bundles/knowledge</b> prints <code class="mono">[]</code> on a clean bundle, never <code class="mono">null</code>.</p>
+                <p>Some things fail <code class="mono" style="color:var(--fg)">validate</code> no matter what. They break the spec: frontmatter that won't parse, and an <code class="mono" style="color:var(--fg)">index.md</code> or <code class="mono" style="color:var(--fg)">log.md</code> that ignores §8 or §9. Everything past that is your call. Say a node's last commit is newer than its <code class="mono" style="color:var(--fg)">modified</code> date. okfctl warns you and exits 0. Template drift and anything <code class="mono" style="color:var(--fg)">lint</code> catches get the same treatment. <code class="mono" style="color:var(--fg)">--strict</code> turns all three into exit 1.</p>
+                <p class="ev">Give a fresh bundle a <code class="mono">log.md</code> with no title and <b>okfctl validate</b> exits 1: <code class="mono">FAIL log.md: log.md must begin with a `# ` title heading (§9)</code></p>
               </div>
             </article>
 
