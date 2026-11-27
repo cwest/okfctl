@@ -38,7 +38,8 @@ func planFor(t *testing.T, dir, actor string, force bool) (*Bundle, MigratePlan)
 // TestConformance_MigrateCitationEntries_Section5_1_SingleResourceBecomesSource
 // is the positive control: an entry that carries exactly one follow-able
 // resource, wherever it sits in the entry and however the entry wraps, becomes
-// one sources entry with that resource and the entry text as its title.
+// one sources entry with that resource. Its title is the work's name only
+// (citationName); these entries mark none, so they get no title.
 func TestConformance_MigrateCitationEntries_Section5_1_SingleResourceBecomesSource(t *testing.T) {
 	body := "# Def\n\n# Citations\n\n" +
 		"Status key: **VERIFIED** = checked against the source.\n" +
@@ -53,12 +54,9 @@ func TestConformance_MigrateCitationEntries_Section5_1_SingleResourceBecomesSour
 		t.Fatalf("want 3 entries (legend excluded, wrapped lines joined), got %d: %q", len(got), got)
 	}
 	cases := []struct{ res, title string }{
-		{"https://api.github.com/repos/ollama/ollama",
-			"[1] VERIFIED — Ollama, license **MIT**, active (pushed 2026-06-26). GitHub REST API: <https://api.github.com/repos/ollama/ollama>."},
-		{"https://claude.com/pricing",
-			"**[2] [VERIFIED — VENDOR-PRICING]** Anthropic API pricing (https://claude.com/pricing) — Opus-class $5/MTok input."},
-		{"https://arxiv.org/abs/2310.20410",
-			"[3] Paper, arXiv:2310.20410 — https://arxiv.org/abs/2310.20410 — and again https://arxiv.org/abs/2310.20410."},
+		{"https://api.github.com/repos/ollama/ollama", ""},
+		{"https://claude.com/pricing", ""},
+		{"https://arxiv.org/abs/2310.20410", ""},
 	}
 	for i, c := range cases {
 		s, ok := citationSource(got[i])
@@ -149,11 +147,11 @@ func TestConformance_MigrateCitationEntries_Section5_1_YearContinuationStaysInEn
 	if nm == nil {
 		t.Fatalf("no migration planned for a.md")
 	}
+	// The entry joins across its wrapped year line: the name comes from the
+	// first line and the resource from the second (§5.1: title is the name).
 	want := []SourceEdit{
-		{Resource: "https://arxiv.org/abs/2505.06120",
-			Title: "[1] VERIFIED — Laban et al., \"LLMs Get Lost In Multi-Turn Conversation,\" arXiv:2505.06120, 2025. https://arxiv.org/abs/2505.06120"},
-		{Resource: "https://doi.org/10.3390/s16010115",
-			Title: "Ordóñez & Roggen, *DeepConvLSTM*, *Sensors* 2016. <https://doi.org/10.3390/s16010115>"},
+		{Resource: "https://arxiv.org/abs/2505.06120", Title: "LLMs Get Lost In Multi-Turn Conversation"},
+		{Resource: "https://doi.org/10.3390/s16010115", Title: "DeepConvLSTM"},
 	}
 	if len(nm.Sources) != len(want) {
 		t.Fatalf("§5.1: want %d sources (one per entry), got %+v", len(want), nm.Sources)
@@ -266,7 +264,8 @@ func TestConformance_MigrateCitationEntries_Section5_1_WrappedBracketKeyStaysInE
 
 // TestConformance_MigrateCitationEntries_Section5_1_WrappedBracketKeyPlansOneSource
 // drives the same defect through migrate: the whole entry becomes one source
-// titled with its full text, and no fragment judgment item appears.
+// and no fragment judgment item appears. The entry marks no work name, so the
+// source is untitled (§5.1, name only) and only that is reported.
 func TestConformance_MigrateCitationEntries_Section5_1_WrappedBracketKeyPlansOneSource(t *testing.T) {
 	dir := mkMigrateBundle(t, map[string]string{
 		"index.md": "# KB\n",
@@ -275,15 +274,19 @@ func TestConformance_MigrateCitationEntries_Section5_1_WrappedBracketKeyPlansOne
 			"[2] VERIFIED — origin binding (see\n[1]); phishing resistance follows. https://w3.org/TR/webauthn-2/\n",
 	})
 	_, plan := planFor(t, dir, "human:casey", false)
-	if len(plan.Judgment) != 0 {
-		t.Fatalf("§5.1: a wrapped [k] line split an entry into judgment items: %+v", plan.Judgment)
+	for _, j := range plan.Judgment {
+		if j.Kind != JudgmentSourceTitleUnnamed {
+			t.Fatalf("§5.1: a wrapped [k] line split an entry into judgment items: %+v", plan.Judgment)
+		}
+	}
+	if len(plan.Judgment) != 1 {
+		t.Fatalf("want one source-title-unnamed item for the whole entry, got %+v", plan.Judgment)
 	}
 	nm := planNodeMigration(plan, "a.md")
 	if nm == nil {
 		t.Fatalf("no migration planned for a.md")
 	}
-	want := SourceEdit{Resource: "https://w3.org/TR/webauthn-2/",
-		Title: "[2] VERIFIED — origin binding (see [1]); phishing resistance follows. https://w3.org/TR/webauthn-2/"}
+	want := SourceEdit{Resource: "https://w3.org/TR/webauthn-2/"}
 	if len(nm.Sources) != 1 || nm.Sources[0] != want {
 		t.Fatalf("§5.1: sources = %+v, want [%+v]", nm.Sources, want)
 	}
