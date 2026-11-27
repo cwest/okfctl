@@ -199,13 +199,16 @@ func TestConformance_MigrateCitationTitle_Section4_ApplySplicesAndIsIdempotent(t
 	}
 	// The one replaced line is source [4]'s legacy full-entry title, which
 	// becomes the work's name once footnote [^4] holds the entry
-	// (migrate_title_shorten.go). Every other original line survives.
+	// (migrate_title_shorten.go). Every other original line outside the
+	// `# Citations` section survives, and the list goes: every entry is in
+	// a footnote (§4.2).
 	legacy := "    title: \"[4] VERIFIED — Legacy, *Legacy Work*, 2025. https://legacy.example/\"\n"
 	if !strings.Contains(got, "  - resource: https://legacy.example/\n    id: \"4\"\n    title: \"Legacy Work\"\n") {
 		t.Fatalf("§5.1: legacy full-entry title not shortened to the name\n%s", got)
 	}
-	if !linesSurviveInOrder(strings.Replace(titledNode, legacy, "    title: \"Legacy Work\"\n", 1), got) {
-		t.Fatalf("§4: apply must only insert lines\n--- got\n%s\n--- orig\n%s", got, titledNode)
+	if !linesSurviveInOrder(withoutCitations(strings.Replace(titledNode, legacy, "    title: \"Legacy Work\"\n", 1)), got) ||
+		strings.Contains(got, "# Citations") {
+		t.Fatalf("§4: apply must only insert lines and remove the list\n--- got\n%s\n--- orig\n%s", got, titledNode)
 	}
 	nb := loadMigrate(t, dir)
 	if fs := Validate(nb); len(fs) != 0 {
@@ -243,7 +246,7 @@ func TestConformance_MigrateCitationTitle_Section5_1_DOISpellingTitlesExistingSo
 	if err := MigrateApply(dir, b, plan); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
-	if got := readRel(t, dir, "a.md"); !strings.Contains(got, "10.1000/ABC\n    id: cite-1\n    title: The DOI Work\n") || !linesSurviveInOrder(node, got) {
+	if got := readRel(t, dir, "a.md"); !strings.Contains(got, "10.1000/ABC\n    id: cite-1\n    title: The DOI Work\n") || !linesSurviveInOrder(withoutCitations(node), got) {
 		t.Fatalf("apply\n--- got\n%s", got)
 	}
 	if _, again := planFor(t, dir, "", false); len(again.Nodes) != 0 {
@@ -311,8 +314,13 @@ func TestConformance_MigrateCitationTitle_Section5_1_LinkReferenceDefinitionPlan
 	if nm := planNodeMigration(plan, "a.md"); nm != nil {
 		t.Fatalf("want no edit, got %+v", nm)
 	}
-	if len(plan.Judgment) != 0 {
-		t.Fatalf("a link reference definition is neither a conflict nor unnamed: %+v", plan.Judgment)
+	if got := append(titleJudgments(plan, JudgmentSourceTitleConflict), titleJudgments(plan, JudgmentSourceTitleUnnamed)...); len(got) != 0 {
+		t.Fatalf("a link reference definition is neither a conflict nor unnamed: %+v", got)
+	}
+	// Removing the section would break the `[docs][arcane-docs]` link, so it
+	// stays and is reported (§4.2 removal never drops a link target).
+	if j := findJudgment(t, plan, "a.md", JudgmentCitationsKept); !strings.Contains(j.Context, "[arcane-docs]") {
+		t.Fatalf("want the kept list to name the link reference definition, got %q", j.Context)
 	}
 }
 

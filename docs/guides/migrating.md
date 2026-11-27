@@ -62,19 +62,22 @@ okfctl migrate mykb --plan migrate-plan.json --generated-by human:casey
 ```
 
 ```text
-Wrote migrate-plan.json: 2 file(s) with deterministic edits (7 edit(s)), 1 judgment item(s).
+Wrote migrate-plan.json: 2 file(s) with deterministic edits (8 edit(s)), 2 judgment item(s).
 version: 0.1 -> hold (1 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
 edits: 2 file(s); timestamp->generated 2, citations->sources 2, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
 attribution: source ids 2, footnote definitions 2, body references->footnotes 0
-judgment: 1 item(s); prose-citation 1
-1 item(s) need a decision before they can migrate; see the plan file.
+citation lists: removed 1, kept 1
+judgment: 2 item(s); citations-kept 1, prose-citation 1
+2 item(s) need a decision before they can migrate; see the plan file.
 ```
 
-`acidity.md` gets three of the seven edits: the rename, the source, and its
-footnote definition (the source's `id` rides on the new source). `tannin.md`
-gets four, counting the link. The Montalcino line is another matter. It
-names nothing a reader can follow, and `migrate` won't invent a source for it.
-The plan files it under `judgment`:
+`acidity.md` gets four of the eight edits: the rename, the source, its
+footnote definition (the source's `id` rides on the new source), and the
+removal of its `# Citations` list, which now holds nothing the source and
+footnote don't. `tannin.md` gets four, counting the link. The Montalcino line
+is another matter. It names nothing a reader can follow, and `migrate` won't
+invent a source for it. The plan files it under `judgment`, and keeps
+`tannin.md`'s list because that line lives nowhere else:
 
 ```json
 "judgment": [
@@ -82,11 +85,16 @@ The plan files it under `judgment`:
     "path": "wine/tannin.md",
     "kind": "prose-citation",
     "context": "- Tasting notes from the 2025 Montalcino trip, no link."
+  },
+  {
+    "path": "wine/tannin.md",
+    "kind": "citations-kept",
+    "context": "entry 2: names no resource, so no source holds it"
   }
 ]
 ```
 
-That one item is also why the version line says `hold`.
+The `prose-citation` item is also why the version line says `hold`.
 [The last section](#why-the-version-declaration-waits) explains it.
 
 `--generated-by` takes the actor (§7) that `migrate` records as `generated.by`
@@ -105,7 +113,7 @@ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
 ```diff
 --- a/wine/acidity.md
 +++ b/wine/acidity.md
-@@ -1,12 +1,17 @@
+@@ -1,12 +1,14 @@
  ---
  type: Reference
  title: Acidity
@@ -119,11 +127,10 @@ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
  # Acidity
 
  Acidity makes a wine taste fresh.
-+
-+[^cite-1]: https://en.wikipedia.org/wiki/Acids_in_wine
 
- # Citations
- - https://en.wikipedia.org/wiki/Acids_in_wine
+-# Citations
+-- https://en.wikipedia.org/wiki/Acids_in_wine
++[^cite-1]: https://en.wikipedia.org/wiki/Acids_in_wine
 --- a/wine/tannin.md
 +++ b/wine/tannin.md
 @@ -1,13 +1,18 @@
@@ -154,9 +161,13 @@ After the diffs it repeats the plan summary and ends with
 `id`, and the entry's full text becomes the footnote definition with that
 label (§5.1: per-claim attribution is a footnote whose label is a
 `sources[].id`). These entries have no key, so the id is `cite-<n>`, the
-entry's place in the list. The body `# Citations` list stays where it was.
-`migrate` adds frontmatter and footnotes and never deletes the prose it came
-from.
+entry's place in the list.
+
+A body `# Citations` list goes only when nothing in it would be lost: every
+entry's full text is the footnote definition of its source, every resource it
+names is a source's `resource`, the section holds nothing but entries, and no
+body `[k]` still points at it. `acidity.md` passes, so its list goes.
+`tannin.md` fails on the Montalcino line, so its list stays as written.
 
 ### 3. Apply
 
@@ -170,7 +181,7 @@ migrated wine/tannin.md
 2 file(s) migrated; okf_version declaration held: bundle still declares v0.1 (v0.2 fallbacks apply, §12.1).
 hint: after committing, list that commit's SHA in .okf-drift-ignore-revs so strict drift skips the mechanical edits (like git blame --ignore-revs-file).
 bundle valid
-note: 1 judgment item(s) were not applied (they need a decision; see the plan file).
+note: 2 judgment item(s) were not applied (they need a decision; see the plan file).
 ```
 
 Take the hint. Commit the result and add that commit's SHA to
@@ -198,10 +209,11 @@ $ mv tannin.tmp mykb/wine/tannin.md
 -->
 ```text
 $ okfctl migrate mykb --plan migrate-plan.json --generated-by human:casey
-Wrote migrate-plan.json: 1 file(s) with deterministic edits (2 edit(s)), 0 judgment item(s).
+Wrote migrate-plan.json: 1 file(s) with deterministic edits (3 edit(s)), 0 judgment item(s).
 version: 0.1 -> declare v0.3
 edits: 1 file(s); timestamp->generated 0, citations->sources 1, citation titles->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
 attribution: source ids 1, footnote definitions 1, body references->footnotes 0
+citation lists: removed 1, kept 0
 judgment: 0 item(s); none
 $ okfctl migrate mykb --apply --plan migrate-plan.json
 migrated wine/tannin.md
@@ -215,8 +227,9 @@ okf_version: 0.3 (declared in index.md)
 ```
 
 The new link became a second `sources` entry (`id: cite-2`), with the link
-text as its `title` and the entry as its footnote definition. The bundle-root
-`index.md` now opens with `okf_version: "0.3"`, as
+text as its `title` and the entry as its footnote definition. With every entry
+held by a source and a footnote, the `# Citations` list is gone. The
+bundle-root `index.md` now opens with `okf_version: "0.3"`, as
 does the `.okf` sidecar.
 
 Run it again and nothing happens. A plan on a migrated bundle has no edits;
@@ -260,8 +273,9 @@ From v0.1 (v0.3 Appendix B), two renames:
   `https://openlibrary.org/isbn/<isbn>`. An ISBN must pass its check digit
   first. The URL is built offline from a fixed pattern; `migrate` never fetches
   it. An identifier that another entry in the same list also names is a
-  cross-reference, so that entry stays a judgment item. The body list stays,
-  so the full entry text is still there.
+  cross-reference, so that entry stays a judgment item. The full entry text
+  stays in the file: in its footnote definition, or in the body list while
+  that list is kept.
 - an entry whose resource is in `sources` already is not added twice (a DOI
   URL matches however its host or case is spelled). If that source has no
   `title`, the entry's name fills it in. A source that already has a title
@@ -281,6 +295,15 @@ From v0.1 (v0.3 Appendix B), two renames:
   `[PRIMARY-DOC, VERIFIED]` stays. Each body `[12]` becomes `[^12]`, and
   `[3]–[5]` or `[1, 2]` expand to one footnote per entry. Code, links,
   reference-link labels, and footnotes already in place are left alone.
+- the body `# Citations` list is removed (§4.2: "Do not use a list of
+  citations in the body") once the migrated file holds everything in it. The
+  check runs on the bytes the apply writes, entry by entry: the entry's text,
+  whitespace collapsed, equals the footnote definition of its first source; each
+  URL or bundle path it names is some source's `resource`; the section has no
+  line that isn't an entry (a status key, a group label, a link reference
+  definition); and no body `[k]` still cites the list. One miss keeps the
+  whole list and files a `citations-kept` item. Everything outside the section
+  keeps its bytes.
 
 From v0.2 (v0.3 §13.1), two edits:
 
@@ -332,9 +355,14 @@ present, is bumped too.
   footnote and its body references stay as written.
 - a node whose ids would collide once case is folded (`source-id-collision`).
   It gets no ids, footnotes, or reference rewrites.
+- a `# Citations` list that can't go without losing something
+  (`citations-kept`). The context names each entry and what would be lost:
+  an entry with no source, a URL no source holds, a footnote whose text
+  differs from the entry, a line that isn't an entry, or a body `[k]` still
+  pointing at the list. The list stays as written.
 
-The three `source-title-*` kinds and these three don't hold the version
-declaration: the resource is already in `sources`.
+The three `source-title-*` kinds and these four don't hold the version
+declaration: the resource is already in `sources`, or the list stays as text.
 
 An entry that names several resources is not a judgment item: it becomes one
 source per resource, since §5.1 gives a source one `resource`. Given

@@ -81,11 +81,18 @@ var (
 // interrupt a paragraph only when it starts at 1. Splitting there would turn
 // one citation into an untitled source and a judgment item.
 func citationEntries(body string) []string {
+	out, _ := citationSection(body)
+	return out
+}
+
+// citationSection is citationEntries plus the section's other non-blank
+// lines: legend and status-key lines, group labels, and any text outside an
+// entry, verbatim and trimmed, in body order.
+func citationSection(body string) (out, other []string) {
 	loc := citationsHeadRe.FindStringIndex(body)
 	if loc == nil {
-		return nil
+		return nil, nil
 	}
-	var out []string
 	var cur []string
 	curOrdered := false // the open entry is an ordered-list item
 	curRefDef := false  // the open entry is a link reference definition
@@ -110,15 +117,20 @@ func citationEntries(body string) []string {
 		switch {
 		case strings.HasPrefix(trimmed, "#"):
 			flush()
-			return out // the next heading ends the Citations section
-		case trimmed == "" || citationLegendRe.MatchString(line):
+			return out, other // the next heading ends the Citations section
+		case trimmed == "":
 			flush()
+		case citationLegendRe.MatchString(line):
+			flush()
+			other = append(other, trimmed)
 		case citationLinkRe.MatchString(line) && !citationBulletRe.MatchString(line) && !citationOrderedRe.MatchString(line):
 			// An unbulleted line that opens with a markdown link is wrapped
 			// prose, not a bracket-key entry (analyze.go's citationLinkRe
 			// draws the same line): it continues the current entry, if any.
 			if cur != nil {
 				cur = append(cur, trimmed)
+			} else {
+				other = append(other, trimmed)
 			}
 		case citationBulletRe.MatchString(line) && markerStarts(line, cur != nil, true, curOrdered, curIndent):
 			start(line, false)
@@ -130,10 +142,12 @@ func citationEntries(body string) []string {
 			start(line, true)
 		case cur != nil:
 			cur = append(cur, trimmed)
+		default:
+			other = append(other, trimmed)
 		}
 	}
 	flush()
-	return out
+	return out, other
 }
 
 // bracketKeyContinues reports whether an unbulleted bracket-key line starts

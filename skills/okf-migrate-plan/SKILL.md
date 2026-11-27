@@ -31,22 +31,25 @@ nodes: 2
 reserved: 2
 okf_version: 0.1 (declared in .okf)
 $ okfctl migrate mykb --plan migrate-plan.json
-Wrote migrate-plan.json: 2 file(s) with deterministic edits (5 edit(s)), 3 judgment item(s).
+Wrote migrate-plan.json: 2 file(s) with deterministic edits (6 edit(s)), 4 judgment item(s).
 version: 0.1 -> hold (3 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
 edits: 2 file(s); timestamp->generated 0, citations->sources 2, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
 attribution: source ids 2, footnote definitions 2, body references->footnotes 0
-judgment: 3 item(s); missing-actor 2, prose-citation 1
-3 item(s) need a decision before they can migrate; see the plan file.
+citation lists: removed 1, kept 1
+judgment: 4 item(s); citations-kept 1, missing-actor 2, prose-citation 1
+4 item(s) need a decision before they can migrate; see the plan file.
 ```
 
 Planning reads the bundle and writes nothing but `migrate-plan.json`. There are
 two kinds of work in it. Edits are changes the tool can make safely (here, two
 URL citations turn into `sources` entries, each with an `id` and a footnote
-definition holding the entry's text, and the root-relative link gets a
-leading `/`). Judgment items are the ones it won't guess at. Neither
-`timestamp` says who generated its node, and the Montalcino citation names no
-resource. Since those three items still lean on v0.1 fallbacks, the version
-stays at 0.1 for now (more on that below).
+definition holding the entry's text, the root-relative link gets a leading
+`/`, and `acidity.md`'s `# Citations` list goes because the source and
+footnote now hold all of it). Judgment items are the ones it won't guess at.
+Neither `timestamp` says who generated its node, and the Montalcino citation
+names no resource, so `tannin.md` keeps its list (`citations-kept`). Since the
+`missing-actor` and `prose-citation` items still lean on v0.1 fallbacks, the
+version stays at 0.1 for now (more on that below).
 
 ## When to Use
 
@@ -84,7 +87,8 @@ $ cat migrate-plan.json
           "id": "cite-1",
           "text": "https://en.wikipedia.org/wiki/Acids_in_wine"
         }
-      ]
+      ],
+      "remove_citations": true
     },
     {
       "path": "wine/tannin.md",
@@ -124,15 +128,21 @@ $ cat migrate-plan.json
       "path": "wine/tannin.md",
       "kind": "prose-citation",
       "context": "- Tasting notes from the 2025 Montalcino trip, no link."
+    },
+    {
+      "path": "wine/tannin.md",
+      "kind": "citations-kept",
+      "context": "entry 2: names no resource, so no source holds it"
     }
   ]
 }
 ```
 
 `nodes[]` lists the edits per file, and you can leave them as they are.
-`judgment[]` has one entry per refusal, with the node `path`, its `kind`, and
-the `context` you need to make the call (the timestamp value or the citation
-line as written).
+`remove_citations` marks a node whose `# Citations` list goes. `judgment[]`
+has one entry per refusal, with the node `path`, its `kind`, and the `context`
+you need to make the call (the timestamp value, the citation line as written,
+or for `citations-kept` each entry and what removing the list would lose).
 `version_action` is `hold` while any `missing-actor` or `prose-citation` item
 is left and `bump` when none are. You'll see `keep` when the bundle declares
 v0.3, or a version the tool doesn't know.
@@ -144,12 +154,13 @@ Pass `--generated-by` and each `missing-actor` item turns into a `timestamp` to
 
 ```text
 $ okfctl migrate mykb --plan migrate-plan.json --generated-by human:casey
-Wrote migrate-plan.json: 2 file(s) with deterministic edits (7 edit(s)), 1 judgment item(s).
+Wrote migrate-plan.json: 2 file(s) with deterministic edits (8 edit(s)), 2 judgment item(s).
 version: 0.1 -> hold (1 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
 edits: 2 file(s); timestamp->generated 2, citations->sources 2, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
 attribution: source ids 2, footnote definitions 2, body references->footnotes 0
-judgment: 1 item(s); prose-citation 1
-1 item(s) need a decision before they can migrate; see the plan file.
+citation lists: removed 1, kept 1
+judgment: 2 item(s); citations-kept 1, prose-citation 1
+2 item(s) need a decision before they can migrate; see the plan file.
 ```
 
 The tool writes the actor string as is into `generated.by` (§7). That's why
@@ -164,7 +175,7 @@ a team handle.
 $ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
 --- a/wine/acidity.md
 +++ b/wine/acidity.md
-@@ -1,12 +1,17 @@
+@@ -1,12 +1,14 @@
  ---
  type: Reference
  title: Acidity
@@ -178,11 +189,10 @@ $ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
  # Acidity
 
  Acidity makes a wine taste fresh.
-+
-+[^cite-1]: https://en.wikipedia.org/wiki/Acids_in_wine
 
- # Citations
- - https://en.wikipedia.org/wiki/Acids_in_wine
+-# Citations
+-- https://en.wikipedia.org/wiki/Acids_in_wine
++[^cite-1]: https://en.wikipedia.org/wiki/Acids_in_wine
 --- a/wine/tannin.md
 +++ b/wine/tannin.md
 @@ -1,13 +1,18 @@
@@ -209,7 +219,8 @@ $ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
 version: 0.1 -> hold (1 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
 edits: 2 file(s); timestamp->generated 2, citations->sources 2, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
 attribution: source ids 2, footnote definitions 2, body references->footnotes 0
-judgment: 1 item(s); prose-citation 1
+citation lists: removed 1, kept 1
+judgment: 2 item(s); citations-kept 1, prose-citation 1
 2 file(s) would change (dry run; nothing written).
 $ okfctl migrate mykb --apply --plan migrate-plan.json
 migrated wine/acidity.md
@@ -217,13 +228,16 @@ migrated wine/tannin.md
 2 file(s) migrated; okf_version declaration held: bundle still declares v0.1 (v0.2 fallbacks apply, §12.1).
 hint: after committing, list that commit's SHA in .okf-drift-ignore-revs so strict drift skips the mechanical edits (like git blame --ignore-revs-file).
 bundle valid
-note: 1 judgment item(s) were not applied (they need a decision; see the plan file).
+note: 2 judgment item(s) were not applied (they need a decision; see the plan file).
 ```
 
 With the version held, `index.md` and `.okf` don't show up in the diff at all.
-The body `# Citations` list stays put. Migration adds frontmatter `sources`
-and footnote definitions and deletes nothing. Keys the tool doesn't recognize come through
-byte for byte (§11), and apply validates the bundle when it's done.
+`acidity.md`'s `# Citations` list is gone: its one entry is now a source and
+a footnote holding the same text. `tannin.md`'s list stays, because the
+Montalcino line lives nowhere else. The only thing migration deletes is a list
+whose every byte is already held elsewhere. Keys the tool doesn't recognize
+come through byte for byte (§11), and apply validates the bundle when it's
+done.
 
 Commit or copy the bundle ahead of a real apply if you want to diff it
 afterward. After you commit, add that commit's SHA to `.okf-drift-ignore-revs`
@@ -232,19 +246,23 @@ as the `hint:` line says.
 ### 4. Resolve the last item and declare v0.3
 
 There's no resource to cite for the Montalcino line. This example deletes it
-from `# Citations`, and with nothing left relying on the v0.1 fallback the plan
+from `# Citations`. Now every entry left is held by a source and a footnote, so
+the list goes, and with nothing left relying on the v0.1 fallback the plan
 bumps the version:
 
 ```text
 $ grep -v Montalcino mykb/wine/tannin.md > tannin.tmp
 $ mv tannin.tmp mykb/wine/tannin.md
 $ okfctl migrate mykb --plan migrate-plan.json
-Wrote migrate-plan.json: 0 file(s) with deterministic edits (0 edit(s)), 0 judgment item(s).
+Wrote migrate-plan.json: 1 file(s) with deterministic edits (1 edit(s)), 0 judgment item(s).
 version: 0.1 -> declare v0.3
-edits: 0 file(s); timestamp->generated 0, citations->sources 0, citation titles->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 1 file(s); timestamp->generated 0, citations->sources 0, citation titles->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
+citation lists: removed 1, kept 0
 judgment: 0 item(s); none
 $ okfctl migrate mykb --apply --plan migrate-plan.json
-0 file(s) migrated; bundle declares v0.3.
+migrated wine/tannin.md
+1 file(s) migrated; bundle declares v0.3.
+hint: after committing, list that commit's SHA in .okf-drift-ignore-revs so strict drift skips the mechanical edits (like git blame --ignore-revs-file).
 bundle valid as v0.3
 $ okfctl validate mykb
 OK: bundle conforms to the OKF spec floor
@@ -280,6 +298,7 @@ comes back to you as a judgment item:
 | source whose `title` is its whole `# Citations` entry (an earlier run wrote it) | `title` cut to the work's name, or removed (§5.1) | the footnote definition `[^id]` holds the entry's text, in this plan or already in the body | it names no work: `source-title-unnamed` (title removed; the text is in the footnote); no footnote holds the text: `source-title-unpreserved` (title kept) |
 | link or path field that resolves only from the bundle root (§12.1) | same target with a leading `/` (§6) | always | never |
 | §5 timestamp not in RFC 3339 form | `"2026-06-20T10:00:00Z"` | it has an offset (`Z`, `+0000`, `-05:00`) | no offset: `timestamp-no-offset`; not a date: `timestamp-invalid` |
+| the body `# Citations` list itself | removed (§4.2: no citation list in the body) | the migrated file holds all of it: each entry's text (whitespace collapsed) is the footnote definition of its first source, each URL or bundle path it names is a source's `resource`, every line is an entry, and no body `[k]` still cites it | anything would be lost: `citations-kept`, naming each entry and what it would lose (the whole list stays) |
 
 Feed it `[1] Smith, *Tannin chemistry*, 2024. https://…` and the new
 `title` is `Tannin chemistry`. The authors, year, and URL stay in the body. The
@@ -325,12 +344,13 @@ $ cp -R "$TRANSCRIPT_FIXTURES/migrating/mykb" kb2
 -->
 ```text
 $ okfctl migrate kb2 --plan migrate-plan.json --generated-by human:casey --force-declare
-Wrote migrate-plan.json: 2 file(s) with deterministic edits (7 edit(s)), 1 judgment item(s).
+Wrote migrate-plan.json: 2 file(s) with deterministic edits (8 edit(s)), 2 judgment item(s).
 version: 0.1 -> declare v0.3 (forced: 1 prose-citation/missing-actor item(s) lose the §12.1 fallback)
 edits: 2 file(s); timestamp->generated 2, citations->sources 2, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
 attribution: source ids 2, footnote definitions 2, body references->footnotes 0
-judgment: 1 item(s); prose-citation 1
-1 item(s) need a decision before they can migrate; see the plan file.
+citation lists: removed 1, kept 1
+judgment: 2 item(s); citations-kept 1, prose-citation 1
+2 item(s) need a decision before they can migrate; see the plan file.
 ```
 
 Bundles that declare v0.3, something later, or a version the tool doesn't
@@ -368,6 +388,9 @@ list. An item goes away when the node stops producing it.
 - **A citation with two URLs.** Split it into one entry per resource. The tool
   won't pick one or split it for you.
 - **A timestamp with no offset.** Add the offset the author meant.
+- **A list kept (`citations-kept`).** Its context names each entry and what
+  would be lost. Fix those (most are one of the items above), or move a
+  status-key line out of the section, and the next plan removes the list.
 
 Adding a `resource` straight to a node's entry under `nodes[]` and applying it
 does work. But the prose line is still in `# Citations` afterward. The next
@@ -401,8 +424,10 @@ out the way the tool would.
    provenance as is.
 4. Look at the real diff with `--dry-run`, and commit or copy the bundle ahead
    of any apply.
-5. Apply won't delete `# Citations`. Migration only adds. Pruning the old list
-   is a separate edit.
+5. Apply deletes a `# Citations` list only when the migrated file provably
+   holds every entry's text and resource. A `citations-kept` item means it
+   didn't, and the list is still there; don't delete it by hand to clear the
+   item, since that is the citation text the item says would be lost.
 6. `--force-declare` won't give you a clean plan. It turns off the only way
    consumers can still read the items you haven't resolved.
 
