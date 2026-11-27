@@ -243,6 +243,9 @@ From v0.1 (v0.3 Appendix B), two renames:
   is taken only where the entry marks it: a leading link's text, a quoted or
   italic title in citation position, or the page name after a leading URL.
   Authors, venue, year, identifiers, URLs, and grades never go into `title`.
+  A quote of the page is not its name: a quote introduced by `Description:`,
+  `Verbatim:`, `states`, `reads`, an error or message, a backticked ref, or a
+  URL, and a quote that is a sentence or a lowercase clause, gives no title.
   An entry that marks no name gets no title and a `source-title-unnamed` item.
   An earlier run may have written the whole entry into `title`. Once the
   entry's text is the footnote definition of the source's `id`, that title

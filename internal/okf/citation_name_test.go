@@ -77,6 +77,69 @@ func TestConformance_CitationName_Section5_1_BoldLeadIsNotTheVenue(t *testing.T)
 	}
 }
 
+// §5.1 `title` names the work. Many entries quote the page instead: a repo
+// description, a docs sentence, an error message, a terms-of-service clause.
+// That quote is evidence for the claim, not the work's name, so the entry has
+// no name and the source stays untitled (reported as source-title-unnamed).
+// Each entry is a real corpus shape.
+func TestConformance_CitationName_Section5_1_QuotedExcerptIsNotAName(t *testing.T) {
+	for _, entry := range []string{
+		// Introduced as a description, verbatim text, or error message.
+		"[4] VERIFIED — `freqtrade/freqtrade`, license **GPL-3.0** (GitHub spdx_id `GPL-3.0`). Description: \"Free, open source crypto trading bot.\" Last push 2026-06-26. Source: <https://api.github.com/repos/freqtrade/freqtrade>.",
+		"[2] VERIFIED — vLLM, GitHub REST API: <https://api.github.com/repos/vllm-project/vllm>. Description: \"A high-throughput and memory-efficient inference and serving engine for LLMs\".",
+		"[5] VERIFIED — Amazon EKS, aws.amazon.com/eks/, retrieved 2026-08-18. Verbatim: \"Managed Kubernetes,\" \"certified Kubernetes,\" \"conformant.\" <https://aws.amazon.com/eks/>",
+		"[1] VERIFIED — `google/cybernetic-agent-governance-engine` README at `main` HEAD `56b751d` (2026-11-25): description, \"not an officially supported Google product\", Objectives. https://github.com/google/x",
+		"[3] VERIFIED — RFC 6750 §3.1. The `insufficient_scope` error: \"The request requires higher privileges than provided by the access token.\" https://www.rfc-editor.org/rfc/rfc6750",
+		// Introduced by a backticked ref or a URL and a colon.
+		"[25] VERIFIED — Privacy.com API, `https://developers.privacy.com/docs/cards`: card `type` values include `SINGLE_USE`; `spend_limit`: \"Transaction requests above the spend limit will be declined\".",
+		"[15] VERIFIED: Mastodon OAuth tokens, https://docs.joinmastodon.org/api/oauth-tokens/: \"Tokens Will Not Expire Automatically.\"",
+		// A sentence, or more than one.
+		"[8] VERIFIED — Sessionize, DevFest Ottawa 2026: \"Call for Speakers is closed. Submissions are no longer possible\"; event 5 Dec 2026. https://sessionize.com/devfest-ottawa-2026/",
+		"[1] VERIFIED — google/elephant-goldfish-model README at HEAD `8b1553f` (2026-11-22): tagline, \"Goldfish reviews require fresh subagent contexts. If your agent cannot create them, EGM stops the review.\" https://github.com/google/elephant-goldfish-model",
+		"[P1] VERIFIED — Headless `gcloud auth print-access-token`, prior probe, \"Reauthentication failed. cannot prompt during non-interactive execution.\" Recorded as [P6].",
+		// A lowercase clause fragment.
+		"[8] VERIFIED [primary] AwardClaw (C6 Labs LLC), Terms of Service §4 (last updated 2026-07-27): \"aggregate publicly available award seat data\". https://www.awardclaw.com/terms",
+		"[4] Unicode CLDR — Common Locale Data Repository, https://cldr.unicode.org/ — \"the most trusted and comprehensive repository of locale data,\" 100+ languages. **VERIFIED.**",
+		// One of a list of quoted excerpts.
+		"[3] VERIFIED — pretalx, GrafanaCON 2027 CFP: \"Event Dates: April 27-29, 2027\"; \"Event location: New York, NY\". https://pretalx.com/grafanacon-2027/cfp",
+		// After a colon, a quote that is not title case is page text.
+		"[x] VERIFIED — Vercel — Fluid compute docs: \"As of April 23, 2025, fluid compute is enabled by default for new projects\". https://vercel.com/docs/fluid-compute",
+		"[x] VERIFIED — Gartner, `https://www.gartner.com/en/research/methodologies/gartner-hype-cycle`: \"The Hype Cycle research is reserved for paying clients\".",
+	} {
+		if got, ok := citationName(entry); ok {
+			t.Errorf("citationName(%q) = %q, want no name (the quote is an excerpt)", entry, got)
+		}
+	}
+}
+
+// Negative control for the excerpt rules: real names that share their
+// surface features still come through. A quoted title may hold `vs.`, an
+// initialism, a `?`, a lowercase first letter inside a word, or its own
+// closing period; italics are never read as excerpts; and a title-case
+// quote after a label colon names the work.
+func TestConformance_CitationName_Section5_1_ExcerptRulesKeepRealNames(t *testing.T) {
+	for entry, want := range map[string]string{
+		"[2] Miles, A. & Bechhofer, S. (eds.), *SKOS Simple Knowledge Organization System Reference*, W3C Recommendation, 2009. https://www.w3.org/TR/skos-reference/":                       "SKOS Simple Knowledge Organization System Reference",
+		"[2] VERIFIED. W3C, \"Understanding SC 1.2.3: Audio Description or Media Alternative (Prerecorded),\" Level A. https://www.w3.org/WAI/WCAG22/Understanding/x.html":                   "Understanding SC 1.2.3: Audio Description or Media Alternative (Prerecorded)",
+		"[10] VERIFIED — AWS What's New, *AWS WAF announces Web Bot Auth support* (Posted 2025-11-21): https://aws.amazon.com/about-aws/whats-new/x":                                         "AWS WAF announces Web Bot Auth support",
+		"[1] W3C Internationalization, \"Localization vs. Internationalization\" (Richard Ishida, W3C), https://www.w3.org/International/questions/qa-i18n — the i18n/l10n distinction.":     "Localization vs. Internationalization",
+		"[53] VERIFIED [vendor page] SerpApi, \"U.S. Legal Shield\": Production plan and above. https://serpapi.com/us-legal-shield":                                                         "U.S. Legal Shield",
+		"[3] Scheibehenne, B., \"Can There Ever Be Too Many Options? A Meta-Analytic Review of Choice Overload,\" *Journal of Consumer Research*, 2010. https://doi.org/10.1086/651235":      "Can There Ever Be Too Many Options? A Meta-Analytic Review of Choice Overload",
+		"[3] Source video: \"Why the 60-30-10 Rule is RUINING Your UI Designs,\" YouTube, https://youtu.be/66oOi9OLMCw (transcript fetched 2026-07-02).":                                     "Why the 60-30-10 Rule is RUINING Your UI Designs",
+		"[S22b] Liquid AI, \"d1.2: State-of-the-Art Omnimodal Decision Models\", 2026-11-16. https://liquid.ai/blog/d1-2. VERIFIED (vendor claims).":                                         "d1.2: State-of-the-Art Omnimodal Decision Models",
+		"[13] VERIFIED [project blog] — Etienne Perot and Jing Chen, \"gVisor is being donated to CNCF\", 2026-10-02: donating the name and trademarks. https://gvisor.dev/blog/x":           "gVisor is being donated to CNCF",
+		"[23] VERIFIED — Google Play listing for package `xyz.block.buzz.mobile` (2026-11-18): \"Buzz - Apps on Google Play,\" developer Block, Inc. <https://play.google.com/store/apps/x>": "Buzz - Apps on Google Play",
+		"[5] Practitioner consensus against overlays: *Overlay Fact Sheet*, https://overlayfactsheet.com/ (a community statement).":                                                          "Overlay Fact Sheet",
+		// A question mark ends a title's question, not a quoted sentence.
+		"[14] Barnett, S. M. & Ceci, S. J. (2002), \"When and where do we apply what we learn? A taxonomy for far transfer,\" *Psychological Bulletin* 128(4):612–637. https://doi.org/10.1037/0033-2909.128.4.612": "When and where do we apply what we learn? A taxonomy for far transfer",
+		"[16] UNVERIFIED-tier (vendor study). Viibeo, \"How fast do viral Shorts cut? A 54-video study,\" 2026-10-15. https://www.viibeo.com/research/viral-shorts-pacing":                                          "How fast do viral Shorts cut? A 54-video study",
+	} {
+		if got, ok := citationName(entry); !ok || got != want {
+			t.Errorf("citationName(%q)\n got %q ok=%v\nwant %q", entry, got, ok, want)
+		}
+	}
+}
+
 // Negative control: emphasis or quotes that mark a claim, a term, or a
 // search string are not a name, and an entry with no marked name has none.
 func TestConformance_CitationName_Section5_1_NoNameWhenNotMarked(t *testing.T) {

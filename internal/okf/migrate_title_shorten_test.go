@@ -125,6 +125,31 @@ func TestConformance_MigrateTitleShorten_Section5_1_NoNameTitleRemovedAndReporte
 	}
 }
 
+// Positive control: a whole-entry title whose only quote is an excerpt (a
+// repo description) is removed and reported, never cut to the excerpt.
+func TestConformance_MigrateTitleShorten_Section5_1_ExcerptTitleRemovedAndReported(t *testing.T) {
+	const entry = "[1] VERIFIED — `freqtrade/freqtrade`, license GPL-3.0. Description: \\\"Free, open source crypto trading bot.\\\" Source: https://api.github.com/repos/freqtrade/freqtrade"
+	node := "---\ntype: Concept\nsources:\n  - resource: https://api.github.com/repos/freqtrade/freqtrade\n" +
+		"    title: \"" + entry + "\"\n---\n\n# Def\n\nA bot [1].\n\n# Citations\n\n- " +
+		strings.ReplaceAll(entry, `\"`, `"`) + "\n"
+	dir := mkMigrateBundle(t, kb(node))
+	_, plan := planFor(t, dir, "", false)
+	rw := titleRewrites(findNodeMigration(t, plan, "a.md"))
+	got, ok := rw["https://api.github.com/repos/freqtrade/freqtrade"]
+	if !ok || got.Title != "" || got.Footnote != "1" {
+		t.Fatalf("§5.1: an excerpt is not a name; want the title removed (footnote 1), got %+v", rw)
+	}
+	var reported bool
+	for _, j := range titleJudgments(plan, JudgmentSourceTitleUnnamed) {
+		if strings.Contains(j.Context, "freqtrade") {
+			reported = true
+		}
+	}
+	if !reported {
+		t.Fatalf("a removed excerpt title must be reported as %s, got %+v", JudgmentSourceTitleUnnamed, plan.Judgment)
+	}
+}
+
 // Negative control: a title that is already just a name is not touched, even
 // though its entry also names that work.
 func TestConformance_MigrateTitleShorten_Section5_1_NameTitleUntouched(t *testing.T) {

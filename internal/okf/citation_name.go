@@ -97,7 +97,7 @@ func citationName(entry string) (string, bool) {
 			// A quoted excerpt is evidence, not the page's name: a name is
 			// followed by a colon, a parenthetical, or a dash.
 			for _, p := range []string{":", " (", " —", " –"} {
-				if strings.HasPrefix(after, p) {
+				if strings.HasPrefix(after, p) && !quoteIsExcerpt("— ", q, after) {
 					return cleanName(q)
 				}
 			}
@@ -131,6 +131,9 @@ func citationName(entry string) (string, bool) {
 	if !namePrefixOK(before) || !nameSuffixOK(after, inner) {
 		return "", false
 	}
+	if text[start] != '*' && quoteIsExcerpt(before, inner, after) {
+		return "", false
+	}
 	// After a bold lead that names the work, an italic span is its venue.
 	if boldLead && text[start] == '*' {
 		return "", false
@@ -138,11 +141,111 @@ func citationName(entry string) (string, bool) {
 	// An italic container followed by a quoted piece (`*Podcast*, "Episode"`)
 	// cites the piece.
 	if text[start] == '*' && strings.HasPrefix(after, ", ") {
-		if q, rest := leadingQuote(after[2:]); q != "" && nameSuffixOK(rest, q) {
+		if q, rest := leadingQuote(after[2:]); q != "" && nameSuffixOK(rest, q) && !quoteIsExcerpt(", ", q, rest) {
 			return cleanName(q)
 		}
 	}
 	return cleanName(inner)
+}
+
+// excerptIntroducers are the words an entry uses to introduce a quotation
+// of the page rather than the page's name ("Description: \"…\"",
+// "verbatim: \"…\"", "the `insufficient_scope` error: \"…\"").
+var excerptIntroducers = map[string]bool{
+	"description": true, "verbatim": true, "states": true, "state": true,
+	"says": true, "say": true, "reads": true, "read": true, "error": true,
+	"message": true, "text": true, "tagline": true, "abstract": true,
+	"statement": true, "quote": true, "quotes": true, "wording": true,
+}
+
+// titleSmallWords may be lowercase inside a title-case name.
+var titleSmallWords = map[string]bool{
+	"a": true, "an": true, "the": true, "and": true, "or": true, "but": true,
+	"nor": true, "for": true, "of": true, "on": true, "in": true, "at": true,
+	"to": true, "by": true, "with": true, "from": true, "as": true, "is": true,
+	"vs": true, "via": true, "per": true, "into": true, "over": true, "are": true,
+	"be": true, "it": true, "its": true, "not": true, "no": true,
+}
+
+var (
+	// excerptSentenceRe finds a sentence break inside a quote: a lowercase
+	// word of three or more letters, a period or `!`, a space, and another
+	// word. `vs. ` and initials (`U.S. `, `A. `) are too short to match. A
+	// `?` is not a break: titles ask questions ("Can There Ever Be Too Many
+	// Options? A Meta-Analytic Review").
+	excerptSentenceRe = regexp.MustCompile(`\b\p{Ll}{3,}[.!]\s+\pL`)
+	nameWordRe        = regexp.MustCompile(`[\pL\pN][\pL\pN'’-]*`)
+)
+
+// quoteIsExcerpt reports whether a quoted span (inner) quotes the page
+// rather than naming it (§5.1: `title` is the work's name). before is the
+// entry text up to the opening quote and after the text past the closing
+// one. A quote is an excerpt when:
+//
+//   - a word like Description, Verbatim, states, reads, error, or message
+//     introduces it;
+//   - a backticked ref or a URL introduces it (`spend_limit`: "…");
+//   - it holds a sentence break, so it is a sentence, not a name;
+//   - another quote follows it, so it is one of a list of excerpts;
+//   - it opens lowercase after a colon or a URL (a clause fragment); or
+//   - a colon introduces it and it is not title case (page text, where a
+//     label like "Source video:" introduces a title-case name).
+func quoteIsExcerpt(before, inner, after string) bool {
+	sep := ""
+	head := before
+	for _, s := range []string{", ", "— ", "– ", ": "} {
+		if strings.HasSuffix(before, s) {
+			sep, head = s, strings.TrimRight(before[:len(before)-len(s)], " ")
+			break
+		}
+	}
+	fields := strings.Fields(head)
+	last := ""
+	if len(fields) > 0 {
+		last = fields[len(fields)-1]
+	}
+	if words := nameWordRe.FindAllString(last, -1); len(words) > 0 &&
+		excerptIntroducers[strings.ToLower(words[len(words)-1])] {
+		return true
+	}
+	byRef := strings.HasSuffix(last, "`") || strings.Contains(last, "://")
+	if byRef && sep != "" {
+		return true
+	}
+	if excerptSentenceRe.MatchString(inner) {
+		return true
+	}
+	rest := strings.TrimLeft(after, ",; ")
+	if strings.HasPrefix(rest, `"`) || strings.HasPrefix(rest, "“") {
+		return true
+	}
+	if sep == ": " || byRef {
+		r, _ := utf8.DecodeRuneInString(inner)
+		if unicode.IsLower(r) {
+			first := nameWordRe.FindString(inner)
+			if first == strings.ToLower(first) {
+				return true
+			}
+		}
+	}
+	if sep == ": " && !titleCase(inner) {
+		return true
+	}
+	return false
+}
+
+// titleCase reports whether every word of s past the first that is not a
+// small word (of, the, for, …) opens with a capital letter or a digit.
+func titleCase(s string) bool {
+	for i, w := range nameWordRe.FindAllString(s, -1) {
+		if i == 0 || titleSmallWords[strings.ToLower(w)] {
+			continue
+		}
+		if r, _ := utf8.DecodeRuneInString(w); unicode.IsLower(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // leadingQuote returns the text of a quoted span that opens s and the text

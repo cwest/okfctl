@@ -284,7 +284,9 @@ comes back to you as a judgment item:
 Feed it `[1] Smith, *Tannin chemistry*, 2024. https://…` and the new
 `title` is `Tannin chemistry`. The authors, year, and URL stay in the body. The
 tool only takes a name the entry marks for it, like the text of a leading link,
-words in quotes or italics, or the page name after a leading URL. If it can't
+words in quotes or italics, or the page name after a leading URL. A quote of
+the page itself isn't a name, so a repo description, an error message, or a
+quoted sentence from the docs gives no `title`. If it can't
 find one, you get no `title` and a `source-title-unnamed` item. So does a bare
 URL. When one entry has the same URL twice, that's one source.
 
