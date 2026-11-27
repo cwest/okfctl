@@ -102,6 +102,8 @@ type SourceEdit struct {
 	// Title is the optional §5.1 label ("a label for humans"): the cited
 	// work's name (citationName), never the entry's full text.
 	Title string `json:"title,omitempty"`
+	// ID is the §5.1 id the body cites the source by (CitationEntryIDs).
+	ID string `json:"id,omitempty"`
 }
 
 // SourceTitleEdit sets the optional §5.1 `title` of a `sources` entry that is
@@ -127,15 +129,29 @@ type NodeMigration struct {
 	Paths []PathEdit `json:"paths,omitempty"`
 	// Timestamps are the v0.3 §5 rewrites to the RFC 3339 form.
 	Timestamps []TimestampEdit `json:"timestamps,omitempty"`
+	// IDs set the §5.1 id of sources already listed in frontmatter.
+	IDs []SourceIDEdit `json:"ids,omitempty"`
+	// Footnotes are the §4.2 footnote definitions holding each converted
+	// entry's full text.
+	Footnotes []FootnoteEdit `json:"footnotes,omitempty"`
+	// Refs are the body citation references rewritten to footnotes.
+	Refs []RefEdit `json:"refs,omitempty"`
+	// RefKeys maps each body citation key to the id it is rewritten to; the
+	// renderer finds the planned Refs with it.
+	RefKeys map[string]string `json:"ref_keys,omitempty"`
 }
 
 func (nm NodeMigration) hasEdits() bool {
-	return nm.Generated != nil || len(nm.Sources) > 0 || len(nm.Titles) > 0 || len(nm.Paths) > 0 || len(nm.Timestamps) > 0
+	return nm.Generated != nil || len(nm.Sources) > 0 || len(nm.Titles) > 0 || len(nm.Paths) > 0 || len(nm.Timestamps) > 0 ||
+		len(nm.IDs) > 0 || len(nm.Footnotes) > 0 || len(nm.Refs) > 0
 }
 
 // EditCount is the number of deterministic edits planned for the node.
 func (nm NodeMigration) EditCount() int {
-	n := len(nm.Sources) + len(nm.Titles) + len(nm.Paths) + len(nm.Timestamps)
+	n := len(nm.Sources) + len(nm.Titles) + len(nm.Paths) + len(nm.Timestamps) + len(nm.IDs) + len(nm.Footnotes)
+	for _, r := range nm.Refs {
+		n += r.Count
+	}
 	if nm.Generated != nil {
 		n++
 	}
@@ -299,6 +315,18 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 		for i, item := range entries {
 			names[i] = citationNames(item)
 		}
+		att := make([]entryAttachment, len(entries))
+		srcIDs, _ := existingSourceIDs(n)
+		attached := map[string]bool{}
+		attach := func(i int, res string) {
+			k := canonicalResource(res)
+			if attached[k] {
+				att[i] = entryAttachment{resource: res, duplicate: true}
+				return
+			}
+			attached[k] = true
+			att[i] = entryAttachment{resource: res, existingID: srcIDs[res]}
+		}
 		for i, item := range entries {
 			src, ok, fromID := citationSourceFrom(item)
 			res := src.Resource
@@ -323,12 +351,15 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 				res = rootedURL(res, r.Path)
 			}
 			if added[res] || added[canonicalResource(res)] {
+				attach(i, res)
 				continue // a second entry for a source this plan adds
 			}
 			if cur, ok := lookupSourceTitle(existing, res); ok {
+				attach(i, cur.resource)
 				planSourceTitle(&plan, nm, existing, rel, item, cur, src.Title)
 				continue
 			}
+			attach(i, res)
 			if src.Title == "" && citationHasProse(item) {
 				plan.Judgment = append(plan.Judgment, JudgmentItem{
 					Path: rel, Kind: JudgmentSourceTitleUnnamed, Context: item,
@@ -337,6 +368,9 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 			nm.Sources = append(nm.Sources, SourceEdit{Resource: res, Title: src.Title})
 			added[res] = true
 			added[canonicalResource(res)] = true
+		}
+		if len(entries) > 0 {
+			planSourceIDs(&plan, nm, n, rel, entries, att)
 		}
 	}
 
@@ -505,6 +539,10 @@ func RenderMigration(root string, b *Bundle, nm NodeMigration) ([]byte, []byte, 
 	if err != nil {
 		return nil, nil, fmt.Errorf("migrate %s: %w", nm.Path, err)
 	}
+	if out, err = applySourceIDs(out, nm.IDs); err != nil {
+		return nil, nil, fmt.Errorf("migrate %s: %w", nm.Path, err)
+	}
+	out = renderSourceIDs(out, nm)
 	if len(nm.Paths) > 0 || len(nm.Timestamps) > 0 {
 		if out, err = renderV03Node(b, nm.Path, out, nm); err != nil {
 			return nil, nil, fmt.Errorf("migrate %s: %w", nm.Path, err)
@@ -629,6 +667,12 @@ func appendSources(mapping *yaml.Node, sources []SourceEdit) {
 	}
 	for _, s := range sources {
 		entry := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		if s.ID != "" {
+			entry.Content = append(entry.Content,
+				&yaml.Node{Kind: yaml.ScalarNode, Value: "id"},
+				idScalar(s.ID),
+			)
+		}
 		entry.Content = append(entry.Content,
 			&yaml.Node{Kind: yaml.ScalarNode, Value: "resource"},
 			scalarValue(s.Resource),

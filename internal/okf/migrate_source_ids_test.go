@@ -224,7 +224,8 @@ func TestConformance_MigrateSourceIDs_Section4_2_GroupedReferencesExpand(t *test
 // place are never rewritten.
 func TestConformance_MigrateSourceIDs_Section4_2_CodeAndLinksUntouched(t *testing.T) {
 	node := "---\ntype: Concept\n---\n\n# Def\n\n" +
-		"Use `arr[3]` in code. See [3](https://x.example/) and [the doc][4]. Real [3].\n\n" +
+		"Use `arr[3]` in code. See [3](https://x.example/) and [the doc][4].\n\n" +
+		"A separate paragraph, far from any link, makes a plain claim [3].\n\n" +
 		"```\nlist[3] = 1\n```\n\n" +
 		"[4]: https://doc.example/\n\n" +
 		"# Citations\n\n" +
@@ -232,7 +233,7 @@ func TestConformance_MigrateSourceIDs_Section4_2_CodeAndLinksUntouched(t *testin
 		"[4] VERIFIED — four https://four.example/\n"
 	dir, _ := migrateOnce(t, kb(node))
 	out := readRel(t, dir, "a.md")
-	for _, keep := range []string{"`arr[3]`", "[3](https://x.example/)", "[the doc][4]", "list[3] = 1", "Real [^3]."} {
+	for _, keep := range []string{"`arr[3]`", "[3](https://x.example/)", "[the doc][4]", "list[3] = 1", "plain claim [^3]."} {
 		if !strings.Contains(out, keep) {
 			t.Errorf("R4: expected %q in\n%s", keep, out)
 		}

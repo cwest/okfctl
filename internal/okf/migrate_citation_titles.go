@@ -185,7 +185,11 @@ func applySourceTitles(raw []byte, titles []SourceTitleEdit) ([]byte, error) {
 			setSourceTitle(firstSourceItem(root, t.Resource), t.Title)
 		}
 	}
-	if out, ok := insertSourceTitleLines(raw, todo, mutate); ok {
+	lines := make([]sourceKeyLine, len(todo))
+	for i, t := range todo {
+		lines[i] = sourceKeyLine{resource: t.Resource, value: scalarValue(t.Title)}
+	}
+	if out, ok := insertSourceKeyLines(raw, "title", lines, mutate); ok {
 		return out, nil
 	}
 	return editFrontmatter(raw, mutate)
@@ -202,12 +206,18 @@ func setSourceTitle(item *yaml.Node, title string) {
 	item.Content = append(item.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "title"}, scalarValue(title))
 }
 
-// insertSourceTitleLines inserts a `title: <value>` line directly under the
+// sourceKeyLine is one `key: value` line to insert under a source's resource.
+type sourceKeyLine struct {
+	resource string
+	value    *yaml.Node
+}
+
+// insertSourceKeyLines inserts a `<key>: <value>` line directly under the
 // `resource:` line of each target item, at the resource key's indent. ok is
 // false when any target is not a block mapping with a single-line resource
-// and no title key, or when the result does not decode to the tree mutate
+// and no such key, or when the result does not decode to the tree mutate
 // builds.
-func insertSourceTitleLines(raw []byte, todo []SourceTitleEdit, mutate func(*yaml.Node)) ([]byte, bool) {
+func insertSourceKeyLines(raw []byte, key string, todo []sourceKeyLine, mutate func(*yaml.Node)) ([]byte, bool) {
 	head, block, tail, ok := splitFrontmatterVerbatim(raw)
 	if !ok {
 		return nil, false
@@ -228,14 +238,14 @@ func insertSourceTitleLines(raw []byte, todo []SourceTitleEdit, mutate func(*yam
 	}
 	var edits []byteEdit
 	for _, t := range todo {
-		item := firstSourceItem(m, t.Resource)
-		if item == nil || item.Style&yaml.FlowStyle != 0 || mappingValue(item, "title") != nil {
+		item := firstSourceItem(m, t.resource)
+		if item == nil || item.Style&yaml.FlowStyle != 0 || mappingValue(item, key) != nil {
 			return nil, false
 		}
-		var key, val *yaml.Node
+		var rkey, val *yaml.Node
 		for i := 0; i+1 < len(item.Content); i += 2 {
 			if item.Content[i].Value == "resource" {
-				key, val = item.Content[i], item.Content[i+1]
+				rkey, val = item.Content[i], item.Content[i+1]
 			}
 		}
 		switch val.Style {
@@ -243,19 +253,18 @@ func insertSourceTitleLines(raw []byte, todo []SourceTitleEdit, mutate func(*yam
 		default:
 			return nil, false
 		}
-		if val.Line != key.Line || key.Line < 1 || key.Line >= len(lines) {
+		if val.Line != rkey.Line || rkey.Line < 1 || rkey.Line >= len(lines) {
 			return nil, false
 		}
-		n := scalarValue(t.Title)
-		text, ok := renderInlineScalar(n, n.Style)
+		text, ok := renderInlineScalar(t.value, t.value.Style)
 		if !ok {
 			return nil, false
 		}
-		at := lines[key.Line]
+		at := lines[rkey.Line]
 		if at == 0 || block[at-1] != '\n' {
 			return nil, false
 		}
-		line := append(bytes.Repeat([]byte(" "), key.Column-1), "title: "...)
+		line := append(bytes.Repeat([]byte(" "), rkey.Column-1), key+": "...)
 		line = append(append(line, text...), eol...)
 		edits = append(edits, byteEdit{at, at, line})
 	}
@@ -268,4 +277,47 @@ func insertSourceTitleLines(raw []byte, todo []SourceTitleEdit, mutate func(*yam
 	buf.Write(out)
 	buf.Write(tail)
 	return buf.Bytes(), true
+}
+
+// applySourceIDs sets each planned id on the first source with that resource
+// that still has no id, and returns the new file bytes. Like
+// applySourceTitles it re-checks the current frontmatter, so a re-applied
+// plan changes nothing, and it inserts one `id:` line under the resource
+// line (§4: unchanged values are not re-serialized). §4: a number-looking id
+// is quoted (idScalar).
+func applySourceIDs(raw []byte, ids []SourceIDEdit) ([]byte, error) {
+	m := parsedFrontmatterMapping(raw)
+	if m == nil || len(ids) == 0 {
+		return raw, nil
+	}
+	var todo []sourceKeyLine
+	for _, e := range ids {
+		if item := firstSourceItem(m, e.Resource); item != nil && mappingValue(item, "id") == nil {
+			todo = append(todo, sourceKeyLine{resource: e.Resource, value: idScalar(e.ID)})
+			setSourceKey(item, "id", idScalar(e.ID))
+		}
+	}
+	if len(todo) == 0 {
+		return raw, nil
+	}
+	mutate := func(root *yaml.Node) {
+		for _, t := range todo {
+			setSourceKey(firstSourceItem(root, t.resource), "id", t.value)
+		}
+	}
+	if out, ok := insertSourceKeyLines(raw, "id", todo, mutate); ok {
+		return out, nil
+	}
+	return editFrontmatter(raw, mutate)
+}
+
+// setSourceKey sets (or replaces) one key of a sources item.
+func setSourceKey(item *yaml.Node, key string, v *yaml.Node) {
+	for i := 0; i+1 < len(item.Content); i += 2 {
+		if item.Content[i].Value == key {
+			item.Content[i+1] = v
+			return
+		}
+	}
+	item.Content = append(item.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: key}, v)
 }

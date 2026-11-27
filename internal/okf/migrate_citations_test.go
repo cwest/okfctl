@@ -150,8 +150,8 @@ func TestConformance_MigrateCitationEntries_Section5_1_YearContinuationStaysInEn
 	// The entry joins across its wrapped year line: the name comes from the
 	// first line and the resource from the second (§5.1: title is the name).
 	want := []SourceEdit{
-		{Resource: "https://arxiv.org/abs/2505.06120", Title: "LLMs Get Lost In Multi-Turn Conversation"},
-		{Resource: "https://doi.org/10.3390/s16010115", Title: "DeepConvLSTM"},
+		{Resource: "https://arxiv.org/abs/2505.06120", Title: "LLMs Get Lost In Multi-Turn Conversation", ID: "1"},
+		{Resource: "https://doi.org/10.3390/s16010115", Title: "DeepConvLSTM", ID: "cite-2"},
 	}
 	if len(nm.Sources) != len(want) {
 		t.Fatalf("§5.1: want %d sources (one per entry), got %+v", len(want), nm.Sources)
@@ -286,7 +286,7 @@ func TestConformance_MigrateCitationEntries_Section5_1_WrappedBracketKeyPlansOne
 	if nm == nil {
 		t.Fatalf("no migration planned for a.md")
 	}
-	want := SourceEdit{Resource: "https://w3.org/TR/webauthn-2/"}
+	want := SourceEdit{Resource: "https://w3.org/TR/webauthn-2/", ID: "2"}
 	if len(nm.Sources) != 1 || nm.Sources[0] != want {
 		t.Fatalf("§5.1: sources = %+v, want [%+v]", nm.Sources, want)
 	}
