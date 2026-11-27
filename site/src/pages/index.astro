@@ -253,7 +253,7 @@ const goInstallCmd = version.tag
             <p class="small" style="margin-top:var(--s-3)">
               With Homebrew: <code class="mono" style="color:var(--fg-muted)">brew install cwest/tap/okfctl</code>.
               With a Go toolchain: <code class="mono" style="color:var(--fg-muted)">{goInstallCmd}</code>.
-              Or grab a prebuilt binary for darwin/linux · amd64/arm64{" "}
+              Or grab a prebuilt binary for macOS, Linux, or Windows · amd64/arm64{" "}
               <span style="white-space:nowrap">from{" "}<a href="https://github.com/cwest/okfctl/releases" style="color:var(--fg-muted);border-bottom:1px solid var(--border-loud)" rel="noopener">releases</a>.</span>
             </p>
 
@@ -270,9 +270,8 @@ const goInstallCmd = version.tag
             </div>
             <div class="tree">
               <div><span class="dir">mykb/</span></div>
-              <div><span class="g">├─</span> <span class="rsv">index.md</span><span class="tag">reserved</span></div>
+              <div><span class="g">├─</span> <span class="rsv">index.md</span><span class="tag">reserved · okf_version 0.3</span></div>
               <div><span class="g">├─</span> <span class="rsv">log.md</span><span class="tag">reserved</span></div>
-              <div><span class="g">├─</span> <span class="g">.okf</span><span class="tag">marker</span></div>
               <div><span class="g">└─</span> <span class="dir">concepts/</span></div>
               <div><span class="g">&nbsp;&nbsp; ├─</span> <span class="rsv">index.md</span><span class="tag">generated</span></div>
               <div><span class="g">&nbsp;&nbsp; └─</span> tannin.md<span class="tag">Reference</span></div>
@@ -281,8 +280,8 @@ const goInstallCmd = version.tag
               <div class="d">--- <span style="opacity:.7">concepts/tannin.md</span></div>
               <div><span class="k">type</span>: <span class="v">Reference</span></div>
               <div><span class="k">title</span>: <span class="v">Tannin</span></div>
-              <div><span class="k">created</span>: <span class="v">2026-08-04T15:36:24Z</span></div>
-              <div><span class="k">modified</span>: <span class="v">2026-08-04T15:36:24Z</span></div>
+              <div><span class="k">created</span>: <span class="v">2026-11-27T10:36:24-05:00</span></div>
+              <div><span class="k">modified</span>: <span class="v">2026-11-27T10:36:24-05:00</span></div>
               <div class="d">---</div>
             </div>
           </div>
@@ -376,8 +375,9 @@ const goInstallCmd = version.tag
                 <div class="row add" data-when="after" hidden><span class="s">+</span><span>Rate grip via [tannin](<span class="t">../reference/tannin.md</span>).</span></div>
 
                 <span class="file">log.md <span style="color:var(--fg-subtle)">· reserved</span></span>
-                <div class="row ctx" id="log-before"><span class="s"> </span><span>- 2026-08-04 — created concepts/tannin.md</span></div>
-                <div class="row add" id="log-after" hidden><span class="s">+</span><span>- 2026-08-04 — moved concepts/tannin.md -&gt; reference/tannin.md</span></div>
+                <div class="row ctx"><span class="s"> </span><span>## 2026-11-27</span></div>
+                <div class="row add" id="log-after" hidden><span class="s">+</span><span>* moved concepts/tannin.md -&gt; reference/tannin.md</span></div>
+                <div class="row ctx"><span class="s"> </span><span>* created concepts/tannin.md</span></div>
               </div>
               <div class="graph-ctl" style="justify-content:space-between">
                 <p class="small" style="margin:0">Two of four rewritten files shown. Depth is recomputed per file—<code class="mono">tannin.md</code> and <code class="mono">../concepts/tannin.md</code> both resolve to <code class="mono">../reference/tannin.md</code>.</p>
@@ -462,8 +462,9 @@ const goInstallCmd = version.tag
 <span class="cm"># the first gate that touches provenance, not just format:</span>
 <span class="cm"># grade-missing · grade-vocabulary · uncited · citation-unresolved</span>
 <span class="p">$</span> <span class="c">okfctl eval transparency</span> <span class="f">mykb</span>
-<span class="o">uncited: concepts/aging.md carries no citations of any kind</span>
-<span class="o">grade-missing: concepts/aging.md has neither an epistemic nor an authority grade</span>
+<span class="o">uncited: concepts/aging.md carries no citations (no sources, no # Citations, no internal reference)</span>
+<span class="o">grade-missing: concepts/aging.md carries no epistemic or authority grade (provenance is invisible)</span>
+<span class="o">2 transparency finding(s)</span>
 <span class="p">$</span> <span class="c">echo</span> $?
 <span class="ok">0</span>   <span class="cm"># advisory by default, like lint</span>
 
@@ -481,7 +482,7 @@ const goInstallCmd = version.tag
 <span class="cm"># a real corpus, not a fixture</span>
 <span class="p">$</span> <span class="c">okfctl bundle info</span> <span class="f">bundles/knowledge</span>
 <span class="o">nodes: hundreds</span>
-<span class="o">okf_version: 0.3 (declared in index.md)</span>
+<span class="o">okf_version: undeclared (v0.2 fallbacks apply, §12.1)</span>
 
 <span class="p">$</span> <span class="c">okfctl validate</span> <span class="f">bundles/knowledge</span>
 <span class="ok">OK: bundle conforms to the OKF spec floor</span>
@@ -489,7 +490,7 @@ const goInstallCmd = version.tag
 <span class="p">$</span> <span class="c">okfctl analyze</span> <span class="f">bundles/knowledge</span> | <span class="c">head</span> <span class="f">-6</span>
 <span class="o"># OKF Corpus Analysis</span>
 <span class="o"></span>
-<span class="o">Thousands of internal link(s). Stale threshold: 180d.</span>
+<span class="o">Thousands of internal link(s). Aging threshold: 180d.</span>
 <span class="o"></span>
 <span class="o">## Coverage gaps — dangling forward-links (research opportunities)</span>
 <span class="ok">  ✓ none</span></pre></div>
@@ -523,7 +524,7 @@ const goInstallCmd = version.tag
               <div><span class="n">01—install</span><h3>One binary, no runtime underneath it.</h3></div>
               <div>
                 <p>A knowledge-base tool that needs a Python environment or a model server is a tool your CI will fight. okfctl is a single static Go binary that runs with nothing installed alongside it: <code class="mono" style="color:var(--fg)">go install</code> it, or drop the binary on <code class="mono" style="color:var(--fg)">PATH</code>, and it runs.</p>
-                <p class="ev"><b>CGO_ENABLED=0 go build -o okfctl .</b>—static, no cgo. Prebuilt for darwin and linux, amd64 and arm64.</p>
+                <p class="ev"><b>CGO_ENABLED=0 go build -o okfctl .</b>—static, no cgo. Prebuilt for macOS, Linux, and Windows, amd64 and arm64.</p>
               </div>
             </article>
 
@@ -606,7 +607,7 @@ const goInstallCmd = version.tag
           <div style="margin-top:var(--s-7)">
             <div class="sec-hd" style="margin-bottom:var(--s-5)">
               <div><h3 class="h-sub" id="cmdref">Command reference</h3></div>
-              <div><p class="small" style="margin:0">Fifteen top-level commands. Each ships a runnable example in its <code class="mono">--help</code>.</p></div>
+              <div><p class="small" style="margin:0">Nineteen top-level commands. Each ships a runnable example in its <code class="mono">--help</code>.</p></div>
             </div>
             <table class="cmdtable" aria-labelledby="cmdref">
               <tbody>
@@ -615,7 +616,8 @@ const goInstallCmd = version.tag
                 <tr><td><b>okfctl</b> index</td><td>Regenerate (<code class="mono">build</code>) and verify (<code class="mono">check</code>) the reserved per-directory <code class="mono">index.md</code>.</td></tr>
                 <tr><td><b>okfctl</b> log</td><td>Append and print the reserved <code class="mono">log.md</code> change history.</td></tr>
                 <tr><td><b>okfctl</b> validate</td><td>Check a bundle against the OKF spec floor; optionally overlay type-templates.</td></tr>
-                <tr><td><b>okfctl</b> lint</td><td>Report curation-health findings (orphans, broken links, coverage gaps); <code class="mono">--strict</code> for CI.</td></tr>
+                <tr><td><b>okfctl</b> lint</td><td>Report curation-health findings (orphans, broken links, coverage gaps, hygiene); <code class="mono">--strict</code> for CI.</td></tr>
+                <tr><td><b>okfctl</b> eval</td><td>Measure node trustworthiness: a deterministic <code class="mono">transparency</code> gate and a <code class="mono">sample</code> worksheet for human review.</td></tr>
                 <tr><td><b>okfctl</b> analyze</td><td>Report where a bundle is weak: freshness, clusters, gaps, connectivity, structure.</td></tr>
                 <tr><td><b>okfctl</b> search</td><td>Core lexical and graph-neighborhood search—stdlib-only, no model or index.</td></tr>
                 <tr><td><b>okfctl</b> graph</td><td>Export the concept-node link graph (<code class="mono">--format json|dot</code>).</td></tr>
@@ -625,6 +627,9 @@ const goInstallCmd = version.tag
                 <tr><td><b>okfctl</b> registry</td><td>Manage named remote bundle sources—<code class="mono">git remote</code> for OKF bundles.</td></tr>
                 <tr><td><b>okfctl</b> connect</td><td>Clone or fast-forward a remote bundle source into a local directory.</td></tr>
                 <tr><td><b>okfctl</b> plugin</td><td>Discover and install <code class="mono">okfctl-&lt;name&gt;</code> plugins on <code class="mono">PATH</code>.</td></tr>
+                <tr><td><b>okfctl</b> config</td><td>Get, set, and list okfctl configuration.</td></tr>
+                <tr><td><b>okfctl</b> completion</td><td>Generate a shell completion script (bash, zsh, fish).</td></tr>
+                <tr><td><b>okfctl</b> version</td><td>Print the okfctl version (also <code class="mono">okfctl --version</code>).</td></tr>
               </tbody>
             </table>
           </div>
@@ -907,7 +912,6 @@ const goInstallCmd = version.tag
         const applyDiff = (after) => {
           $("#diff").dataset.state = after ? "after" : "before";
           $$('#diff .row.add[data-when="after"]').forEach((r) => (r.hidden = !after));
-          $("#log-before").hidden = after;
           $("#log-after").hidden = !after;
           diffFlag.textContent = after ? "after" : "before";
           diffFlag.style.color = after ? "var(--ok)" : "var(--fg-muted)";

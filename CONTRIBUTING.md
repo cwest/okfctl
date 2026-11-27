@@ -63,9 +63,10 @@ controls: a *positive* control (the defect it targets still gets caught) and a
 negative control is the one that gets skipped, and it's the one that proves your
 change didn't just silence the detector.
 
-If your change touches frontmatter, provenance, or freshness, also run it against
-a v0.1 bundle—the documented legacy fallbacks must keep working, so "it passes"
-on v0.2 alone isn't proof.
+If your change touches links, frontmatter, provenance, or freshness, run it
+against a bundle that declares v0.3 and against a v0.1 bundle too. A v0.3
+bundle turns the legacy fallbacks off and an older one relies on them, so "it
+passes" on one alone isn't proof.
 
 ## What a good PR body contains
 

@@ -5,12 +5,13 @@ Read this first; it makes every other page make sense.
 ## Bundle
 
 A **bundle** is a directory tree of Markdown files that conforms to the Open
-Knowledge Format. `okfctl bundle init` scaffolds one: the two reserved files plus
-a bundle-root `.okf` sidecar whose `okf_version` marks the target spec version
-(§12). A fresh bundle has zero concept nodes.
+Knowledge Format. `okfctl bundle init` scaffolds one: the two reserved files,
+with a bundle-root `index.md` whose frontmatter declares `okf_version: "0.3"`
+(§8.1, §12). A fresh bundle has zero concept nodes.
 
-`okfctl bundle info <dir>` summarizes a bundle—node count, reserved-file count,
-and the declared `okf_version`.
+`okfctl bundle info <dir>` summarizes a bundle: node count, reserved-file count,
+and the `okf_version` with where it was declared (`0.3 (declared in index.md)`),
+or `undeclared` when the bundle names no version.
 
 ## Node
 
@@ -66,8 +67,9 @@ OKF is at **v0.3**, and okfctl targets it: `okfctl bundle init` declares
 A bundle declares its version with `okf_version` in the frontmatter of its
 bundle-root `index.md` (§8.1, §12). okfctl reads that declaration rather than
 assuming; a legacy `.okf` sidecar is read only when the root index declares
-nothing. A bundle that declares no version is shown as v0.3, but it keeps the
-older reading rules below, because those key on what the bundle *declares*.
+nothing. A bundle that declares no version is reported as `okf_version:
+undeclared (v0.2 fallbacks apply, §12.1)`: okfctl reads it with the v0.3 rules,
+plus the older fallbacks below, because those key on what the bundle *declares*.
 
 v0.3 has two breaking changes (§13.1). A link or path field without a leading `/`
 resolves from the directory of its file, and only *current* verification events

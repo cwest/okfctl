@@ -1,7 +1,7 @@
 ---
 name: okf-migrate-plan
 description: Use when working an okfctl migrate-plan.json — the judgment items okfctl migrate refuses to guess when upgrading a v0.1 or v0.2 bundle to OKF v0.3. Covers the deterministic/judgment split, handing a plan to any agent or working it by hand, and verifying the applied migration.
-version: 1.2.0
+version: 1.3.0
 author: okfctl
 license: Apache-2.0
 metadata:
@@ -310,12 +310,16 @@ $ okfctl migrate mykb --apply --plan migrate-plan.json
 migrated concepts/mouthfeel.md
 migrated concepts/tannin.md
 2 file(s) migrated; okf_version declaration held: bundle still declares v0.1 (v0.2 fallbacks apply, §12.1).
+hint: after committing, list that commit's SHA in .okf-drift-ignore-revs so strict drift skips the mechanical edits (like git blame --ignore-revs-file).
 bundle valid
 note: 2 judgment item(s) were not applied (they need a decision; see the plan file).
 ```
 
 The apply **re-validates automatically**. The closing note is the tool being
-honest: unresolved judgment items were left alone.
+honest: unresolved judgment items were left alone. The `hint:` line appears
+whenever an apply edits files: once you commit the migration, list that commit
+in `.okf-drift-ignore-revs` so `validate --strict` doesn't report git drift on
+every file it touched.
 
 Now resolve the two prose items (here, by deleting both lines from their
 `# Citations` lists) and re-plan. Nothing relies on the fallback any more, so the

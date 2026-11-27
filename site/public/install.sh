@@ -23,7 +23,7 @@
 #   curl -sSL https://okfctl.dev/install.sh | sh
 #
 # Environment overrides:
-#   OKFCTL_VERSION   install a specific tag (e.g. v0.2.0). Default: latest.
+#   OKFCTL_VERSION   install a specific tag (e.g. v0.5.0). Default: latest.
 #   OKFCTL_BIN_DIR   install directory. Default: /usr/local/bin (falls back to
 #                    $HOME/.local/bin when /usr/local/bin is not writable).
 #   GITHUB_TOKEN     optional; sent to the GitHub API only if the latest tag

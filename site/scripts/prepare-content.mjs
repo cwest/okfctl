@@ -81,7 +81,11 @@ function withFrontmatter({ title, slug, sidebarLabel, sidebarOrder, description 
 // of the tracked tree, but never leak the _generated/ build-artifact prefix into
 // a public URL. The slug is derived from `out` (drop the ".md") so the two
 // cannot drift; a bespoke slug can still be set explicitly if ever needed.
-const pages = [
+//
+// `title` replaces the source doc's H1 on the published page, so it must match
+// that H1 (inline-code backticks dropped). tests/page-titles.test.mjs enforces
+// this and holds the short, commented list of deliberate exceptions.
+export const pages = [
   {
     src: "concepts.md",
     out: "concepts.md",
@@ -100,7 +104,7 @@ const pages = [
   {
     src: "guides/index-and-freshness.md",
     out: "guides/index-and-freshness.md",
-    title: "Keeping the index current and fixing freshness drift",
+    title: "Keeping index.md current and fixing freshness drift",
     sidebarLabel: "Index & freshness",
     sidebarOrder: 2,
   },
@@ -121,7 +125,7 @@ const pages = [
   {
     src: "guides/migrating.md",
     out: "guides/migrating.md",
-    title: "Migrating a v0.1 bundle to v0.2",
+    title: "Migrating a bundle to OKF v0.3",
     sidebarLabel: "Migrating",
     sidebarOrder: 5,
   },

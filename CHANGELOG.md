@@ -11,8 +11,42 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-27
+
+okfctl now targets **OKF v0.3**. New bundles declare `okf_version: "0.3"` on
+the bundle-root `index.md`, `migrate` brings v0.1 and v0.2 bundles forward, and
+a bundle that declares 0.2 or earlier, or nothing, keeps the §12.1 fallbacks, so
+existing bundles read the same as before.
+
 ### Added
 
+- Links and path fields resolve the way OKF v0.3 §6 says. A value with a URI
+  scheme is a URL, a leading `/` resolves from the bundle root, and anything
+  else resolves from the directory of the file that holds it. A value that
+  climbs above the root is external and is never read. One resolver serves
+  every command: the link graph, orphan counts, `lint broken-link`, `analyze`
+  dangling links, `eval` citations, and the `node mv`/`node promote` rewrites.
+  The §6.2 path fields (`sources[].resource`, `superseded_by`, and the rest)
+  now get `broken-link` and dangling-link checks too, and a path field that
+  points at a concept is a graph edge (§6.4). In a bundle that declares 0.2 or
+  earlier, or no version, a bare value that doesn't resolve from its file
+  falls back to the bundle root (§12.1). `okf_version` is read from the
+  bundle-root `index.md` (§8.1), then from a legacy `.okf` sidecar; `bundle
+  info` names where it came from, and `validate` warns when the two disagree.
+- `migrate --apply` prints a hint after an apply that edits files: list the
+  commit that lands it in `.okf-drift-ignore-revs`, so `validate --strict`
+  doesn't report drift on every mechanically edited file.
+- `lint` reports `tag-hygiene` beside `type-hygiene`: two or more `tags`
+  spellings that fold to one form (case, separators, and a plural that folds
+  only onto a singular the bundle already uses), listed with per-node counts,
+  most common first. `analyze` clusters tags with the same fold.
+- `index build` adds a shape suffix to each subdirectory entry: the child's
+  concept count, its types, its shared tags, and a subtree total when it nests
+  deeper, so a reader can pick a branch without opening it. Tune it with
+  `--shape-tag-min` and `--shape-tag-max`, or turn it off with `--no-shape`.
+  (#163)
+- The okfctl.dev homepage theme control cycles system, light, and dark, and
+  shares its setting with the docs pages.
 - `migrate` upgrades a v0.2 bundle (or one that declares no version) to OKF
   v0.3. A bare link or path field that resolves only from the bundle root (the
   §12.1 fallback) is rewritten with a leading `/` so it resolves to the same
@@ -90,6 +124,14 @@ tagged release, goreleaser generates the release notes from the commit log
 - `status-lifecycle` states the v0.3 §5.4 meaning of an unknown status (not
   stable, excluded from current knowledge) and no longer calls the value a
   defect.
+- The docs, the okfctl.dev site, and `llms.txt` cite the OKF spec at its new
+  home, [`open-knowledge-format/open-knowledge-format`](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md).
+  The `GoogleCloudPlatform/open-knowledge-format` repo and the
+  `knowledge-catalog` copy are frozen at v0.2.
+- okfctl stamps `created` and `modified` in the author's local offset
+  (`2026-10-09T22:30:00-04:00`) instead of UTC, and the drift check reads
+  `modified` in its own offset. A node written in the evening no longer
+  records tomorrow's UTC date and then fails its own `validate --strict`.
 
 ### Deprecated
 
@@ -171,6 +213,59 @@ tagged release, goreleaser generates the release notes from the commit log
   and lossless). Every node-mutation command that records to the log inherits the
   §9 shape. Together with the `validate` change this holds the invariant that
   `okfctl validate` never rejects a log okfctl wrote. (#177)
+- okfctl refuses to read a symlink that resolves outside the bundle root (OKF
+  v0.3 §3.2, §11.2). Before, `Load` followed a symlinked `.md` file, so a
+  bundle, including one fetched with `connect`, could pull any local file into
+  the graph, the search index, `serve`, and `okfctl-api`. `validate` prints a
+  warning for each skipped path and still exits 0. The commands that open one
+  bundle file directly (`log`, `index`, the `migrate` version bumps, the
+  drift-ignore file) refuse an escaping symlink too.
+- The broken-link "did you mean" hint writes each candidate in a form that
+  resolves from the linking file (`/`-rooted, else relative), so in a v0.3
+  bundle it no longer suggests the bare value that just failed to resolve.
+- `analyze` counts body `# Citations` entries alongside `sources` in a bundle
+  that declares 0.2 or earlier, or no version (§12.1), skipping entries that a
+  `sources` entry already covers. A node that `migrate` left half converted no
+  longer reads as single-citation. A v0.3 bundle counts `sources` only.
+- `analyze` counts label-style citation markers (`- **[VERIFIED — cloned]**`)
+  as citations, not only bare keys like `[1]`, and skips a line-start Markdown
+  link in `# Citations`, which is navigation rather than a source.
+- `migrate` keeps a hard-wrapped `# Citations` entry whole. A continuation line
+  that happened to start with `2025.` or a bracket tag split one entry into a
+  bogus source and a bogus judgment item.
+- The v0.1 `timestamp` → `generated.at` rename keeps the time of day and the
+  offset of an unquoted timestamp. It used to cut it to a bare date. (#171)
+- `index build` keeps a hand-written subdirectory description
+  (`* [Sub](sub/) - text`) across builds, and `index check` no longer reports
+  such an index as out of date. (#173)
+- `index build` and `index check` on a subdirectory keep that directory's
+  existing H1 instead of stamping `# Knowledge Base` over it, which also made a
+  correct sub-scope index read as stale.
+- `index` and `log` handle a CRLF `index.md` or `log.md` (Windows with
+  `core.autocrlf=true`): they normalize line endings on read and keep CRLF on
+  write. A CRLF index no longer reads as stale, `index build` no longer doubles
+  a shape suffix or rewrites every line, and `log append` no longer leaves a
+  mixed-ending file. (#185)
+- `connect` fast-forwards only a destination that's itself a checkout of the
+  same source. Before, any directory inside any repo passed, so it could run
+  `git pull --ff-only` on an unrelated enclosing repo. It also accepts Windows
+  drive-letter and UNC paths as sources. (#193)
+- `install.sh` reads the latest tag from the `github.com/cwest/okfctl/releases/latest`
+  redirect instead of the GitHub API, so shared CI runners and NAT'd networks
+  no longer hit the unauthenticated rate limit and fail with "could not
+  determine the latest version". It falls back to the API (with
+  `GITHUB_TOKEN` when set) only when the redirect names no tag.
+
+### Performance
+
+- The `validate` drift check reads git history once per run instead of running
+  `git log` per node: one `git log` for the commit graph and one
+  `git diff-tree --stdin` for the changed paths, replayed with the same history
+  simplification `git log -- <path>` uses. On the 356-node reference corpus,
+  `validate --strict` went from 33 s to under 1 s with identical output. It
+  falls back to the per-path answer when git config sets `log.follow` or
+  `log.showSignature`, for a pathspec-magic path, or when the batched read
+  fails.
 
 ### Build
 
@@ -367,7 +462,8 @@ Open Knowledge Format (OKF) bundles, targeting OKF v0.1.
   (`okf-authoring`, `okf-curation-health`, `okf-semantic-search`), and a
   spec-conformance suite proving okfctl's output validates clean.
 
-[Unreleased]: https://github.com/cwest/okfctl/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/cwest/okfctl/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/cwest/okfctl/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/cwest/okfctl/releases/tag/v0.4.0
 [0.3.1]: https://github.com/cwest/okfctl/releases/tag/v0.3.1
 [0.3.0]: https://github.com/cwest/okfctl/releases/tag/v0.3.0
