@@ -239,9 +239,9 @@ dash. The spec citations all survive, and the examples now use `./mykb` and
 These are sized for after a direction is picked. A1 and A12 are worth doing
 whichever direction wins.
 
-| Code | Card | Size | Lane |
+| Code | Card | Size | Kind |
 | :-- | :-- | :-- | :-- |
-| A1 | Fix the wrong facts: §-citations (F2), homepage output (F3), `--generated-by` actors (F4), `llms.txt` cadence (F8) | S | writing, touches `cmd/node.go` and `index.astro` |
+| A1 | Fix the wrong facts: §-citations (F2), homepage output (F3), `--generated-by` actors (F4), `llms.txt` cadence (F8) | S | docs, touches `cmd/node.go` and `index.astro` |
 | A2 | Transcript test: replay every `$ okfctl` block in `docs/` and the README against the built binary, fail on drift | M | code |
 | A3 | Rest of the README, plus `docs/README.md` and `docs/install.md` | M | writing |
 | A4 | Guides, part 1: `authoring`, `index-and-freshness`, `curation-health` | M | writing |
