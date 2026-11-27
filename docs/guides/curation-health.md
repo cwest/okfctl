@@ -59,7 +59,7 @@ Exit 1. That's the line to put in CI. `lint` never changes a file.
 ## Reading the `lint` findings
 
 `broken-link` fired because `legs.md` lives in `wine/` and links to
-`body.md`, so the link resolves to `wine/body.md`, which doesn't exist. Under
+`body.md`. That resolves to `wine/body.md`, which doesn't exist. Under
 §6 a link with no leading `/` resolves from its file's own directory, and one
 with a leading `/` resolves from the bundle root. The hint names a form that
 works from where the link sits. In a bundle that declares 0.2 or earlier, or
@@ -69,27 +69,27 @@ and `superseded_by` (§6.2).
 
 `lint` reports a broken link only when a node with that file name exists
 somewhere else, which marks it as a moved or mistyped path. A link to a node
-nobody has written yet is a gap in coverage, not a defect. `lint` stays quiet
+you haven't written yet is a gap in coverage, a different problem. `lint` stays quiet
 about it and `analyze` lists it, as you'll see below.
 
 `missing-xref` fired twice: `oak.md` says "acidity" and `legs.md` says
 "body", both without a link to the node of that title. The fix is a link.
 
 `type-hygiene` caught `Reference` and `reference`, two spellings that
-probably mean one type. OKF leaves type values open (§4.1), so `lint` never
+probably mean one type. OKF leaves type values open (§4.1), and `lint` never
 says which spelling is right. It reports that two exist. `tag-hygiene` does
 the same for `tags`. It folds case and separators (`run-book`, `run_book`,
-`runbook`), and folds a plural onto its singular when the singular is already
-a tag in the bundle. The fold is a guess, so read the finding before you
+`runbook`), and folds a plural onto its singular when the singular is itself
+a tag in the bundle. The fold is a guess. Read the finding before you
 rename anything.
 
 The other two are frontmatter OKF accepts but reads differently than you
 probably meant:
 
 - `status-lifecycle`: `retired` isn't one of `draft`, `stable`, or
-  `deprecated`. §5.4 says a concept with any other status isn't stable, so a
+  `deprecated`. §5.4 says a concept with any other status isn't stable, and a
   tool that filters to current knowledge drops it.
-- `timestamp-form`: `2026-06-20 10:00:00` has no offset, so it names no
+- `timestamp-form`: `2026-06-20 10:00:00` has no offset. It names no
   instant (§5). `lint` checks `generated.at`, `verified[].at`, `stale_after`,
   `sources[].last_modified`, and `usage_window` this way. A `stale_after` that
   won't parse counts as stale.
@@ -132,13 +132,13 @@ uncited: wine/legs.md carries no citations (no sources, no # Citations, no inter
 okfctl: 4 transparency finding(s)
 ```
 
-Oak and acidity each carry `epistemic: verified` and a source, so they pass.
+Oak and acidity each carry `epistemic: verified` and a source. They pass.
 Legs has no grade and no source. Body has a source problem and a typo.
 
 okfctl has no list of allowed grades, because OKF doesn't define one. It
 learns the list from your bundle. A value at least two nodes carry
 (`--grade-vocabulary-floor`, default 2) counts as vocabulary. Here `verified`
-appears twice, so the lone `verifed` stands out. The fourth check,
+appears twice, and the lone `verifed` stands out. The fourth check,
 `citation-unresolved`, fires when an internal citation points at no node.
 
 `eval transparency` doesn't follow `http(s)` links, since that needs the
@@ -165,14 +165,14 @@ _okfctl extracted the context below; fill in each empty slot. okfctl does not ju
 Below that come three sections, one each for Accuracy, Alignment, and
 Calibration, with a `(fill in)` slot for each answer. okfctl fills in what it
 can read from the node and leaves the judgment blank for you or a model. It
-never decides whether a claim is true. The sample is
-seeded, so the same command picks the same nodes every time (`--seed` changes
+never decides if a claim is true. The sample is
+seeded: the same command picks the same nodes every time (`--seed` changes
 it). In a pre-merge job, `--changed-since origin/main` builds the worksheet
 for the nodes a branch touched instead.
 
 ## `analyze`: where is the bundle thin?
 
-`lint` asks whether anything is broken. `analyze` asks where the bundle is
+`lint` asks if anything is broken. `analyze` asks where the bundle is
 weak, and it always exits 0:
 
 ```text
@@ -248,8 +248,8 @@ $ okfctl analyze mykb
 
 Some of this repeats what the other checks said from a different angle: the
 dangling link is `lint`'s broken link, and the uncited nodes are
-`eval`'s. The rest is new. Every node is under 15 lines (`--thin-lines`).
-Two cite only one source. None says when it was last reviewed, so all four
+`eval`'s. The rest is new: every node is under 15 lines (`--thin-lines`), and
+two cite only one source. None says when it was last reviewed, and all four
 show up as undated under Aging (`--aging-days`, default 180). Each one has a
 single inbound link, and that link is its directory's index.
 
@@ -272,8 +272,8 @@ two.
 
 ## Semantic lint (`lint --semantic`)
 
-Structural lint asks whether anything links to a node. Semantic lint asks
-whether anything is even about the same thing, which the link graph alone
+Structural lint asks if anything links to a node. Semantic lint asks if
+anything is even about the same thing, which the link graph alone
 can't answer. It adds two checks:
 
 | check | finding |
@@ -282,8 +282,8 @@ can't answer. It adds two checks:
 | `no-semantic-neighbors` | a node whose best neighbor scores below `--isolation-floor` (default `0.20`) |
 
 `okfctl lint` doesn't compute embeddings. It reads an index that the bundled
-`okfctl-search` plugin builds, so linting needs no model. Without that index,
-`--semantic` fails rather than quietly running the structural checks alone:
+`okfctl-search` plugin builds. Linting needs no model. Without that index,
+`--semantic` fails instead of running only the structural checks:
 
 <!-- transcript: exit 1 okfctl lint --semantic mykb -->
 ```text
@@ -315,12 +315,12 @@ Every command that walks a bundle (`validate`, `lint`, `analyze`, `search`,
 `graph export`, `index build` and `index check`) skips some files.
 
 OKF itself excludes two kinds (§3.2). A file or directory whose name starts
-with `.` isn't part of the bundle, so `.git`, `.venv`, and `.drafts/` are
+with `.` isn't part of the bundle: `.git`, `.venv`, and `.drafts/` are
 never read. A `.md` file with no frontmatter or no `type`, like a `README.md`
 or `AGENTS.md`, isn't a concept. It's left out of the graph, lint, the index,
 and search, and `validate` prints a warning about it without failing.
 
-okfctl also skips directories that hold Markdown nobody wrote as knowledge:
+okfctl also skips directories that hold Markdown no one wrote as knowledge:
 `node_modules`, `venv`, `env`, `__pycache__`, `site-packages`, `vendor`,
 `target`, `dist`, and `build`, matched by name at any depth below the root.
 Here both kinds turn up in a copy of the bundle:
