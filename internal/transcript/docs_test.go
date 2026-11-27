@@ -27,39 +27,48 @@ import (
 // repoRoot is the module root, two levels above this package.
 const repoRoot = "../.."
 
-// docFiles lists README.md and every Markdown file under docs/, repo-relative.
+// docFiles lists README.md and every Markdown file under docs/ and skills/,
+// repo-relative. The skills ship to agents, which copy their commands
+// verbatim, so their transcripts are held to the same check as the docs.
 func docFiles(t *testing.T) []string {
 	t.Helper()
 	files := []string{"README.md"}
-	err := filepath.WalkDir(filepath.Join(repoRoot, "docs"), func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() && strings.HasSuffix(p, ".md") {
-			rel, err := filepath.Rel(repoRoot, p)
+	for _, dir := range []string{"docs", "skills"} {
+		err := filepath.WalkDir(filepath.Join(repoRoot, dir), func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			files = append(files, filepath.ToSlash(rel))
+			if !d.IsDir() && strings.HasSuffix(p, ".md") {
+				rel, err := filepath.Rel(repoRoot, p)
+				if err != nil {
+					return err
+				}
+				files = append(files, filepath.ToSlash(rel))
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
 		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
 	sort.Strings(files)
 	return files
 }
 
-// buildOkfctl builds the binary from this tree into a fresh bin dir and
-// returns the env that puts it first on PATH.
+// buildOkfctl builds okfctl and the okfctl-search plugin from this tree into a
+// fresh bin dir and returns the env that puts it first on PATH.
 func buildOkfctl(t *testing.T) []string {
 	t.Helper()
 	bin := t.TempDir()
-	build := exec.Command("go", "build", "-o", filepath.Join(bin, "okfctl"), "github.com/cwest/okfctl")
-	build.Env = append(os.Environ(), "CGO_ENABLED=0")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("go build okfctl: %v\n%s", err, out)
+	for name, pkg := range map[string]string{
+		"okfctl":        "github.com/cwest/okfctl",
+		"okfctl-search": "github.com/cwest/okfctl/cmd/okfctl-search",
+	} {
+		build := exec.Command("go", "build", "-o", filepath.Join(bin, name), pkg)
+		build.Env = append(os.Environ(), "CGO_ENABLED=0")
+		if out, err := build.CombinedOutput(); err != nil {
+			t.Fatalf("go build %s: %v\n%s", name, err, out)
+		}
 	}
 	fixtures, err := filepath.Abs(filepath.Join(repoRoot, "testdata", "transcripts"))
 	if err != nil {
@@ -71,8 +80,8 @@ func buildOkfctl(t *testing.T) []string {
 	}
 }
 
-// TestDocTranscripts replays every `$ okfctl` transcript in README.md and
-// docs/**/*.md against the binary built from this tree. A doc that shows
+// TestDocTranscripts replays every `$ okfctl` transcript in README.md,
+// docs/**/*.md, and skills/**/*.md against the binary built from this tree. A doc that shows
 // output the binary doesn't print fails here, naming the file, block, line,
 // and the expected and actual text. See the package doc for the placeholder
 // and directive syntax.
