@@ -15,8 +15,8 @@ metadata:
 
 ## Overview
 
-Two nodes say nearly the same thing and don't link each other, and a third is
-off topic. Build the index, then lint with `--semantic`:
+Two nodes say nearly the same thing and don't link each other. The Kubernetes
+node is off topic. Build the index, then lint with `--semantic`:
 
 <!-- transcript: exit 1 okfctl lint ./mykb --semantic -->
 ```text
@@ -63,12 +63,12 @@ check silently. The structural checks still run (that's where `missing-xref`
 came from).
 
 The run above used the default `hash` embedder. It needs no model. It compares
-word overlap and ignores meaning, and the 0.83 here says the two nodes use the
+word overlap and ignores meaning. The 0.83 here says the two nodes use the
 same vocabulary. For findings you'll act on, build with `--embedder model2vec`
 (below).
 
-Use `--json` if a script or agent reads lint output. The text form of the two
-semantic findings leaves out the node path. The JSON form has it.
+Scripts and agents should read lint output with `--json`. The text form of
+the two semantic findings leaves out the node path (the JSON form has it).
 
 ## When to Use
 
@@ -77,8 +77,8 @@ semantic findings leaves out the node path. The JSON form has it.
 - You want search or nearest-neighbor lookups by meaning.
 - The default thresholds misfire on your corpus and you need to retune them.
 
-Orphans, coverage gaps, and broken links need no index. They're in
-`okf-curation-health`.
+Orphans and broken links need no index (neither do coverage gaps). The checks
+for all three live in `okf-curation-health`.
 
 ## Point okfctl at a local model
 
@@ -86,12 +86,12 @@ Orphans, coverage gaps, and broken links need no index. They're in
 static embedding model in-process. okfctl doesn't ship model weights and never
 downloads one. You download a model yourself, for example
 [`minishlab/potion-base-8M`](https://huggingface.co/minishlab/potion-base-8M),
-and point okfctl at its directory. It has to hold `config.json`,
-`model.safetensors`, and `tokenizer.json` (or `vocab.txt`).
+and point okfctl at its directory. It has to hold `config.json` and
+`model.safetensors`, plus `tokenizer.json` (or `vocab.txt`).
 
 Set the path in okfctl's config. To override it for one run, pass `--model-path`:
 
-<!-- transcript: skip needs a downloaded Model2Vec model, and the test environment has none -->
+<!-- transcript: skip needs a downloaded Model2Vec model that the test environment lacks -->
 ```text
 $ okfctl config set model_path ~/models/potion-base-8M
 $ okfctl config get model_path
@@ -102,10 +102,10 @@ $ okfctl-search --semantic tannin mykb
 okfctl-search: index model does not match the active embedder; rebuild with 'okfctl-search index build'
 ```
 
-The index records which model made it. The last query above used the default
+The index remembers which model made it. The last query above used the default
 `hash` embedder against a `model2vec` index and failed. Rebuild to switch.
 
-If the path holds no model, the build fails. It doesn't fall back to `hash`:
+If there's no model at that path, the build fails. It doesn't fall back to `hash`:
 
 <!-- transcript: exit 1 okfctl-search --embedder model2vec --model-path /nonexistent/model index build mykb -->
 ```text
@@ -119,8 +119,8 @@ With potion-base-8M on the bundle above, the near-duplicate pair scores 0.99
 
 ## Build and rebuild the index
 
-`index build` keys each vector by a hash of the node's content. It skips nodes
-that haven't changed. One embedder produces the same index each time you run it.
+`index build` keys each vector by a hash of the node's content and skips nodes
+that haven't changed (one embedder builds the same index each time).
 
 The index comes from the nodes plus one model revision. Don't commit it.
 okfctl doesn't add it to `.gitignore` for you:
@@ -129,8 +129,8 @@ okfctl doesn't add it to `.gitignore` for you:
 $ echo '.okfctl/' >> mykb/.gitignore
 ```
 
-A node added since the last build shows up as one finding, and a partial run
-never reads as clean:
+Each node added since the last build shows up as one finding. Partial indexes
+never read as clean:
 
 ```text
 $ okfctl node new wine/body.md --type Reference --title Body --bundle mykb
@@ -156,7 +156,7 @@ $ okfctl-search related wine/tannin.md mykb
 `okfctl-search --semantic "query" <dir>` ranks nodes against a query, top 5 by
 default (`--k`). `related <path> <dir>` lists one node's nearest neighbors, the
 same data `lint --semantic` uses. Each takes `--path`, `--type`, and `--tag`
-filters. For lexical or link-graph search with no index, use core
+filters. For lexical or link-graph search with no index, use the main binary's
 `okfctl search` (see `okfctl search --help`).
 
 ## The two semantic findings
@@ -166,38 +166,37 @@ filters. For lexical or link-graph search with no index, use core
 | `similar-unlinked` | two nodes score at or above `--similarity-threshold` and neither links the other | `0.80` |
 | `no-semantic-neighbors` | a node's best neighbor scores below `--isolation-floor` | `0.20` |
 
-Add a link in either direction and `similar-unlinked` clears on the next lint.
-Lint reads links from the bundle itself. The index holds only vectors.
+Link the pair in either direction and `similar-unlinked` clears on the next lint.
+Lint reads links from the bundle itself (the index stores only vectors).
 
 ## Tune the thresholds
 
 The isolation floor started at 0.30. It came down to 0.20 after a test of
-potion-base-8M on a few wine nodes: same-topic nodes in different words scored
-0.27 to 0.33 there. One Kubernetes node dropped among them scored 0.13. The old
+potion-base-8M on a few wine nodes, where same-topic nodes in different words
+scored 0.27 to 0.33. One Kubernetes node dropped among them scored 0.13. The old
 floor flagged good wine nodes as dead concepts, but 0.20 flags only the
 outlier.
 
 With a mean-pooled static model like potion-base-8M, scores bunch up and the
-order of results holds up better than the numbers themselves. To
+order of results is steadier than the numbers themselves. To
 pick a threshold, run `okfctl-search related` on a few pairs you know are
-related and a few you know aren't, then put `--isolation-floor` between those
-two bands. Another model or corpus will want its own numbers.
+related plus a few you know aren't, then put `--isolation-floor` between those
+two bands. Another model or corpus will want different numbers.
 
 ## Common Pitfalls
 
-1. **Reading the missing-index error as "no findings."** It exits 1. Build the
-   index first.
-2. **Committing `.okfctl/index.db`.** It goes stale as nodes change and is tied
-   to one model revision. Add `.okfctl/` to `.gitignore`.
-3. **Acting on `hash` findings.** `hash` matches words. Rebuild with
+1. The missing-index error doesn't mean "no findings." It exits 1 (build the
+   index first).
+2. `.okfctl/index.db` doesn't belong in git. It goes stale as nodes change and
+   is tied to one model revision. Add `.okfctl/` to `.gitignore`.
+3. `hash` findings only mean the words overlap. Rebuild with
    `--embedder model2vec`, then decide what to link or delete.
-4. **Assuming okfctl will download a model.** It never does. Download one and
-   set `model_path`.
-5. **Copying 0.20 to another model.** Measure with `related` and retune.
-6. **Linting after edits with no rebuild.** Lint reads stored vectors. Only
-   added or removed paths show up as drift.
-7. **Parsing the text output.** Use `--json`. The text lines for semantic
-   findings have no path.
+4. okfctl never downloads a model. Download one yourself and set `model_path`.
+5. 0.20 was measured on potion-base-8M. On another model, measure with
+   `related` and retune.
+6. Lint after an edit reads the old vectors until you rebuild. Only added or
+   removed paths show up as drift.
+7. The text lines for semantic findings have no path. Pass `--json`.
 
 ## Verification Checklist
 
@@ -206,6 +205,6 @@ two bands. Another model or corpus will want its own numbers.
       and node count you wanted
 - [ ] `.okfctl/` is in the bundle's `.gitignore`
 - [ ] `okfctl lint <dir> --semantic --json` finishes with no missing-index
-      error, and each finding was reviewed
+      error, with each finding reviewed
 - [ ] The index was rebuilt after the last content edit
 - [ ] Thresholds were checked against `related` scores on this corpus

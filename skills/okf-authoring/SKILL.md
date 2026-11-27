@@ -15,7 +15,7 @@ metadata:
 
 ## Overview
 
-Make a bundle, add two nodes, link one to the other, and rename the target:
+Make a bundle with two nodes, link one to the other, then rename the target:
 
 ```text
 $ okfctl bundle init mykb
@@ -33,24 +33,25 @@ $ okfctl index check mykb
 OK: index.md is current
 ```
 
-A bundle is a directory of Markdown files, and each concept node is one file
-with YAML frontmatter (`type`, `title`) and a body. Its path is its identity. Nodes link
-each other with ordinary relative Markdown links. That's why `node mv` had to
-rewrite the link in `oak.md`. `node new` and `node mv` also rebuilt `index.md`
-and logged each change in `log.md`, and `index check` passes with no
-`index build` step.
+Bundles are directories of Markdown files. Each concept node is one file with
+YAML frontmatter (`type`, `title`) and a body. Its path is its identity.
+Nodes link to each other with ordinary relative Markdown links. That's why
+`node mv` had to rewrite the link in `oak.md`. `node new` and `node mv` also
+rebuilt `index.md` and logged each change in `log.md` (`index check` passes
+with no separate index build).
 
-You need only the `okfctl` binary for any command on this page. Install it with
+All you need for any command on this page is the `okfctl` binary. Install it with
 `brew install cwest/tap/okfctl`.
 
 ## When to Use
 
-- You're starting a bundle, or adding, editing, renaming, or deleting nodes.
+- You want to start a bundle.
+- You need to add, edit, rename, or delete some nodes.
 - You want new nodes of one type to start from a team template.
 - You want the reserved `index.md` and `log.md` to stay current.
 
-For orphans, broken links, and CI gates, use `okf-curation-health`. For
-similarity checks, use `okf-semantic-search`.
+Orphans and broken links are in `okf-curation-health` with the CI gates.
+Similarity is in `okf-semantic-search`.
 
 ## Create a bundle
 
@@ -66,7 +67,7 @@ okf_version: 0.3 (declared in index.md)
 There's no `.okf` sidecar. `reserved: 3` above counts the root index, the
 `concepts/index.md` that `node new` added, and `log.md`.
 
-A bundle with no declared version reports `okf_version: undeclared (v0.2
+Bundles with no declared version report `okf_version: undeclared (v0.2
 fallbacks apply, §12.1)`. Upgrade it with `okfctl migrate` (see
 `okf-migrate-plan`).
 
@@ -98,17 +99,17 @@ Oak barrels add [tannin](tannins.md) to red wine.
 ```
 
 `--type` takes any string. OKF leaves `type` values open (§4.1). `validate`
-accepts `Reference`, `Concept`, and anything you make up.
+accepts `Reference`, `Concept`, and any type that you make up.
 
 `okfctl node edit <path> --bundle <dir>` opens the node in `$EDITOR` (then
 `$OKFCTL_EDITOR`, then `$VISUAL`) and validates the bundle when the editor
-exits. Don't call it from an agent shell with no terminal. Edit the file in
-place and run `okfctl validate` after.
+exits. In an agent shell that has no terminal, just edit the file in
+place and run `okfctl validate` when you're done.
 
 ## Start nodes from a type template
 
-A type template is an ordinary node with `type: Type Template`. It lives in the
-bundle (tool config has no say in it):
+A template is a node with `type: Type Template` that lives in the bundle
+(tool config has no say in it):
 
 ```text
 $ mkdir -p mykb/templates
@@ -139,15 +140,15 @@ tags:
 ## Verification
 ```
 
-If a template matches `--type`, `node new` stubs each listed field with
-`TODO`, leaves each recommended field empty, and writes one `##` heading per
-body section. `okfctl template show Playbook mykb` prints one template's
-fields. To check existing nodes against a template, use `validate --templates`
-(see `okf-curation-health`).
+With a template for the `--type` you asked for, `node new` stubs each
+listed field with `TODO`, leaves the recommended ones empty, and writes a
+`##` heading for each body section. `okfctl template show Playbook mykb`
+prints one template's fields. Checking existing nodes against a template is
+`validate --templates` (see `okf-curation-health`).
 
 ## Move and remove nodes
 
-Preview first. `--dry-run` lists each link it would rewrite and writes
+Preview first. `--dry-run` lists all the links it would rewrite and writes
 nothing:
 
 ```text
@@ -159,9 +160,9 @@ remove concepts/oak.md
   orphaned: concepts/tannins.md
 ```
 
-`node rm --dry-run` names the nodes the removal would leave with no inbound
-links. Use a raw `mv` or `git mv` and nothing gets rewritten (links to the old
-path just break).
+`node rm --dry-run` shows the nodes that would be left with no inbound
+links. Raw `mv` or `git mv` rewrites nothing (links to the old path just
+break).
 
 ## Promote directory-as-concept indexes
 
@@ -198,12 +199,12 @@ Promote leaves the body and `created` as they were. It rewrites the `gke/` and
 `gke/index.md` spellings of inbound links, writes a fresh `index.md` with no
 frontmatter, appends to `log.md`, and doesn't touch the root index.
 `--name overview` names each promoted file `overview.md` (the default is the
-directory name). Finish with `lint --strict` and look for zero `broken-link`
-findings.
+directory name). Finish with `lint --strict` and check that there are no
+`broken-link` findings.
 
 ## Keep index.md and log.md current
 
-A file added by hand, outside okfctl, makes the index stale:
+Files added by hand, outside okfctl, make the index stale:
 
 <!-- transcript: exit 1 okfctl index check ./mykb -->
 ```text
@@ -229,23 +230,23 @@ $ okfctl log show mykb
 ```
 
 `index build` writes one `index.md` per directory that holds concepts (§8).
-`index check` exits 1 when any is stale, and CI can gate on it. `log.md`
+`index check` exits 1 when any is stale (CI can gate on it). `log.md`
 groups entries under `## YYYY-MM-DD` headings, newest first (§9). The node
 commands log their own changes. Use `log append` for edits you made by hand.
 
 ## Common Pitfalls
 
-1. **Hand-editing `index.md`.** The next `index build` overwrites it. Put
-   content in concept nodes.
-2. **Treating `index.md` or `log.md` as a concept.** They're reserved. Nothing
-   links to `log.md`, and lint never calls it an orphan.
-3. **Renaming a node with `mv` or `git mv`.** Inbound links point at the old
-   path and break. Use `okfctl node mv`.
-4. **Skipping `--dry-run` on `node rm`.** The dry run is the one place you see
-   which nodes the removal orphans.
-5. **Adding files outside okfctl with no `index build`.** The new node is
-   missing from the index, and lint reports it as an orphan. Run `index check`
-   in CI.
+1. The next `index build` overwrites `index.md`. Hand edits there vanish.
+   Put content in concept nodes.
+2. `index.md` and `log.md` are reserved files. Nothing links to `log.md`
+   (lint never calls it an orphan).
+3. Plain `mv` or `git mv` leaves inbound links pointing at the old path.
+   Use `okfctl node mv`.
+4. `node rm --dry-run` is the one place you see which nodes the removal
+   orphans. Don't skip it.
+5. Files added outside okfctl stay out of the index until `index build`
+   rebuilds it. Lint reports them as orphans until then. Run `index check` in
+   CI.
 
 ## Verification Checklist
 
