@@ -243,7 +243,16 @@ From v0.1 (v0.3 Appendix B), two renames:
   is taken only where the entry marks it: a leading link's text, a quoted or
   italic title in citation position, or the page name after a leading URL.
   Authors, venue, year, identifiers, URLs, and grades never go into `title`.
+  A quote of the page is not its name: a quote introduced by `Description:`,
+  `Verbatim:`, `states`, `reads`, an error or message, a backticked ref, or a
+  URL, and a quote that is a sentence or a lowercase clause, gives no title.
   An entry that marks no name gets no title and a `source-title-unnamed` item.
+  An earlier run may have written the whole entry into `title`. Once the
+  entry's text is the footnote definition of the source's `id`, that title
+  is cut to the work's name, or removed with a `source-title-unnamed` item
+  when the entry names none. A title that is already a name stays, and so
+  do the source's other keys (`note`, `x-` keys; §4.1). The plan summary
+  counts these on a `titles:` line.
   An entry with no URL that carries exactly one DOI, arXiv id, PubMed id,
   or ISBN gets a `resource` built from that identifier:
   `https://doi.org/<doi>`, `https://arxiv.org/abs/<id>`,
@@ -311,6 +320,9 @@ present, is bumped too.
   (`source-title-unnamed`). The title stays unset until you name the work.
 - a citation entry that names a different work than the title its source
   already has (`source-title-conflict`). The existing title stays.
+- a source whose `title` holds its whole citation entry, where no footnote
+  definition with the source's `id` holds that text (`source-title-unpreserved`).
+  The title stays, so the text is never lost.
 - a body `[k]` that names an entry of the node but sits within 60 characters
   of "brief", "citation", "node", or a link, or is the label of an undefined
   `[text][k]` reference (`citation-ref-unclear`). It may point at another
@@ -321,7 +333,7 @@ present, is bumped too.
 - a node whose ids would collide once case is folded (`source-id-collision`).
   It gets no ids, footnotes, or reference rewrites.
 
-The two `source-title-*` kinds and these three don't hold the version
+The three `source-title-*` kinds and these three don't hold the version
 declaration: the resource is already in `sources`.
 
 An entry that names several resources is not a judgment item: it becomes one

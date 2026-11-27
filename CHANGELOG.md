@@ -23,6 +23,14 @@ tagged release, goreleaser generates the release notes from the commit log
   is not a resource. An entry with a resource that another entry of the node
   also names stays a `prose-citation` item. `analyze` no longer counts a split
   entry on top of the sources it became.
+- `migrate` cuts a source `title` that holds its whole `# Citations` entry
+  (as an earlier run wrote it) to the work's name, once the footnote
+  definition `[^id]` holds the entry's text (§5.1: title is a label for
+  humans). When the entry names no work the title is removed and reported
+  (`source-title-unnamed`). A title whose text no footnote holds is kept and
+  reported (`source-title-unpreserved`), so the text is never lost. A title
+  that is already a name, and the source's other keys, are left alone. The
+  plan summary gains a `titles:` line.
 
 ## [0.6.0] - 2026-11-27
 

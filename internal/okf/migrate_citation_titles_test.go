@@ -197,7 +197,14 @@ func TestConformance_MigrateCitationTitle_Section4_ApplySplicesAndIsIdempotent(t
 	if !strings.Contains(got, "  - resource: https://wiki.acme/fpa\n    id: \"2\"\n    title: \"The FP&A Handbook\"\n") {
 		t.Fatalf("§4: title line not inserted under its resource\n%s", got)
 	}
-	if !linesSurviveInOrder(titledNode, got) {
+	// The one replaced line is source [4]'s legacy full-entry title, which
+	// becomes the work's name once footnote [^4] holds the entry
+	// (migrate_title_shorten.go). Every other original line survives.
+	legacy := "    title: \"[4] VERIFIED — Legacy, *Legacy Work*, 2025. https://legacy.example/\"\n"
+	if !strings.Contains(got, "  - resource: https://legacy.example/\n    id: \"4\"\n    title: \"Legacy Work\"\n") {
+		t.Fatalf("§5.1: legacy full-entry title not shortened to the name\n%s", got)
+	}
+	if !linesSurviveInOrder(strings.Replace(titledNode, legacy, "    title: \"Legacy Work\"\n", 1), got) {
 		t.Fatalf("§4: apply must only insert lines\n--- got\n%s\n--- orig\n%s", got, titledNode)
 	}
 	nb := loadMigrate(t, dir)

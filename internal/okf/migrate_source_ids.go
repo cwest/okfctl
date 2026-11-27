@@ -252,9 +252,11 @@ var footnoteLabelRe = regexp.MustCompile(`\[\^([^\]\s]+)\]`)
 var footnoteDefRe = regexp.MustCompile(`(?m)^ {0,3}\[\^([^\]\s]+)\]:`)
 
 // planSourceIDs plans the ids, footnote definitions, and body reference
-// rewrites for one node. att holds one attachment per entry. On a case-folded
-// collision the node is reported and nothing is planned for it.
-func planSourceIDs(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, entries []string, att []entryAttachment) {
+// rewrites for one node. att holds one attachment per entry. It returns the id
+// of each entry whose source carries it (entry index to id). On a case-folded
+// collision the node is reported, nothing is planned for it, and it returns
+// nil.
+func planSourceIDs(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, entries []string, att []entryAttachment) map[int]string {
 	// A link reference definition (`[label]: url`) is the target of a
 	// `[text][label]` link, not a citation the body cites by key: it gets no
 	// id and no footnote, and its label is never rewritten.
@@ -306,18 +308,18 @@ func planSourceIDs(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, en
 		}
 		if err := set.Claim(id); err != nil {
 			refuse(fmt.Errorf("existing sources id: %w", err))
-			return
+			return nil
 		}
 	}
 	for i := range entries {
 		if err := set.Claim(final[i]); err != nil {
 			refuse(fmt.Errorf("entry %d: %w", i+1, err))
-			return
+			return nil
 		}
 		for _, id := range partIDs[i] {
 			if err := set.Claim(id); err != nil {
 				refuse(fmt.Errorf("entry %d: %w", i+1, err))
-				return
+				return nil
 			}
 		}
 	}
@@ -329,10 +331,11 @@ func planSourceIDs(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, en
 		l := strings.ToLower(m[1])
 		if set.Has(l) && !held[l] && !ownLabel(final, partIDs, att, srcIDs, l) {
 			refuse(fmt.Errorf("footnote label [^%s] is already in the body", m[1]))
-			return
+			return nil
 		}
 	}
 
+	entryIDs := map[int]string{}
 	refKeys := map[string]string{} // body token -> id, attached entries only
 	nodeKeys := map[string]bool{}  // body tokens of every entry
 	newIdx := map[string]int{}
@@ -353,6 +356,7 @@ func planSourceIDs(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, en
 			continue
 		}
 		id := final[i]
+		entryIDs[i] = id
 		if j, ok := newIdx[a.resource]; ok {
 			nm.Sources[j].ID = id
 		} else if a.existingID == "" {
@@ -383,7 +387,7 @@ func planSourceIDs(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, en
 		}
 	}
 	if len(refKeys) == 0 {
-		return
+		return entryIDs
 	}
 	nm.RefKeys = refKeys
 	rewrites, unclear := scanCitationRefs(n.Body, nodeKeys, refKeys)
@@ -391,6 +395,7 @@ func planSourceIDs(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, en
 	for _, u := range unclear {
 		plan.Judgment = append(plan.Judgment, JudgmentItem{Path: rel, Kind: JudgmentCitationRef, Context: u})
 	}
+	return entryIDs
 }
 
 // ownLabel reports whether label (folded) is the id of an entry, or of a part

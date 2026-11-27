@@ -399,3 +399,32 @@ func TestMigrate_PlanSummaryCountsAttribution_Section5_1(t *testing.T) {
 		}
 	}
 }
+
+// §5.1: the summary counts the full-citation titles a plan shortens to the
+// work's name and the ones it removes because the entry names no work. A
+// title that is already a name is in neither count.
+func TestMigrate_PlanSummaryCountsTitleShortening_Section5_1(t *testing.T) {
+	dir := mkPromoteCLIBundle(t, map[string]string{
+		"index.md": "# KB\n",
+		"log.md":   "# Log\n",
+		"a.md": "---\ntype: Concept\nsources:\n" +
+			"  - resource: https://wiki.acme/fpa\n" +
+			"    title: \"[1] Acme, *The FP&A Handbook*, 2024. https://wiki.acme/fpa\"\n" +
+			"  - resource: https://probe.example/\n" +
+			"    title: \"[2] on-box probe of https://probe.example/ returned 200.\"\n" +
+			"  - resource: https://named.example/\n" +
+			"    title: Named Work\n" +
+			"---\n\n# Def\n\n# Citations\n" +
+			"- [1] Acme, *The FP&A Handbook*, 2024. https://wiki.acme/fpa\n" +
+			"- [2] on-box probe of https://probe.example/ returned 200.\n" +
+			"- [3] Named, *Named Work*, 2026. https://named.example/\n",
+	})
+	planPath := filepath.Join(t.TempDir(), "migrate-plan.json")
+	out, err := runOKF(t, "migrate", dir, "--plan", planPath)
+	if err != nil {
+		t.Fatalf("migrate --plan: err=%v out=%q", err, out)
+	}
+	if want := "titles: full-citation titles->name 1, removed (no name) 1"; !strings.Contains(out, want) {
+		t.Errorf("summary missing %q:\n%s", want, out)
+	}
+}

@@ -277,13 +277,16 @@ comes back to you as a judgment item:
 | body `# Citations` entry that names two or more resources | one `sources[]` entry per resource, ids `<id>`, `<id>-2`, `<id>-3` (§5.1) | always, in the order the entry names them; a URL inside a code span is not a resource | a resource is also named by another entry of the node: `prose-citation` (nothing split) |
 | body `# Citations` entry whose resource is already in `sources` | that source's `title` (§5.1) | the source has no `title` and the entry marks the work's name | it marks no name: `source-title-unnamed` (the title stays unset); the source already has a different `title`: `source-title-conflict` (the existing title stays) |
 | body `# Citations` entry with a source, and the body `[k]` that cites it | `sources[].id`, footnote definition `[^id]: <entry text>`, body `[^id]` (§5.1, §4.2) | always: id is the plain-slug key unique after case folding, else the ordered-list number, else `cite-<n>`; `[3]–[5]` and `[1, 2]` expand | a `[k]` within 60 characters of "brief", "citation", "node", or a link: `citation-ref-unclear`; a second entry for the same resource: `citation-unattached`; ids that collide once case is folded: `source-id-collision` (nothing written for that node) |
+| source whose `title` is its whole `# Citations` entry (an earlier run wrote it) | `title` cut to the work's name, or removed (§5.1) | the footnote definition `[^id]` holds the entry's text, in this plan or already in the body | it names no work: `source-title-unnamed` (title removed; the text is in the footnote); no footnote holds the text: `source-title-unpreserved` (title kept) |
 | link or path field that resolves only from the bundle root (§12.1) | same target with a leading `/` (§6) | always | never |
 | §5 timestamp not in RFC 3339 form | `"2026-06-20T10:00:00Z"` | it has an offset (`Z`, `+0000`, `-05:00`) | no offset: `timestamp-no-offset`; not a date: `timestamp-invalid` |
 
 Feed it `[1] Smith, *Tannin chemistry*, 2024. https://…` and the new
 `title` is `Tannin chemistry`. The authors, year, and URL stay in the body. The
 tool only takes a name the entry marks for it, like the text of a leading link,
-words in quotes or italics, or the page name after a leading URL. If it can't
+words in quotes or italics, or the page name after a leading URL. A quote of
+the page itself isn't a name, so a repo description, an error message, or a
+quoted sentence from the docs gives no `title`. If it can't
 find one, you get no `title` and a `source-title-unnamed` item. So does a bare
 URL. When one entry has the same URL twice, that's one source.
 
@@ -353,6 +356,10 @@ list. An item goes away when the node stops producing it.
   entry marks one.
 - **A citation that marks no name (`source-title-unnamed`).** Put the work's
   name in quotes or italics in the entry, or set `title` on the source by hand.
+- **A whole-entry title kept (`source-title-unpreserved`).** No footnote
+  `[^id]` holds the entry's text, so the tool left the title alone. Make the
+  footnote definition hold the entry, or shorten the title yourself once the
+  text lives somewhere else.
 - **A title that differs from the citation (`source-title-conflict`).** The
   tool didn't touch the old `title`. Decide which name is right and edit the
   source.

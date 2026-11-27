@@ -134,6 +134,9 @@ type NodeMigration struct {
 	// Footnotes are the §4.2 footnote definitions holding each converted
 	// entry's full text.
 	Footnotes []FootnoteEdit `json:"footnotes,omitempty"`
+	// Retitles shorten a title that holds its full citation entry to the
+	// work's name, once a footnote definition holds that text.
+	Retitles []SourceRetitleEdit `json:"retitles,omitempty"`
 	// Refs are the body citation references rewritten to footnotes.
 	Refs []RefEdit `json:"refs,omitempty"`
 	// RefKeys maps each body citation key to the id it is rewritten to; the
@@ -143,12 +146,12 @@ type NodeMigration struct {
 
 func (nm NodeMigration) hasEdits() bool {
 	return nm.Generated != nil || len(nm.Sources) > 0 || len(nm.Titles) > 0 || len(nm.Paths) > 0 || len(nm.Timestamps) > 0 ||
-		len(nm.IDs) > 0 || len(nm.Footnotes) > 0 || len(nm.Refs) > 0
+		len(nm.IDs) > 0 || len(nm.Footnotes) > 0 || len(nm.Refs) > 0 || len(nm.Retitles) > 0
 }
 
 // EditCount is the number of deterministic edits planned for the node.
 func (nm NodeMigration) EditCount() int {
-	n := len(nm.Sources) + len(nm.Titles) + len(nm.Paths) + len(nm.Timestamps) + len(nm.IDs) + len(nm.Footnotes)
+	n := len(nm.Sources) + len(nm.Titles) + len(nm.Paths) + len(nm.Timestamps) + len(nm.IDs) + len(nm.Footnotes) + len(nm.Retitles)
 	for _, r := range nm.Refs {
 		n += r.Count
 	}
@@ -319,6 +322,8 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 		att := make([]entryAttachment, len(entries))
 		srcIDs, _ := existingSourceIDs(n)
 		attached := map[string]bool{}
+		var retitle []retitleCandidate
+		deferred := map[string][]titleCall{}
 		attach := func(i int, res string) {
 			k := canonicalResource(res)
 			if attached[k] {
@@ -369,6 +374,17 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 			}
 			if cur, ok := lookupSourceTitle(existing, res); ok {
 				attach(i, cur.resource)
+				if !att[i].duplicate && cur.has && cur.title != src.Title && isEntryText(cur.title, item) {
+					retitle = append(retitle, retitleCandidate{entry: i, cur: cur, name: src.Title})
+					deferred[cur.resource] = []titleCall{}
+				}
+				// A source whose title may be shortened is decided once its
+				// final title is known (replayTitleCalls), so a re-plan of
+				// the result agrees with this plan.
+				if calls, ok := deferred[cur.resource]; ok {
+					deferred[cur.resource] = append(calls, titleCall{entry: item, cur: cur, name: src.Title})
+					continue
+				}
 				planSourceTitle(&plan, nm, existing, rel, item, cur, src.Title)
 				continue
 			}
@@ -383,8 +399,10 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 			added[canonicalResource(res)] = true
 		}
 		if len(entries) > 0 {
-			planSourceIDs(&plan, nm, n, rel, entries, att)
+			ids := planSourceIDs(&plan, nm, n, rel, entries, att)
+			planRetitles(&plan, nm, n, rel, entries, ids, retitle)
 		}
+		replayTitleCalls(&plan, nm, existing, rel, deferred)
 	}
 
 	// v0.3 §6/§12.1 and §5 edits. Links are rewritten in every Markdown file
@@ -556,6 +574,9 @@ func RenderMigration(root string, b *Bundle, nm NodeMigration) ([]byte, []byte, 
 		return nil, nil, fmt.Errorf("migrate %s: %w", nm.Path, err)
 	}
 	out = renderSourceIDs(out, nm)
+	if out, err = applyTitleRewrites(out, nm.Retitles); err != nil {
+		return nil, nil, fmt.Errorf("migrate %s: %w", nm.Path, err)
+	}
 	if len(nm.Paths) > 0 || len(nm.Timestamps) > 0 {
 		if out, err = renderV03Node(b, nm.Path, out, nm); err != nil {
 			return nil, nil, fmt.Errorf("migrate %s: %w", nm.Path, err)
