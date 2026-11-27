@@ -71,6 +71,21 @@ func scanDrift(b *Bundle) []driftPair {
 	}
 	sort.Strings(paths)
 
+	// One batched history read answers every node; a failed batched read
+	// falls back to the per-path lookup so the findings never change.
+	lookup := func(p string) (time.Time, string, bool, error) {
+		return GitLastCommitDateIgnoring(b.Root, p, ignore)
+	}
+	if len(paths) > 0 {
+		h, herr := loadGitHistory(b.Root)
+		switch {
+		case herr == nil && h == nil:
+			return nil // git cannot answer for any path: no drift to report
+		case herr == nil:
+			lookup = func(p string) (time.Time, string, bool, error) { return h.lastCommit(p, ignore) }
+		}
+	}
+
 	var out []driftPair
 	for _, p := range paths {
 		n := b.Nodes[p]
@@ -81,7 +96,7 @@ func scanDrift(b *Bundle) []driftPair {
 		if !ok {
 			continue // no reliable modified to compare
 		}
-		git, sha, ok, err := GitLastCommitDateIgnoring(b.Root, p, ignore)
+		git, sha, ok, err := lookup(p)
 		if err != nil || !ok {
 			continue // no git source of truth: degrade, do not report
 		}
