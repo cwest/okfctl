@@ -27,28 +27,48 @@ import (
 )
 
 func newNodeCmd() *cobra.Command {
-	node := &cobra.Command{Use: "node", Short: "Author and inspect nodes"}
+	node := &cobra.Command{Use: "node", Short: "Create, move, remove, edit, and read concept nodes"}
 
 	var typ, title, dir, templatesFrom string
 	newC := &cobra.Command{
 		Use:   "new <path>",
-		Short: "Create a conformant node (type required, OKF §4.1)",
-		Long: "new creates a conformant concept node at <path>. A non-empty --type is REQUIRED: " +
-			"type is the one managed field (a node must carry a non-empty type; the value " +
-			"itself is open per OKF §4.1, so any string is accepted). The presence requirement is the " +
-			"spec floor (OKF §4.1 / §11: every frontmatter block carries a non-empty type). If a type " +
-			"template governs the " +
-			"given type, the node is scaffolded from it (PRD §9.3); the template may be local or " +
-			"referenced from a separate bundle (the .okf `templates:` key, or --templates-from which " +
-			"overrides it, PRD §9.2). Otherwise a plain conformant " +
-			"node is written. Creation is recorded in log.md and index.md is regenerated, so a new " +
-			"node is never an audit gap. It doesn't open an editor — use `okfctl node edit` for that.",
-		Example: "  # Create a node of an open type\n" +
-			"  okfctl node new concepts/revenue --type Concept --title Revenue\n\n" +
-			"  # Create in a bundle elsewhere\n" +
-			"  okfctl node new concepts/revenue --type Concept --bundle ./bundles/knowledge\n\n" +
-			"  # Scaffold from a referenced template bundle, overriding the .okf reference\n" +
-			"  okfctl node new runbooks/deploy --type Playbook --templates-from ../okf-type-templates",
+		Short: "Create a concept node, then update log.md and index.md",
+		Long: "new writes a concept node at <path> in the bundle --bundle names (the current " +
+			"directory by default). The .md suffix is optional. You have to pass --type (a file " +
+			"with no type isn't a concept, OKF §4.1, §3.2). Any value works. The spec " +
+			"leaves the list of types open. The node gets that type and created and modified " +
+			"timestamps, plus the --title if you gave one. With no title, the heading is the " +
+			"file name.\n\n" +
+			"Then new adds \"created <path>\" to log.md and rebuilds each index.md, and that's " +
+			"why `okfctl index check` passes right after. If the --bundle directory is missing, " +
+			"new makes it and declares no okf_version.\n\n" +
+			"With a type template for --type in the bundle, the node starts from that template's " +
+			"fields and body headings (PRD §9.3). Templates live in the bundle itself or in " +
+			"another bundle named by the .okf templates key or --templates-from (PRD §9.2). Run " +
+			"`okfctl template list` to see them.\n\n" +
+			"Overwriting a node, writing outside the bundle and a path that starts with a dot " +
+			"all exit 1.\n\n" +
+			"To edit the node in your editor, use `okfctl node edit`.",
+		Annotations: map[string]string{
+			transcriptAnnotation: "<!-- transcript: exit 1 okfctl node new tannin --bundle shelf -->",
+		},
+		Example: "  $ okfctl bundle init shelf\n" +
+			"  Initialized OKF bundle in shelf\n" +
+			"  $ okfctl node new tannin --bundle shelf\n" +
+			"  okfctl: --type is required (OKF §4.1 / §11: every node needs a non-empty type)\n" +
+			"  $ okfctl node new tannin --type Concept --title Tannin --bundle shelf\n" +
+			"  Created shelf/tannin.md\n" +
+			"  $ cat shelf/tannin.md\n" +
+			"  ---\n" +
+			"  type: Concept\n" +
+			"  title: Tannin\n" +
+			"  created: <TIMESTAMP>\n" +
+			"  modified: <TIMESTAMP>\n" +
+			"  ---\n" +
+			"\n" +
+			"  # Tannin\n" +
+			"  $ okfctl index check shelf\n" +
+			"  OK: index.md is current",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if typ == "" {
@@ -101,14 +121,32 @@ func newNodeCmd() *cobra.Command {
 	var showBundle string
 	showC := &cobra.Command{
 		Use:   "show <path>",
-		Short: "Print a node, surfacing its type (PRD §7.3)",
-		Long: "show prints a single node's path, its type, and its Markdown body (PRD §7.3: reads " +
-			"reveal the managed type). The .md suffix is optional in <path>. Read-only — it never " +
-			"mutates the bundle. It errors if no node matches.",
-		Example: "  # Show a node (the .md suffix is optional)\n" +
-			"  okfctl node show concepts/revenue\n\n" +
-			"  # Show a node in a bundle elsewhere\n" +
-			"  okfctl node show concepts/revenue --bundle ./bundles/knowledge",
+		Short: "Print one node's path, type, and body",
+		Long: "show prints a node's path, its type and its Markdown body from the bundle --bundle " +
+			"names (the current directory by default). The .md suffix is optional. The type gets " +
+			"a line of its own: you see what kind of concept you're reading before the body " +
+			"starts (PRD §7.3). The rest of the frontmatter (title, timestamps, sources) stays " +
+			"hidden. cat the file for that.\n\n" +
+			"show never writes. Any path that isn't a concept node exits 1 with \"node not " +
+			"found\", index.md and log.md included. The spec says neither is ever a concept " +
+			"(§3.1).",
+		Example: "  $ okfctl bundle init reader\n" +
+			"  Initialized OKF bundle in reader\n" +
+			"  $ okfctl node new wine/oak --type Concept --title Oak --bundle reader\n" +
+			"  Created reader/wine/oak.md\n" +
+			"  $ echo 'Oak barrels add tannin.' >> reader/wine/oak.md\n" +
+			"  $ okfctl node show wine/oak --bundle reader\n" +
+			"  path: wine/oak.md\n" +
+			"  type: Concept\n" +
+			"\n" +
+			"  # Oak\n" +
+			"  Oak barrels add tannin.\n" +
+			"\n" +
+			"  $ okfctl node show index --bundle reader\n" +
+			"  okfctl: node not found: index.md",
+		Annotations: map[string]string{
+			transcriptAnnotation: "<!-- transcript: exit 1 okfctl node show index --bundle reader -->",
+		},
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			b, err := okf.Load(showBundle)
@@ -133,14 +171,24 @@ func newNodeCmd() *cobra.Command {
 	var listBundle string
 	listC := &cobra.Command{
 		Use:   "list",
-		Short: "List nodes with their type (PRD §7.3)",
-		Long: "list prints every concept node in the bundle with its managed type, sorted by path " +
-			"(PRD §7.3: reads reveal the type). Reserved files (index.md, log.md) aren't nodes " +
-			"and aren't listed. Read-only.",
-		Example: "  # List every node in the current bundle\n" +
-			"  okfctl node list\n\n" +
-			"  # List nodes in a bundle elsewhere\n" +
-			"  okfctl node list --bundle ./bundles/knowledge",
+		Short: "List every concept node with its type, sorted by path",
+		Long: "list prints one line per concept node in the bundle given by --bundle (the current " +
+			"directory by default), sorted by path, with the node's type in the second column " +
+			"(PRD §7.3). Use it to see what a bundle holds, or to find nodes of one type with " +
+			"grep.\n\n" +
+			"index.md and log.md never appear (OKF §3.1). Neither does a .md file with no type, " +
+			"such as a README.md. The spec doesn't count those as concepts (§3.2), and " +
+			"`okfctl validate` warns about them. list only reads.",
+		Example: "  $ okfctl bundle init catalog\n" +
+			"  Initialized OKF bundle in catalog\n" +
+			"  $ okfctl node new wine/tannin --type Concept --bundle catalog\n" +
+			"  Created catalog/wine/tannin.md\n" +
+			"  $ okfctl node new grape/sangiovese --type 'Grape Variety' --bundle catalog\n" +
+			"  Created catalog/grape/sangiovese.md\n" +
+			"  $ echo 'Notes for editors.' > catalog/README.md\n" +
+			"  $ okfctl node list --bundle catalog\n" +
+			"  grape/sangiovese.md                      Grape Variety\n" +
+			"  wine/tannin.md                           Concept",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			b, err := okf.Load(listBundle)
@@ -165,15 +213,33 @@ func newNodeCmd() *cobra.Command {
 	var mvDry bool
 	mvC := &cobra.Command{
 		Use:   "mv <old> <new>",
-		Short: "Move/rename a node, rewriting inbound links (path is identity)",
-		Long: "mv moves or renames a node. A node's path is its identity (OKF §6: cross-links are " +
-			"by path), so mv also rewrites every inbound internal link to point at the new path, " +
-			"then maintains log.md and index.md. The .md suffix is optional on both arguments. " +
-			"--dry-run prints the move and every link rewrite and writes nothing.",
-		Example: "  # Rename a node and rewrite inbound links\n" +
-			"  okfctl node mv concepts/revenue concepts/net-revenue\n\n" +
-			"  # Preview the move and rewrites without touching disk\n" +
-			"  okfctl node mv concepts/revenue concepts/net-revenue --dry-run",
+		Short: "Move or rename a node and rewrite every link that points at it",
+		Long: "mv takes the node at <old> to <new> in the bundle --bundle names (the current " +
+			"directory by default, with the .md suffix optional on either path). Links find their " +
+			"target by path (OKF §6). That's why mv rewrites each link in the bundle that pointed " +
+			"at the old path, README files included: one that started with / still starts with " +
+			"/ while a relative one gets worked out again from its own file. Then mv adds \"moved " +
+			"<old> -> <new>\" to log.md and rebuilds each index.md.\n\n" +
+			"Try --dry-run first.\n\n" +
+			"It prints the move and each rewrite with nothing written. The links in the moved " +
+			"node stay as written. Relative ones that worked from the old directory can " +
+			"break from the new one. `okfctl lint` reports them as broken-link.\n\n" +
+			"With a file at <new>, mv exits 1 and changes nothing. It won't move index.md " +
+			"or log.md, nor put a node at either name.",
+		Example: "  $ okfctl bundle init map\n" +
+			"  Initialized OKF bundle in map\n" +
+			"  $ okfctl node new wine/tannin --type Concept --title Tannin --bundle map\n" +
+			"  Created map/wine/tannin.md\n" +
+			"  $ okfctl node new wine/oak --type Concept --title Oak --bundle map\n" +
+			"  Created map/wine/oak.md\n" +
+			"  $ echo 'Oak barrels add [tannin](tannin.md).' >> map/wine/oak.md\n" +
+			"  $ okfctl node mv wine/tannin wine/tannins --dry-run --bundle map\n" +
+			"  move wine/tannin.md -> wine/tannins.md\n" +
+			"    rewrite wine/oak.md: tannin.md -> tannins.md\n" +
+			"  $ okfctl node mv wine/tannin wine/tannins --bundle map\n" +
+			"  Moved wine/tannin.md -> wine/tannins.md (1 inbound link(s) rewritten)\n" +
+			"  $ tail -n 1 map/wine/oak.md\n" +
+			"  Oak barrels add [tannin](tannins.md).",
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			b, err := okf.Load(mvBundle)
@@ -209,16 +275,30 @@ func newNodeCmd() *cobra.Command {
 	var rmDry bool
 	rmC := &cobra.Command{
 		Use:   "rm <path>",
-		Short: "Remove a node and report resulting orphans",
-		Long: "rm deletes a node and reports which nodes are orphaned as a result (left with no " +
-			"inbound links, OKF §6), then maintains log.md and index.md. The .md suffix is " +
-			"optional. It doesn't rewrite links that pointed at the removed node — those become " +
-			"broken links that `okfctl lint` will report, by design. --dry-run reports the plan " +
-			"and writes nothing.",
-		Example: "  # Remove a node and see resulting orphans\n" +
-			"  okfctl node rm concepts/deprecated\n\n" +
-			"  # Preview the removal without touching disk\n" +
-			"  okfctl node rm concepts/deprecated --dry-run",
+		Short: "Delete a node and list the nodes it leaves with no inbound links",
+		Long: "rm deletes the node at <path> from the bundle --bundle names (the current directory " +
+			"by default). The .md suffix is optional. Then it adds \"removed <path>\" to log.md, " +
+			"rebuilds each index.md and prints the orphans: nodes the deleted one linked to that " +
+			"nothing else links to now (OKF §6.4). In the example oak was tannin's only link.\n\n" +
+			"Run it with --dry-run first to print the same list and leave the node in place.\n\n" +
+			"Links that pointed at the deleted node stay as they were. The spec allows a broken " +
+			"link (§6.1, §11.2), and afterward validate and lint pass. Only `okfctl analyze` " +
+			"mentions them, as dangling forward-links. To find them yourself, grep the bundle " +
+			"for the old path first.\n\n" +
+			"rm won't delete index.md or log.md (§3.1); it exits 1.",
+		Example: "  $ okfctl bundle init rack\n" +
+			"  Initialized OKF bundle in rack\n" +
+			"  $ okfctl node new tannin --type Concept --bundle rack\n" +
+			"  Created rack/tannin.md\n" +
+			"  $ okfctl node new oak --type Concept --bundle rack\n" +
+			"  Created rack/oak.md\n" +
+			"  $ echo 'Oak barrels add [tannin](tannin.md).' >> rack/oak.md\n" +
+			"  $ okfctl node rm oak --dry-run --bundle rack\n" +
+			"  remove oak.md\n" +
+			"    orphaned: tannin.md\n" +
+			"  $ okfctl node rm oak --bundle rack\n" +
+			"  Removed oak.md\n" +
+			"    orphaned: tannin.md",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			b, err := okf.Load(rmBundle)
@@ -254,17 +334,33 @@ func newNodeCmd() *cobra.Command {
 	var editBundle string
 	editC := &cobra.Command{
 		Use:   "edit <path>",
-		Short: "Open a node in $EDITOR, then re-validate on return",
-		Long: "edit opens a node in your editor ($OKFCTL_EDITOR, then $VISUAL, then $EDITOR, then " +
-			"vi) and, on return, re-validates the whole bundle against the spec floor (OKF §4.1 / §11). If " +
-			"validation fails, the findings are printed and the command exits non-zero. On success " +
-			"it refreshes the node's `modified` timestamp (`created` is never touched), appends to " +
-			"log.md, and regenerates index.md — this is how `modified` stays honest for the " +
-			"okfctl-mediated edit path. Reserved files (index.md, log.md) can't be edited this way.",
-		Example: "  # Edit a node, then re-validate on save\n" +
-			"  okfctl node edit concepts/revenue\n\n" +
-			"  # Use a specific editor for this edit\n" +
-			"  OKFCTL_EDITOR=\"code --wait\" okfctl node edit concepts/revenue",
+		Short: "Open a node in your editor, then validate and log the change",
+		Long: "edit opens the node at <path> in your editor and waits for it to close. The editor " +
+			"is $OKFCTL_EDITOR, then $VISUAL, then $EDITOR (vi if none is set). The .md suffix " +
+			"is optional. In the example the editor is true: it exits right away.\n\n" +
+			"After the editor closes, edit validates the whole bundle (OKF §11.1) and, if that " +
+			"passes with the node's type still set, sets modified to now, adds \"edited <path>\" " +
+			"to log.md and rebuilds each index.md. created stays as it was. A node changed in " +
+			"your editor without okfctl keeps its old modified date. validate reports that later " +
+			"as git drift.\n\n" +
+			"A failed check prints the findings and exits 1. So does an emptied type (the file " +
+			"is no longer a concept, §3.2). Either way your change stays on disk and nothing " +
+			"else is touched. Fix it and run edit again.\n\n" +
+			"The variable's whole value is taken as one program name. OKFCTL_EDITOR=\"code " +
+			"--wait\" fails. Put the arguments in a short script and name the script there.\n\n" +
+			"edit won't open index.md or log.md.",
+		Example: "  $ okfctl bundle init desk\n" +
+			"  Initialized OKF bundle in desk\n" +
+			"  $ okfctl node new tannin --type Concept --bundle desk\n" +
+			"  Created desk/tannin.md\n" +
+			"  $ OKFCTL_EDITOR=true okfctl node edit tannin --bundle desk\n" +
+			"  tannin.md edited; bundle valid\n" +
+			"  $ okfctl log show desk\n" +
+			"  # Change Log\n" +
+			"\n" +
+			"  ## <DATE>\n" +
+			"  * edited tannin.md\n" +
+			"  * created tannin.md",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p := withMD(args[0])
@@ -343,24 +439,40 @@ func newNodeRefreshCmd() *cobra.Command {
 	var yes bool
 	c := &cobra.Command{
 		Use:   "refresh <bundle> [path]",
-		Short: "Rewrite stale `modified` timestamps to git last-commit (bulk drift fix)",
-		Long: "refresh is the remediation for the git drift that validate reports: it " +
-			"rewrites each drifting node's frontmatter `modified` to its git last-commit " +
-			"day. `created` is immutable and never touched, the Markdown body is preserved " +
-			"verbatim, and log.md/index.md are maintained. With a trailing path it fixes a " +
-			"single node. --dry-run lists what would change and writes nothing. It degrades " +
-			"to a clean no-op outside a git repo, and exits non-zero only on real failure.\n\n" +
-			"A plan dominated by a single commit — the signature of a bulk mechanical " +
-			"commit, whose remediation would collapse real authoring history into the " +
-			"migration date — is REFUSED unless --yes is given. The right fix in that case " +
-			"is to list the mechanical commit in " + okf.DriftIgnoreRevsFile + " (like " +
-			"`git blame --ignore-revs-file`), so drift walks back to the prior real commit.",
-		Example: "  # Fix every drifting node in the bundle\n" +
-			"  okfctl node refresh ./bundles/knowledge\n\n" +
-			"  # Preview the plan without writing anything\n" +
-			"  okfctl node refresh --dry-run ./bundles/knowledge\n\n" +
-			"  # Fix a single node\n" +
-			"  okfctl node refresh ./bundles/knowledge concepts/income-statement.md",
+		Short: "Set modified to each node's last git commit date",
+		Long: "refresh fixes the git drift `okfctl validate` warns about: a node whose modified " +
+			"timestamp disagrees with the day git last committed it. Each drifting node gets that " +
+			"commit day as its modified date and a \"refreshed <path>\" line in log.md. The index " +
+			"is rebuilt once at the end. created and the body don't change. Put a path after the " +
+			"bundle to fix one node.\n\n" +
+			"The example commits a node created today with a January date. validate warns. " +
+			"--dry-run lists the change and writes nothing. After refresh makes it, validate " +
+			"passes. Outside a git repository nothing drifts, and refresh exits 0 having done " +
+			"nothing.\n\n" +
+			"A bulk commit (a migration, a reformat) is the case to watch. Refreshing from it " +
+			"would stamp its date on every node it touched and wipe out their real history. So " +
+			"refresh stops when one commit accounts for half or more of a plan of 10 or more " +
+			"changes: it exits 1 and prints the commit's SHA. Add that SHA to " +
+			okf.DriftIgnoreRevsFile + " in the bundle root (it works like git blame " +
+			"--ignore-revs-file) and drift looks past the commit to the one before. --yes " +
+			"refreshes anyway.",
+		Example: "  $ okfctl bundle init ledger\n" +
+			"  Initialized OKF bundle in ledger\n" +
+			"  $ okfctl node new tannin --type Concept --bundle ledger\n" +
+			"  Created ledger/tannin.md\n" +
+			"  $ git -C ledger init -q && git -C ledger add .\n" +
+			"  $ GIT_COMMITTER_DATE=2026-01-15T12:00:00Z git -C ledger -c user.name=me -c user.email=me@example.com commit -q -m import\n" +
+			"  $ okfctl validate ledger\n" +
+			"  warning tannin.md: modified <DATE> disagrees with git last-commit 2026-01-15; run `okfctl node refresh` to fix it (or `okfctl node edit` per node)\n" +
+			"  1 drift warning(s)\n" +
+			"  $ okfctl node refresh --dry-run ledger\n" +
+			"  would refresh tannin.md: <DATE> -> 2026-01-15\n" +
+			"  1 node(s) would be refreshed (dry run; nothing written)\n" +
+			"  $ okfctl node refresh ledger\n" +
+			"  refreshed tannin.md: <DATE> -> 2026-01-15\n" +
+			"  1 node(s) refreshed\n" +
+			"  $ okfctl validate ledger\n" +
+			"  OK: bundle conforms to the OKF spec floor",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := args[0]
@@ -448,21 +560,41 @@ func newNodePromoteCmd() *cobra.Command {
 	var name string
 	c := &cobra.Command{
 		Use:   "promote <bundle>",
-		Short: "Promote directory-as-concept index.md files to sibling concept files (bulk remediation)",
-		Long: "promote remediates the directory-as-concept pattern validate reports: every " +
-			"non-root index.md that carries frontmatter is moved to a sibling concept file " +
-			"(dir/<basename>.md; basename defaults to the directory name, --name overrides it). " +
-			"The body is preserved verbatim and `created` is immutable, matching node refresh. " +
-			"Inbound links to the old directory-concept are rewritten (both the dir/index.md and " +
-			"dir/ spellings), the real index.md is regenerated with no frontmatter, and log.md is " +
-			"appended. The bundle-root index is left alone. --dry-run lists every move and rewrite " +
-			"and writes nothing.",
-		Example: "  # Promote every directory-as-concept index in the bundle\n" +
-			"  okfctl node promote ./bundles/knowledge\n\n" +
-			"  # Preview the moves and inbound-link rewrites without writing\n" +
-			"  okfctl node promote --dry-run ./bundles/knowledge\n\n" +
-			"  # Use a fixed basename for every promoted concept file\n" +
-			"  okfctl node promote --name overview ./bundles/knowledge",
+		Short: "Turn each subdirectory index.md that holds a concept into its own node",
+		Long: "promote fixes a layout validate fails: a concept written as a subdirectory's " +
+			"index.md. OKF §8 says an index file there has no frontmatter. promote moves each " +
+			"one to a node beside it named after the directory (grape/index.md becomes " +
+			"grape/grape.md), or to the one name --name gives. Links to the old place get " +
+			"rewritten in both spellings, grape/index.md and grape/. One log.md line goes in per " +
+			"move. Then the index is rebuilt and grape/index.md is a generated list again.\n\n" +
+			"--dry-run prints each move and rewrite with nothing written.\n\n" +
+			"Run promote before anything rebuilds the index. index build and the node commands " +
+			"that rebuild when they finish delete a subdirectory index.md, frontmatter and all, " +
+			"once its directory holds no other node. The body and created carry over as they " +
+			"were. The root index.md isn't touched; §8.1 lets it hold bundle metadata. A taken " +
+			"target name makes promote exit 1 with nothing changed.",
+		Annotations: map[string]string{
+			transcriptAnnotation: "<!-- transcript: exit 1 okfctl validate handbook -->",
+		},
+		Example: "  $ okfctl bundle init handbook\n" +
+			"  Initialized OKF bundle in handbook\n" +
+			"  $ mkdir handbook/grape\n" +
+			"  $ printf -- '---\\ntype: Concept\\ntitle: Grape\\n---\\n\\nThe fruit.\\n' > handbook/grape/index.md\n" +
+			"  $ printf -- '---\\ntype: Concept\\ntitle: Tannin\\n---\\n\\nTannin comes from [grape](grape/) skins.\\n' > handbook/tannin.md\n" +
+			"  $ okfctl validate handbook\n" +
+			"  FAIL grape/index.md: index files contain no frontmatter (§8); only the bundle-root index may carry frontmatter (§8.1)\n" +
+			"  okfctl: 1 conformance finding(s)\n" +
+			"  $ okfctl node promote --dry-run handbook\n" +
+			"  would promote grape/index.md -> grape/grape.md\n" +
+			"    rewrite tannin.md: grape/ -> grape/grape.md\n" +
+			"  1 index(es) would be promoted (dry run; nothing written)\n" +
+			"  $ okfctl node promote handbook\n" +
+			"  promoted grape/index.md -> grape/grape.md (1 inbound link(s) rewritten)\n" +
+			"  1 index(es) promoted\n" +
+			"  $ tail -n 1 handbook/tannin.md\n" +
+			"  Tannin comes from [grape](grape/grape.md) skins.\n" +
+			"  $ cd handbook && okfctl validate .\n" +
+			"  OK: bundle conforms to the OKF spec floor",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := args[0]
