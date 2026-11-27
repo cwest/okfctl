@@ -15,6 +15,7 @@
 package okf
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -100,9 +101,9 @@ func TestSubdirDescription_SurvivesThreeBuilds(t *testing.T) {
 
 // TestSubdirDescription_ChildFrontmatterStableAcrossBuilds pins the second path
 // of the same bug class: a description sourced from the CHILD index frontmatter
-// is honored on build #1 AND survives build #2 (previously dropped, because the
-// build rewrites the child index without frontmatter per §8). The preserved
-// on-disk parent description takes over as the stable home.
+// is honored on build #1 AND survives build #2. The curator-authored child
+// index is not okfctl-generated, so the build keeps it (OKF §8: a producer MAY
+// generate index.md, it need not discard what a person wrote) and reports it.
 func TestSubdirDescription_ChildFrontmatterStableAcrossBuilds(t *testing.T) {
 	dir := t.TempDir()
 	_ = Scaffold(dir)
@@ -111,9 +112,19 @@ func TestSubdirDescription_ChildFrontmatterStableAcrossBuilds(t *testing.T) {
 	// A curator-authored child index carrying a description in its frontmatter
 	// (the door §8 leaves open for a first build).
 	childIdx := filepath.Join(dir, "topics", "index.md")
-	if err := os.WriteFile(childIdx,
-		[]byte("---\ndescription: From child frontmatter.\n---\n\n# Topics\n"), 0o644); err != nil {
+	child := "---\ndescription: From child frontmatter.\n---\n\n# Topics\n"
+	if err := os.WriteFile(childIdx, []byte(child), 0o644); err != nil {
 		t.Fatal(err)
+	}
+	wantKept := func(err error, label string) {
+		t.Helper()
+		var hw *HandWrittenIndexError
+		if !errors.As(err, &hw) || strings.Join(hw.Paths, ",") != "topics/index.md" {
+			t.Fatalf("WriteIndex %s: want the hand-written topics/index.md reported, got %v", label, err)
+		}
+		if got := readFileStr(t, childIdx); got != child {
+			t.Fatalf("WriteIndex %s: curator child index must be kept byte for byte; got %q", label, got)
+		}
 	}
 
 	// Build #1 honors the child-frontmatter description on the parent bullet.
@@ -121,9 +132,7 @@ func TestSubdirDescription_ChildFrontmatterStableAcrossBuilds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := WriteIndex(b1); err != nil {
-		t.Fatalf("WriteIndex #1: %v", err)
-	}
+	wantKept(WriteIndex(b1), "#1")
 	root1, err := os.ReadFile(filepath.Join(dir, "index.md"))
 	if err != nil {
 		t.Fatal(err)
@@ -138,9 +147,7 @@ func TestSubdirDescription_ChildFrontmatterStableAcrossBuilds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := WriteIndex(b2); err != nil {
-		t.Fatalf("WriteIndex #2: %v", err)
-	}
+	wantKept(WriteIndex(b2), "#2")
 	root2, err := os.ReadFile(filepath.Join(dir, "index.md"))
 	if err != nil {
 		t.Fatal(err)
