@@ -1,10 +1,11 @@
 # okfctl
 
 > A command-line tool for authoring and maintaining Open Knowledge Format (OKF)
-> bundles. It ships as one static binary for macOS, Linux, and Windows: put it
-> on your PATH and it runs. okfctl does not author
-> the OKF specification; it is a conformant consumer that enforces the spec floor
-> and keeps anything stricter behind an explicit opt-in overlay.
+> bundles. It is pure Go and ships as one static binary with semantic search
+> built in. Search runs offline: okfctl never calls a service or downloads a
+> model. okfctl does not author the OKF specification; it is a conformant
+> consumer that enforces the spec floor and keeps anything stricter behind an
+> explicit opt-in overlay.
 
 okfctl scaffolds a bundle, adds and moves nodes without breaking links, keeps the
 reserved `index.md`/`log.md` files current, checks a corpus against the spec, and
