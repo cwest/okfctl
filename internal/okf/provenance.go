@@ -312,6 +312,55 @@ func (n *Node) SourceCitations() int {
 	return citationCount(n.Body) // §13.1: legacy body fallback for v0.1 docs.
 }
 
+// SourceCitations returns how many distinct provenance entries the node at path
+// carries, using the bundle's declared okf_version. Frontmatter `sources` (§5.1)
+// always count, one per distinct resource. In a bundle that declares 0.2 or
+// earlier, or no version, v0.3 §12.1 allows the Appendix B fallback, so each
+// legacy body `# Citations` entry counts too unless it names a resource that
+// `sources` already lists. That keeps a node part-way through migration (some
+// entries moved to `sources`, the rest still in the body) from reading as
+// thinly cited. A bundle declaring 0.3 or later gets no fallback: only
+// `sources` count. The body list is parsed with migrate's parser
+// (citationEntries, citationSource), so the two agree on what an entry is.
+func (b *Bundle) SourceCitations(path string) int {
+	n := b.Nodes[path]
+	if n == nil {
+		return 0
+	}
+	seen := map[string]bool{}
+	for _, s := range n.Sources() {
+		seen[b.provenanceKey(path, s.Resource)] = true
+	}
+	count := len(seen)
+	if !legacyVersion(b.DeclaredOkfVersion) {
+		return count // §12.1: no # Citations fallback for 0.3+.
+	}
+	for _, entry := range citationEntries(n.Body) {
+		src, ok := citationSource(entry)
+		if !ok {
+			count++ // prose, or several resources: one entry, nothing to dedupe on
+			continue
+		}
+		if k := b.provenanceKey(path, src.Resource); !seen[k] {
+			seen[k] = true
+			count++
+		}
+	}
+	return count
+}
+
+// provenanceKey is the identity of a provenance resource for de-duplication.
+// A value that resolves inside the bundle (§6, §6.2, with the §12.1 root
+// fallback) is keyed by the file it names, so `acidity.md` and
+// `/wine/acidity.md` from wine/ are one source. Anything else (a URL, a §5.1
+// scope descriptor) is keyed by its trimmed text.
+func (b *Bundle) provenanceKey(fromFile, resource string) string {
+	if r := b.ResolvePathField(fromFile, resource); r.Kind == RefBundle {
+		return "bundle:" + r.Path
+	}
+	return "text:" + strings.TrimSpace(resource)
+}
+
 // parseVerification reads a { by, at } mapping into a Verification. v0.3 §5.2:
 // both keys are REQUIRED in an event, and consumers ignore an event that does
 // not have both. ok is false unless `by` is a non-empty actor AND `at` is a
