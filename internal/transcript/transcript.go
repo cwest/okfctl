@@ -486,8 +486,10 @@ var placeholders = map[string]string{
 var tokenRE = regexp.MustCompile(`<[A-Z]+>`)
 
 // matchLine reports whether got matches want, a literal line that may hold
-// placeholders.
+// placeholders. Trailing whitespace on got is ignored: the repo's Markdown
+// hooks strip it from the doc, so a shown line can never carry it.
 func matchLine(want, got string, vars map[string]string) bool {
+	got = strings.TrimRight(got, " \t")
 	if !strings.Contains(want, "<") {
 		return want == got
 	}

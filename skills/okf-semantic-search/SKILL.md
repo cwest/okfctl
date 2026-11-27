@@ -1,7 +1,7 @@
 ---
 name: okf-semantic-search
-description: Use when adding the opt-in semantic layer to an OKF bundle with okfctl — configuring an offline embedding model, building the semantic index with okfctl-search, running semantic search/related, and driving lint --semantic (similar-unlinked, no-semantic-neighbors) with the reasoning behind the calibration defaults.
-version: 1.0.0
+description: Use when adding similarity search and similarity lint to an OKF bundle with okfctl. Covers building the index with okfctl-search, pointing it at a local Model2Vec model, search and related, and lint --semantic (similar-unlinked, no-semantic-neighbors) with how to tune its thresholds.
+version: 2.0.0
 author: okfctl
 license: Apache-2.0
 metadata:
@@ -11,229 +11,200 @@ metadata:
     sharing: shareable
 ---
 
-# The opt-in semantic layer with okfctl-search
+# Similarity search and lint with okfctl-search
 
 ## Overview
 
-Structural checks ask *"is anything linked to this?"*. The **semantic** layer
-asks *"is anything even about the same thing?"* — the curation question the graph
-alone can't answer. It has two parts:
+Two nodes say nearly the same thing and don't link each other. The Kubernetes
+node is off topic. Build the index, then lint with `--semantic`:
 
-- **`okfctl-search`** — a bundled plugin that embeds concept nodes into a local
-  index (`.okfctl/index.db`) and does semantic search over them, fully offline.
-- **`lint --semantic`** — core `lint` extended with two similarity-driven checks
-  (`similar-unlinked`, `no-semantic-neighbors`) that *read* that index.
+<!-- transcript: exit 1 okfctl lint ./mykb --semantic -->
+```text
+$ okfctl bundle init mykb
+Initialized OKF bundle in mykb
+$ okfctl node new wine/tannin.md --type Reference --title Tannin --bundle mykb
+Created mykb/wine/tannin.md
+$ okfctl node new wine/tannins.md --type Reference --title Tannins --bundle mykb
+Created mykb/wine/tannins.md
+$ okfctl node new ops/kubernetes.md --type Reference --title Kubernetes --bundle mykb
+Created mykb/ops/kubernetes.md
+$ echo 'Tannins are polyphenols from grape skins and oak that dry the palate and give red wine its grip.' >> mykb/wine/tannin.md
+$ echo 'Tannins are polyphenols from grape skins and oak barrels that dry the palate and give red wine grip.' >> mykb/wine/tannins.md
+$ echo 'Kubernetes schedules containers across a cluster of nodes.' >> mykb/ops/kubernetes.md
+$ okfctl lint ./mykb --semantic
+okfctl: no semantic index at mykb/.okfctl/index.db: run 'okfctl-search index build ./mykb' first
+$ okfctl-search index build mykb
+indexed 3 node(s) with hash-test-embedder (dim 64) -> mykb/.okfctl/index.db
+$ okfctl lint mykb --semantic --json
+[
+  {
+    "check": "missing-xref",
+    "path": "wine/tannin.md",
+    "message": "missing-xref: wine/tannin.md mentions \"Tannins\" but does not link to wine/tannins.md"
+  },
+  {
+    "check": "no-semantic-neighbors",
+    "path": "ops/kubernetes.md",
+    "message": "no semantically close node (best neighbor 0.00, below 0.20) — dead concept, or missing context?"
+  },
+  {
+    "check": "similar-unlinked",
+    "path": "wine/tannin.md",
+    "message": "0.83 semantically similar to wine/tannins.md with no link between them — missing cross-reference?"
+  }
+]
+```
 
-**This is the only okfctl path that needs a model.** Building the index needs an
-embedding model; *reading* it (which is all `lint --semantic` does) needs none.
+`okfctl-search` is a separate plugin binary that ships beside `okfctl`. It
+embeds each concept node and stores the vectors in `.okfctl/index.db`.
+`lint --semantic` only reads that file (that's why linting needs no model).
+With no index it exits 1 and names the command to run. It never skips the
+check silently. The structural checks still run (that's where `missing-xref`
+came from).
+
+The run above used the default `hash` embedder. It needs no model. It compares
+word overlap and ignores meaning. The 0.83 here says the two nodes use the
+same vocabulary. For findings you'll act on, build with `--embedder model2vec`
+(below).
+
+Scripts and agents should read lint output with `--json`. The text form of
+the two semantic findings leaves out the node path (the JSON form has it).
 
 ## When to Use
 
-- You want to find missing cross-references between nodes that read alike but
-  aren't linked, or nodes with no semantically related kin.
-- You want semantic (meaning-based) search/`related` over a bundle.
-- You are retuning the similarity/isolation thresholds for your own corpus.
+- You want to find nodes on one topic that don't link each other.
+- You want to find nodes that nothing else in the bundle is close to.
+- You want search or nearest-neighbor lookups by meaning.
+- The default thresholds misfire on your corpus and you need to retune them.
 
-Don't use for: structural curation (orphans, coverage gaps) — that needs no model
-and lives in `okf-curation-health`; authoring — see `okf-authoring`.
+Orphans and broken links need no index (neither do coverage gaps). The checks
+for all three live in `okf-curation-health`.
 
-## The two embedders
+## Point okfctl at a local model
 
-`okfctl-search` ships two embedders:
+`--embedder model2vec` loads a [Model2Vec](https://github.com/MinishLab/model2vec)
+static embedding model in-process. okfctl doesn't ship model weights and never
+downloads one. You download a model yourself, for example
+[`minishlab/potion-base-8M`](https://huggingface.co/minishlab/potion-base-8M),
+and point okfctl at its directory. It has to hold `config.json` and
+`model.safetensors`, plus `tokenizer.json` (or `vocab.txt`).
 
-- **`--embedder hash`** (default) — offline, dependency-free, deterministic, and
-  needs no model. But it is *lexical*: it matches shared tokens, not meaning. Fine
-  for a smoke test; **do not act on its `similar-unlinked` findings** — they mean
-  "shares vocabulary," not "related subject."
-- **`--embedder model2vec`** — a genuine static embedding model run in pure Go (no
-  CGO, no Python, no ONNX). Use this if you intend to act on semantic findings.
+Set the path in okfctl's config. To override it for one run, pass `--model-path`:
 
-## 1. Configure a model (model2vec)
-
-okfctl **never downloads a model at runtime.** Point it at a model directory you
-already have on disk. A model2vec directory needs the standard layout:
-`config.json`, `model.safetensors`, and `tokenizer.json` (or `vocab.txt`). One
-common source is a Hugging Face cache snapshot, e.g. `minishlab/potion-base-8M`.
-
-Set the path once (persisted in okfctl's JSON config), or override per-invocation:
-
-```sh
-# once — persisted in config
-$ okfctl config set model_path /path/to/potion-base-8M
+<!-- transcript: skip needs a downloaded Model2Vec model that the test environment lacks -->
+```text
+$ okfctl config set model_path ~/models/potion-base-8M
 $ okfctl config get model_path
-/path/to/potion-base-8M
-$ okfctl config list
-model_path = /path/to/potion-base-8M
-
-# or per-invocation, overriding the config
-$ okfctl-search --embedder model2vec --model-path /path/to/potion-base-8M --semantic "…" ./mykb
+/Users/you/models/potion-base-8M
+$ okfctl-search --embedder model2vec --model-path ~/models/potion-base-8M index build mykb
+indexed 3 node(s) with minishlab/potion-base-8M@bf8b056651a2 (dim 256) -> mykb/.okfctl/index.db
+$ okfctl-search --semantic tannin mykb
+okfctl-search: index model does not match the active embedder; rebuild with 'okfctl-search index build'
 ```
 
-If no model can be resolved, `model2vec` fails with an actionable error rather
-than silently falling back to the `hash` embedder — a query answered by the wrong
-embedder is worse than one that refuses to run:
+The index remembers which model made it. The last query above used the default
+`hash` embedder against a `model2vec` index and failed. Rebuild to switch.
 
-```sh
+If there's no model at that path, the build fails. It doesn't fall back to `hash`:
+
+<!-- transcript: exit 1 okfctl-search --embedder model2vec --model-path /nonexistent/model index build mykb -->
+```text
 $ okfctl-search --embedder model2vec --model-path /nonexistent/model index build mykb
 okfctl-search: loading model2vec model from /nonexistent/model: open /nonexistent/model/config.json: no such file or directory
 ```
 
-## 2. Build the index
+With potion-base-8M on the bundle above, the near-duplicate pair scores 0.99
+(up from 0.83) and the Kubernetes node's best neighbor is 0.11 (up from
+0.00).
 
-```sh
-$ okfctl-search --embedder model2vec index build mykb
-indexed 11 node(s) with minishlab/potion-base-8M@bf8b056651a2 (dim 256) -> mykb/.okfctl/index.db
-```
+## Build and rebuild the index
 
-The index is **content-hash keyed**: an unchanged node is not re-embedded, and
-the build is deterministic for a fixed embedder. The index records the model it
-was built with; switching embedders requires a rebuild.
+`index build` keys each vector by a hash of the node's content and skips nodes
+that haven't changed (one embedder builds the same index each time).
 
-### The index is a derived artifact — never commit it
+The index comes from the nodes plus one model revision. Don't commit it.
+okfctl doesn't add it to `.gitignore` for you:
 
-`.okfctl/index.db` is a **derived artifact keyed to a specific model revision.**
-It is not source of truth and it goes stale silently as nodes change. Add it to
-your bundle's `.gitignore` (okfctl does not do this for you):
-
-```sh
+```text
 $ echo '.okfctl/' >> mykb/.gitignore
 ```
 
-Committing it invites two failure modes: a stale index that no longer matches the
-nodes, and an index built under a different model that another checkout can't use.
-Rebuild it locally; don't track it.
+Each node added since the last build shows up as one finding. Partial indexes
+never read as clean:
 
-## 3. Semantic search and related
-
-```sh
-$ okfctl-search --embedder model2vec --semantic "tannin structure" mykb
-0.7757	concepts/tannin.md
-0.4079	concepts/mouthfeel.md
-0.3643	concepts/wine.md
-0.2197	concepts/aging.md
-0.1333	concepts/balance.md
-
-$ okfctl-search --embedder model2vec related concepts/tannin.md mykb
-0.5231	concepts/aging.md
-0.5220	concepts/mouthfeel.md
-0.4818	concepts/wine.md
-...
+```text
+$ okfctl node new wine/body.md --type Reference --title Body --bundle mykb
+Created mykb/wine/body.md
+$ okfctl lint mykb --semantic | grep absent
+1 node(s) absent from the semantic index and not checked (wine/body.md) — rerun 'okfctl-search index build'
 ```
 
-An index built under one embedder is refused by another — rebuild to switch:
+Edits to a node's text don't show up this way. Lint reads the stored vectors.
+After you edit nodes, rebuild, then trust the findings.
 
-```sh
-$ okfctl-search --semantic "caching" mykb          # default hash, index built with model2vec
-okfctl-search: index model does not match the active embedder; rebuild with 'okfctl-search index build'
+## Search and related
+
+```text
+$ okfctl-search index build mykb
+indexed 4 node(s) with hash-test-embedder (dim 64) -> mykb/.okfctl/index.db
+$ okfctl-search related wine/tannin.md mykb
+0.8276	wine/tannins.md
+0.2491	wine/body.md
+0.0000	ops/kubernetes.md
 ```
 
-## 4. lint --semantic
+`okfctl-search --semantic "query" <dir>` ranks nodes against a query, top 5 by
+default (`--k`). `related <path> <dir>` lists one node's nearest neighbors, the
+same data `lint --semantic` uses. Each takes `--path`, `--type`, and `--tag`
+filters. For lexical or link-graph search with no index, use the main binary's
+`okfctl search` (see `okfctl search --help`).
 
-`lint --semantic` adds two checks by reading the index. **Core only reads the
-index, so no embedding model is needed to lint** — only to build.
+## The two semantic findings
 
-```sh
-$ okfctl-search --embedder model2vec index build mykb   # build (needs a model)
-$ okfctl lint mykb --semantic                            # read (needs none)
-```
-
-The two semantic findings:
-
-| finding | fires when | reads as |
+| finding | fires when | default |
 |---|---|---|
-| `similar-unlinked` | two nodes score ≥ `--similarity-threshold` (default `0.80`) with **no link in either direction** | *"these cover the same ground and don't reference each other — missing cross-reference?"* |
-| `no-semantic-neighbors` | a node's **best** neighbor falls below `--isolation-floor` (default `0.20`) | *"nothing in the corpus is close to this — dead concept, or missing context?"* |
+| `similar-unlinked` | two nodes score at or above `--similarity-threshold` and neither links the other | `0.80` |
+| `no-semantic-neighbors` | a node's best neighbor scores below `--isolation-floor` | `0.20` |
 
-Real output (two near-identical unlinked nodes, and an isolated node):
+Link the pair in either direction and `similar-unlinked` clears on the next lint.
+Lint reads links from the bundle itself (the index stores only vectors).
 
-```sh
-$ okfctl lint mykb --semantic
-0.94 semantically similar to b.md with no link between them — missing cross-reference?
-no semantically close node (best neighbor 0.17, below 0.20) — dead concept, or missing context?
-...
-```
+## Tune the thresholds
 
-Add a link between the similar pair (in either direction) and the
-`similar-unlinked` finding clears — the check reads the live graph, not a cached
-answer.
+The isolation floor started at 0.30. It came down to 0.20 after a test of
+potion-base-8M on a few wine nodes, where same-topic nodes in different words
+scored 0.27 to 0.33. One Kubernetes node dropped among them scored 0.13. The old
+floor flagged good wine nodes as dead concepts, but 0.20 flags only the
+outlier.
 
-### Behaviors to rely on
-
-- **Opt-in.** Without `--semantic`, output is unchanged and the index is never
-  read.
-- **A missing index is an ERROR, not a silent skip.** It names the exact fix so a
-  CI job can never believe it ran semantic checks when it didn't:
-
-  ```sh
-  $ okfctl lint mykb --semantic          # no index built yet
-  okfctl: no semantic index at mykb/.okfctl/index.db: run 'okfctl-search index build mykb' first
-  ```
-
-- **Index drift is surfaced.** Nodes added since the last `index build` produce
-  one finding naming them, so a partial pass never reads as clean:
-
-  ```sh
-  1 node(s) absent from the semantic index and not checked (concepts/acidity.md) — rerun 'okfctl-search index build'
-  ```
-
-## Calibrating the thresholds for your corpus
-
-The defaults are `--similarity-threshold 0.80` and `--isolation-floor 0.20`. The
-isolation floor was **lowered from 0.30 to 0.20 on purpose**, and you need the
-reasoning, not just the number, to retune for your own corpus:
-
-- With a mean-pooled static model (e.g. potion-base-8M), **absolute similarity
-  scores are compressed** — the ranking is reliable, the magnitudes are not.
-- On a small topical corpus, same-topic-different-wording nodes score roughly
-  **0.27–0.33**, while a genuinely off-topic node (say a Kubernetes concept
-  dropped among wine notes) scores around **0.13**.
-- A 0.30 floor therefore flags legitimately on-topic nodes as "dead concepts" —
-  a false positive that trains users to ignore the check. **0.20** separates the
-  true outlier from merely-loosely-related kin.
-
-So: the floor targets the *clear outlier*, not a semantic ideal. If your corpus
-and model produce different magnitudes (check with `okfctl-search related` on a
-few known-related and known-unrelated nodes), retune `--isolation-floor` to sit
-between your "on-topic but loosely related" band and your "genuinely off-topic"
-scores. Likewise, `similar-unlinked` at 0.80 with `hash` means "shares
-vocabulary"; only with `model2vec` does it mean genuinely related subject matter.
+With a mean-pooled static model like potion-base-8M, scores bunch up and the
+order of results is steadier than the numbers themselves. To
+pick a threshold, run `okfctl-search related` on a few pairs you know are
+related plus a few you know aren't, then put `--isolation-floor` between those
+two bands. Another model or corpus will want different numbers.
 
 ## Common Pitfalls
 
-1. **Running `lint --semantic` with no index.** It errors (naming `okfctl-search
-   index build`) rather than silently degrading to structural-only. Build the
-   index first; don't interpret the error as "no findings."
-
-2. **Committing `.okfctl/index.db`.** It's a gitignored-by-convention derived
-   artifact keyed to a model revision. It goes stale silently and won't match
-   another checkout's model. Gitignore it and rebuild locally.
-
-3. **Acting on `hash`-embedder findings.** The default embedder is lexical.
-   `similar-unlinked` under `hash` means "shares tokens," not "related." Build
-   with `--embedder model2vec` before trusting semantic findings.
-
-4. **Expecting okfctl to download a model.** It never fetches at runtime. Point
-   `model_path` at a directory already on disk with the model2vec layout, or the
-   command fails with an actionable error.
-
-5. **Copying the 0.20 floor blindly to a different model.** The floor is
-   calibrated to a specific model's score distribution. A different model (or
-   corpus) shifts the magnitudes — recalibrate using `related` scores on
-   known-related vs. known-unrelated node pairs.
-
-6. **Assuming an edited node re-triggers `similar-unlinked` without a rebuild.**
-   `lint --semantic` reads stored vectors. Editing a node's prose changes nothing
-   until you `okfctl-search index build` again; only added/removed node *paths*
-   surface as index drift.
+1. The missing-index error doesn't mean "no findings." It exits 1 (build the
+   index first).
+2. `.okfctl/index.db` doesn't belong in git. It goes stale as nodes change and
+   is tied to one model revision. Add `.okfctl/` to `.gitignore`.
+3. `hash` findings only mean the words overlap. Rebuild with
+   `--embedder model2vec`, then decide what to link or delete.
+4. okfctl never downloads a model. Download one yourself and set `model_path`.
+5. 0.20 was measured on potion-base-8M. On another model, measure with
+   `related` and retune.
+6. Lint after an edit reads the old vectors until you rebuild. Only added or
+   removed paths show up as drift.
+7. The text lines for semantic findings have no path. Pass `--json`.
 
 ## Verification Checklist
 
-- [ ] `okfctl config get model_path` resolves to a real model2vec directory
-- [ ] `okfctl-search --embedder model2vec index build <dir>` reports the expected
-      model + node count
+- [ ] `okfctl config get model_path` prints a Model2Vec directory that exists
+- [ ] `okfctl-search --embedder model2vec index build <dir>` names the model
+      and node count you wanted
 - [ ] `.okfctl/` is in the bundle's `.gitignore`
-- [ ] `okfctl lint <dir> --semantic` runs (no missing-index error) and findings
-      were reviewed
-- [ ] Thresholds retuned against this corpus's actual `related` scores if the
-      defaults misfire
-- [ ] Index rebuilt after node content changes before trusting semantic findings
+- [ ] `okfctl lint <dir> --semantic --json` finishes with no missing-index
+      error, with each finding reviewed
+- [ ] The index was rebuilt after the last content edit
+- [ ] Thresholds were checked against `related` scores on this corpus
