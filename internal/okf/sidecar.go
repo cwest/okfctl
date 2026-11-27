@@ -23,7 +23,7 @@ import (
 // readOkfSidecar parses the bundle-root .okf sidecar into a map of its top-level
 // scalar keys. The .okf is a small flat YAML document (e.g.
 // "okf_version: 0.2\ntemplates: ../tpl"); this is the generalized reader that
-// both readOkfVersion (§12) and readTemplatesRef (§9.2) build on, so the sidecar
+// both readOkfVersion (OKF §12) and readTemplatesRef (PRD §9.2) build on, so the sidecar
 // is no longer okf_version-only. A missing or unreadable file yields an empty
 // map — the sidecar is always optional, and Load stays lenient. Keys and values
 // are trimmed; blank lines and lines with no colon are skipped. The last
@@ -56,7 +56,7 @@ func readOkfSidecar(root string) map[string]string {
 }
 
 // readTemplatesRef returns the bundle-relative path declared by the .okf
-// sidecar's `templates` key (§9.2), or the empty string when the key — or the
+// sidecar's `templates` key (PRD §9.2), or the empty string when the key — or the
 // sidecar — is absent. An empty string is the silent direction of the feature:
 // no referenced template bundle. The path is returned verbatim (bundle-relative,
 // e.g. "../tpl"); the resolver joins it to the bundle root.

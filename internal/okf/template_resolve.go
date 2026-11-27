@@ -33,7 +33,7 @@ type ResolvedTemplates struct {
 	ByType map[string]Template
 	// Shadowed holds the referenced templates that a local template overrode,
 	// sorted by target type. It lets `template list` flag a referenced entry a
-	// local one supersedes (§9.4), rather than silently dropping it.
+	// local one supersedes (PRD §9.4), rather than silently dropping it.
 	Shadowed []Template
 }
 

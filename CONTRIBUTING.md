@@ -15,14 +15,14 @@ Two failure directions matter equally:
 
 - **Under-conformance**—emitting or accepting something the spec forbids.
 - **Over-conformance**—rejecting something the spec *permits*. The spec leaves
-  `type` values open (§7.4) and tolerates unknown keys (§11), so an unknown
+  `type` values open (§4.1) and tolerates unknown keys (§4.1, §11.2), so an unknown
   `type` or a future frontmatter key MUST pass `validate`. Inventing a closed
   vocabulary is a spec violation in the strict direction—and the easier one to
   ship by accident, because it looks like rigor. `okfctl` enforces the spec
   *floor* for everyone and keeps anything stricter behind an explicit opt-in
-  overlay (`--templates`, §9.4).
+  overlay (`--templates`, PRD §9.4).
 
-When a behavior is spec-mandated, cite the section (`§6`, `§7.4`, `§9.4`, `§11`)
+When a behavior is spec-mandated, cite the section (`§4.1`, `§6`, `§11`)
 in the code comment, the test name, and the PR body. If a section is genuinely
 ambiguous, open an issue rather than resolving it silently in code.
 
