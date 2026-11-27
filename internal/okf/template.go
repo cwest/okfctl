@@ -84,7 +84,7 @@ type DriftFinding struct {
 // Output is deterministic (sorted by node path, then finding order).
 //
 // This is the single-bundle read: only the consumer's own local Type Template
-// nodes govern. For the referenced-bundle overlay (§9.2) use TemplateDriftWith
+// nodes govern. For the referenced-bundle overlay (PRD §9.2) use TemplateDriftWith
 // with a resolved template map.
 func TemplateDrift(b *Bundle) []DriftFinding {
 	return TemplateDriftWith(b, Templates(b))
@@ -170,7 +170,7 @@ func sortedNodePaths(b *Bundle) []string {
 //   - any other dotted path `a.b.c` → literal nested-map traversal.
 //   - a plain key → the original flat non-blank frontmatter lookup.
 //
-// The overlay stays warning-class and adds no required vocabulary (§7.4, §11);
+// The overlay stays warning-class and adds no required vocabulary (PRD §7.4, OKF §11);
 // it only teaches the existing required_fields check to read v0.2 provenance.
 func hasNonEmptyField(n *Node, key string) bool {
 	switch key {

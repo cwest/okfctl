@@ -81,7 +81,7 @@ const (
 const StatusStable = "stable"
 
 // LifecycleStatuses is the set of status values that §5.4 defines. Absent ⇒
-// stable. Unlike the open `type` vocabulary (§7.4), §5.4 names these values,
+// stable. Unlike the open `type` vocabulary (PRD §7.4), OKF §5.4 names these values,
 // and it also DEFINES what any other value means: the concept is not stable,
 // and filters to current knowledge exclude it. So a value outside this set is
 // permitted and keeps that meaning (§11.2 rule 4: keep the value, MAY warn).
