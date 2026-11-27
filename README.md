@@ -5,16 +5,14 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/cwest/okfctl.svg)](https://pkg.go.dev/github.com/cwest/okfctl)
 [![License](https://img.shields.io/github/license/cwest/okfctl)](LICENSE)
 
-Markdown knowledge bases don't rot because people stop writing. They rot because
-nothing keeps the structure honest—links break on a rename, the index drifts
-from the tree, provenance goes stale, and no one notices until the corpus is
-already a maze.
-
-`okfctl` is the tool that keeps it honest. It authors and maintains
+`okfctl` is a command-line tool for people who keep a knowledge base in
+Markdown and want it to stay correct as it grows. It writes and checks
 [Open Knowledge Format](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md)
-(OKF) bundles—a curated tree of Markdown "nodes" with a link graph, reserved
-`index.md`/`log.md` files, and frontmatter provenance—and it checks the whole
-thing against the spec so drift surfaces as a finding instead of a surprise.
+(OKF) bundles: folders of Markdown files ("nodes") that link to each other and
+record where their facts came from in YAML frontmatter. Rename a node and okfctl
+rewrites every link that pointed at it. Put `okfctl lint --strict` in CI and a
+node that names another without linking to it fails the build, as the run below
+shows.
 
 **Website:** [okfctl.dev](https://okfctl.dev) &nbsp;•&nbsp;
 **Docs:** [`docs/`](docs/README.md) &nbsp;•&nbsp;
@@ -22,35 +20,47 @@ thing against the spec so drift surfaces as a finding instead of a surprise.
 **Security:** [SECURITY.md](SECURITY.md) &nbsp;•&nbsp;
 **Conduct:** [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 
-## What it does
+## See it catch something
 
-Use `okfctl` to scaffold a bundle, add and move nodes without breaking links,
-keep the reserved index and change log current, check a corpus against the spec,
-and inspect its health and link graph. It's a single static Go binary, so it runs
-anywhere without a toolchain, an interpreter, or a model download.
+Make a bundle with two nodes. Have one of them mention the other without
+linking to it:
+
+```text
+$ okfctl bundle init mykb
+Initialized OKF bundle in mykb
+$ okfctl node new concepts/tannin.md --type Reference --title "Tannin" --bundle mykb
+Created mykb/concepts/tannin.md
+$ okfctl node new concepts/oak.md --type Reference --title "Oak" --bundle mykb
+Created mykb/concepts/oak.md
+$ echo 'Oak barrels add tannin to red wine.' >> mykb/concepts/oak.md
+$ okfctl validate mykb
+OK: bundle conforms to the OKF spec floor
+$ okfctl lint mykb
+missing-xref: concepts/oak.md mentions "Tannin" but does not link to concepts/tannin.md
+1 lint finding(s)
+$ okfctl lint --strict mykb
+missing-xref: concepts/oak.md mentions "Tannin" but does not link to concepts/tannin.md
+1 lint finding(s)
+okfctl: 1 lint finding(s)
+```
+
+`validate` passes. The bundle meets the spec's floor: all the frontmatter
+parses, and the reserved `index.md` and `log.md` files are well formed (OKF
+§11.1). `lint` reads past the floor and finds the oak node talking about tannin
+with no link. By default it exits 0. With `--strict` it exits 1, and that is
+the line you put in CI.
+
+Notice you never ran an index command. `node new` rebuilt both `index.md` files
+and logged each node in `log.md` as it went, which is why
+`okfctl index check mykb` prints `OK: index.md is current`.
 
 ![okfctl quickstart: bundle init through validate and bundle info](docs/assets/quickstart.gif)
 
-## 60-second quickstart
-
-Starting from an empty directory, scaffold a bundle, add a node, build the
-index, and validate—a full cold start:
-
-```sh
-okfctl bundle init mykb                                              # scaffold a conformant bundle
-okfctl node new concepts/tannin.md --type Reference --title "Tannin" --bundle mykb
-okfctl node list --bundle mykb                                       # see the node you just made
-okfctl index build mykb                                              # generate the reserved index.md files
-okfctl index check mykb                                              # confirm the index is current
-okfctl log append mykb --message "added tannin node"                # record the change
-okfctl validate mykb                                                 # check against the OKF spec floor
-okfctl bundle info mykb                                              # nodes: 1, reserved: 3, okf_version: 0.3 (declared in index.md)
-```
-
-From here, `okfctl search "tannin" mykb` finds nodes lexically, `okfctl graph
-export mykb` dumps the link graph, and `okfctl analyze mykb` reports where the
-bundle is weak. Every command explains itself with `okfctl <cmd> --help`,
-including a runnable example.
+okfctl ships as one static Go binary. It needs no toolchain, interpreter, or
+model download to run. Try `okfctl search "tannin" mykb` to find nodes by text,
+`okfctl graph export mykb` to dump the link graph, or `okfctl analyze mykb` to
+see where the bundle is thin. Each `okfctl <cmd> --help` ends with an example
+you can paste.
 
 ## Install
 
