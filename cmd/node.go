@@ -54,9 +54,9 @@ func newNodeCmd() *cobra.Command {
 			if typ == "" {
 				return fmt.Errorf("--type is required (OKF §4.1 / §11: every node needs a non-empty type)")
 			}
-			// If a template governs this type, scaffold from it (§9.3); otherwise
+			// If a template governs this type, scaffold from it (PRD §9.3); otherwise
 			// create a plain conformant node (unchanged path). Templates resolve
-			// through the §9.2 reference overlay: a referenced bundle folded in,
+			// through the PRD §9.2 reference overlay: a referenced bundle folded in,
 			// local Type Template nodes overlaid (local wins). A broken reference
 			// is a hard error — the author asked for the overlay via the key/flag.
 			created := ""

@@ -289,7 +289,7 @@ func reservedNode(rel string, src []byte) *Node {
 // okf_version key. Load does not call it: the bundle-root index.md declaration
 // wins (§8.1, §12) and the sidecar is only the fallback (readDeclaredVersion).
 // It reads through the generalized sidecar parser (readOkfSidecar) so a bundle
-// carrying other sidecar keys (e.g. a §9.2 `templates` reference) does not
+// carrying other sidecar keys (e.g. a PRD §9.2 `templates` reference) does not
 // change the version read.
 func readOkfVersion(root string) string {
 	if v := sidecarDeclaredVersion(root); v != "" {

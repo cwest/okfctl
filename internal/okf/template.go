@@ -80,7 +80,7 @@ type DriftFinding struct {
 // TemplateDrift reports where nodes diverge from the template governing their
 // type (PRD §9.4): a required field missing/empty, or a body_section heading
 // absent. recommended_fields are advisory and never reported here. A node whose
-// type has no governing template never drifts (unknown types are fine, §7.4).
+// type has no governing template never drifts (unknown types are fine, PRD §7.4).
 // Output is deterministic (sorted by node path, then finding order).
 //
 // This is the single-bundle read: only the consumer's own local Type Template
@@ -91,7 +91,7 @@ func TemplateDrift(b *Bundle) []DriftFinding {
 }
 
 // TemplateDriftWith reports template drift against an explicit template map,
-// letting the caller supply the §9.2-resolved set (referenced bundle folded in,
+// letting the caller supply the PRD §9.2-resolved set (referenced bundle folded in,
 // local overlaid) instead of only the consumer's local Type Template nodes. The
 // drift semantics are identical to TemplateDrift; only the governing template
 // source differs. A node whose type is itself `Type Template` is never governed

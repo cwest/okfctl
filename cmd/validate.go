@@ -80,7 +80,7 @@ func newValidateCmd() *cobra.Command {
 
 			var drift []okf.DriftFinding
 			if templates {
-				// Resolve the effective templates (§9.2): a referenced bundle
+				// Resolve the effective templates (PRD §9.2): a referenced bundle
 				// (--templates-from, or the .okf `templates:` key) folded in,
 				// local Type Template nodes overlaid. A broken reference is a
 				// hard error here — the overlay was explicitly requested.
