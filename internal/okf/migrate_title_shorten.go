@@ -54,6 +54,9 @@ type SourceRetitleEdit struct {
 	Old      string `json:"old"`
 	Title    string `json:"title,omitempty"`
 	Footnote string `json:"footnote"`
+	// Moved marks a title annotated beyond its entry's text: the plan appends
+	// the annotation to the footnote definition before the title changes.
+	Moved bool `json:"moved,omitempty"`
 }
 
 // retitleCandidate is an entry whose existing source's title holds the
