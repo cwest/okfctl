@@ -18,7 +18,7 @@ does **not** create any concept nodes—a fresh bundle has zero nodes.
 okfctl node new concepts/tannin.md --type Reference --title "Tannin" --bundle mykb
 ```
 
-`--type` is required (a non-empty `type` is the OKF spec floor, §7). When a type
+`--type` is required (a non-empty `type` is the OKF spec floor, §4.1). When a type
 template governs `--type`, the node is scaffolded from it: required fields are
 stubbed with `TODO` placeholders, recommended fields stubbed empty, and the
 template's body sections laid down as empty `##` headings.

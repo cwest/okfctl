@@ -16,11 +16,11 @@ or `undeclared` when the bundle names no version.
 ## Node
 
 A **node** is a single concept file: Markdown with a YAML frontmatter block. The
-one floor requirement is a non-empty `type` (OKF §7). Its path is its identity,
+one floor requirement is a non-empty `type` (OKF §4.1). Its path is its identity,
 so moving a node is a graph operation—`okfctl node mv` rewrites every inbound
 link rather than leaving them dangling.
 
-`type` values are **open** (§7.4): `Reference`, `Concept`, or any other string
+`type` values are **open** (§4.1): `Reference`, `Concept`, or any other string
 all pass `validate`. The tool doesn't invent a taxonomy.
 
 ## Reserved files: `index.md` and `log.md`
@@ -50,9 +50,9 @@ dumps the graph (JSON or Graphviz DOT); `okfctl serve` renders it interactively;
 okfctl enforces the **spec floor** for everyone: the minimum every conformant
 bundle must satisfy. Anything stricter—a team's required frontmatter fields or
 body sections—lives behind an explicit opt-in **overlay**: type-templates,
-enabled with `validate --templates` (§9.4). The overlay never leaks into the
+enabled with `validate --templates`. The overlay never leaks into the
 floor. An unknown `type` value and an unrecognized future frontmatter key both
-still pass the floor; rejecting them would be over-conformance, itself a spec
+still pass the floor (§11.2); rejecting them would be over-conformance, itself a spec
 violation.
 
 Templates are authored as ordinary OKF nodes (`type: Type Template`); nothing

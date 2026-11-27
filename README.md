@@ -85,8 +85,8 @@ OKF is a specification `okfctl` consumes; it doesn't author it. The
 [Open Knowledge Format spec](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md)
 decides behavior, and where it does, it wins. `okfctl` enforces the spec *floor*
 for everyone and keeps anything stricter behind an explicit opt-in overlay
-(`--templates`, §9.4), so an unknown `type` or a future frontmatter key still
-passes `validate`.
+(`--templates`), so an unknown `type` or a future frontmatter key still
+passes `validate` (OKF §11.2).
 
 ## Commands
 

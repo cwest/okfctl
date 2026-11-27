@@ -32,15 +32,15 @@ func newNodeCmd() *cobra.Command {
 	var typ, title, dir, templatesFrom string
 	newC := &cobra.Command{
 		Use:   "new <path>",
-		Short: "Create a conformant node (type required, PRD §7)",
+		Short: "Create a conformant node (type required, OKF §4.1)",
 		Long: "new creates a conformant concept node at <path>. A non-empty --type is REQUIRED: " +
-			"type is the one managed field (PRD §7 — a node must carry a non-empty type; the value " +
-			"itself is open per PRD §7.4, so any string is accepted). The presence requirement is the " +
+			"type is the one managed field (a node must carry a non-empty type; the value " +
+			"itself is open per OKF §4.1, so any string is accepted). The presence requirement is the " +
 			"spec floor (OKF §4.1 / §11: every frontmatter block carries a non-empty type). If a type " +
 			"template governs the " +
 			"given type, the node is scaffolded from it (PRD §9.3); the template may be local or " +
 			"referenced from a separate bundle (the .okf `templates:` key, or --templates-from which " +
-			"overrides it, §9.2). Otherwise a plain conformant " +
+			"overrides it, PRD §9.2). Otherwise a plain conformant " +
 			"node is written. Creation is recorded in log.md and index.md is regenerated, so a new " +
 			"node is never an audit gap. It doesn't open an editor — use `okfctl node edit` for that.",
 		Example: "  # Create a node of an open type\n" +
@@ -92,7 +92,7 @@ func newNodeCmd() *cobra.Command {
 			return nil
 		},
 	}
-	newC.Flags().StringVar(&typ, "type", "", "type to assign the new node (required; any non-empty value, PRD §7.4)")
+	newC.Flags().StringVar(&typ, "type", "", "type to assign the new node (required; any non-empty value, OKF §4.1)")
 	newC.Flags().StringVar(&title, "title", "", "title for the new node (omitted from frontmatter when empty)")
 	newC.Flags().StringVar(&dir, "bundle", ".", "bundle directory to operate on")
 	newC.Flags().StringVar(&templatesFrom, "templates-from", "", templatesFromFlagUsage)
@@ -101,7 +101,7 @@ func newNodeCmd() *cobra.Command {
 	var showBundle string
 	showC := &cobra.Command{
 		Use:   "show <path>",
-		Short: "Print a node, surfacing its type (§7.3)",
+		Short: "Print a node, surfacing its type (PRD §7.3)",
 		Long: "show prints a single node's path, its type, and its Markdown body (PRD §7.3: reads " +
 			"reveal the managed type). The .md suffix is optional in <path>. Read-only — it never " +
 			"mutates the bundle. It errors if no node matches.",
@@ -133,7 +133,7 @@ func newNodeCmd() *cobra.Command {
 	var listBundle string
 	listC := &cobra.Command{
 		Use:   "list",
-		Short: "List nodes with their type (§7.3)",
+		Short: "List nodes with their type (PRD §7.3)",
 		Long: "list prints every concept node in the bundle with its managed type, sorted by path " +
 			"(PRD §7.3: reads reveal the type). Reserved files (index.md, log.md) aren't nodes " +
 			"and aren't listed. Read-only.",
