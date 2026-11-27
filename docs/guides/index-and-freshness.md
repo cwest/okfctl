@@ -1,17 +1,11 @@
 # Keeping `index.md` current and fixing freshness drift
 
-Bundles go stale in two ways you won't notice at first. The `index.md` files
-fall behind the nodes. Or a node's `modified` date stops matching what git
-remembers. okfctl catches both, and below you'll watch it happen on a
-three-node bundle, with output pasted from my terminal and the CI line that
-fails each time.
+Your bundle can go stale in two ways you won't see at first. Its `index.md`
+files stop listing all the nodes. Its `modified` dates drift away from what
+git remembers. Below, okfctl finds each one on a three-node bundle. I pasted
+these blocks from my terminal. Each one ends on the line that fails CI.
 
 ## Catch a stale index
-
-The node commands rebuild `index.md` for you, but nothing rebuilds it when a
-file shows up some other way: your editor, a script, a `git pull` of someone
-else's work. Start with two nodes and a current index, then copy
-`body.md` in by hand:
 
 <!-- transcript: setup
 $ cp -R "$TRANSCRIPT_FIXTURES/index-and-freshness/mykb" mykb
@@ -22,8 +16,6 @@ OK: index.md is current
 $ cp "$TRANSCRIPT_FIXTURES/index-and-freshness/body.md" mykb/wine/body.md
 ```
 
-Now there's a node with no index entry:
-
 <!-- transcript: exit 1 okfctl index check mykb -->
 ```text
 $ okfctl index check mykb
@@ -31,7 +23,9 @@ index.md is out of date; run `okfctl index build` to regenerate
 okfctl: index.md is out of date
 ```
 
-Rebuild it, and the check passes:
+The node commands rewrite `index.md` as they go. Nothing does that for a file
+you copy in by hand. The same goes for a file a script writes and for one that
+arrives in a `git pull`. Here `body.md` stays unlisted until you rebuild:
 
 ```text
 $ okfctl index build mykb
@@ -40,13 +34,10 @@ $ okfctl index check mykb
 OK: index.md is current
 ```
 
-`index check` exits 1 when any `index.md` in the bundle is stale or missing,
-and when one is left behind in a directory that no longer has content. Put it in CI and an
-index can't fall behind the nodes for longer than one pull request. `index
-build` fixes all three cases, and it deletes a leftover index in an empty
-directory.
-
-This is what it wrote:
+`index check` exits 1 if an `index.md` is stale or missing. It also exits 1 if
+one is left over in a directory that has nothing in it now. `index build` fixes
+all three (it deletes the leftover). With the check in CI, an index can't lag
+the nodes by more than one pull request.
 
 ```text
 $ cat mykb/index.md
@@ -69,39 +60,38 @@ $ cat mykb/wine/index.md
 * [Tannin](tannin.md) - The drying grip in red wine.
 ```
 
-There's one `index.md` per directory, and each lists only its own directory,
-with links relative to it (OKF v0.3 §8). Each node's `description` becomes the
-text after its link. The new body node is listed, and the root entry for
-`wine/` now counts three concepts.
+Body is in the list now, with its `description` after the link. The root says
+`wine/` has three concepts. OKF v0.3 §8 asks for this layout: one
+`index.md` per directory, listing that directory and nothing deeper, with links
+relative to it.
 
 ## What `index build` keeps and what it owns
 
-Rebuilding is safe to run as often as you like. The root `index.md` is the one
-index allowed frontmatter, and §8.1 says a tool that regenerates it MUST leave
-that alone. okfctl does, byte for byte, down to `okf_version`, `title`,
-`description`, `license`, and extension keys like `x-acme-owner`. With no block
-there at all, you get one holding `okf_version` if a legacy `.okf` sidecar
-declares it.
+Rebuilding is safe to repeat. The root `index.md` is the one index that gets
+frontmatter, and §8.1 says a tool that regenerates the file MUST leave that
+block as it was. okfctl does, byte for byte (`okf_version`, `title`,
+`description`, `license`, and keys like `x-acme-owner` all come through). If
+there's no block at all and a legacy `.okf` sidecar declares `okf_version`, you
+get a new block holding that one key.
 
-Then there's `(3 concepts · Reference · shared tags: taste)`. okfctl writes
-that suffix so a reader, person or agent, can tell what's in `wine/` without
-opening it. It counts the directory's own concepts, lists their types, and
-names up to 12 tags (`--shape-tag-max`) that at least two of them carry
-(`--shape-tag-min`, default 2). A directory that nests deeper gets a `· N in
-subtree` total. `--no-shape` drops the whole suffix.
+okfctl adds the `(3 concepts · Reference · shared tags: taste)` part itself.
+It tells a reader (a person or an agent) what `wine/` holds so they don't
+have to open it: how many concepts, their types, and up to 12 tags
+(`--shape-tag-max`) that at least two of them carry (`--shape-tag-min`, default
+2). Directories that nest deeper also get a `· N in
+subtree` total. `--no-shape` drops the whole thing.
 
-Hand edits to an index usually vanish on the next build. Two don't. One is a
-description you add to a subdirectory entry
-(`* [Wine](wine/) - tasting vocabulary`), and the other is the H1. Neither do Windows line
-endings. An `index.md` checked out with CRLF stays CRLF, and `index check`
+Most hand edits to an index disappear on the next build.
+
+Two don't. One is the H1. The other is a description you add to a subdirectory
+entry, like `* [Wine](wine/) - tasting vocabulary`. Windows line endings stay
+put too. An `index.md` checked out with CRLF stays CRLF, and `index check`
 won't call it stale over that.
 
 ## Catch a `modified` date that git contradicts
 
-A node's `modified` field says when it last changed. Git also knows. When the
-two disagree, `validate` says so. This copy of the bundle has two commits. The
-first is from March 2. The second, on April 10, fixes a typo in `tannin.md`
-and leaves its `modified` alone:
+This copy of the bundle is in git with two commits. The second one, from April
+10, fixes a typo in `tannin.md` and leaves its `modified` field at March 2:
 
 <!-- transcript: setup
 $ git -C mykb init -q
@@ -127,12 +117,10 @@ warning wine/tannin.md: modified 2026-03-02 disagrees with git last-commit 2026-
 okfctl: 1 drift warning(s)
 ```
 
-Stale dates are legal OKF. Plain `validate` warns and exits 0, and with
-`--strict` it exits 1 for CI. The check never writes to anything. Outside a git
-repository there's no history to compare with, and you won't see a warning.
-
-`node refresh` sets each drifting node's `modified` to the day of its last
-commit:
+A stale date is legal OKF. That's why plain `validate` warns and still exits 0,
+and why CI wants the `--strict` form (exit 1). The check never writes to a file.
+Outside a git repository there's no history to compare against. You won't
+get a warning.
 
 ```text
 $ okfctl node refresh mykb --dry-run
@@ -145,14 +133,14 @@ $ okfctl validate mykb
 OK: bundle conforms to the OKF spec floor
 ```
 
-It leaves `created` and the body alone and logs each change in `log.md`. Name a
-node after the bundle to fix just that one:
-`okfctl node refresh mykb wine/tannin.md`.
+`node refresh` set `modified` to the day of the last commit and wrote a line to
+`log.md`. It didn't touch `created` or the body. To fix one node and leave the
+others, name it: `okfctl node refresh mykb wine/tannin.md`.
 
 ## Keep a bulk commit from erasing your dates
 
-Git knows when a commit landed. It has no idea why. Say on May 1 you add a
-`wine` tag to every node in one sweep:
+Git knows the day a file changed. It has no idea why. Say that on May 1 you add a
+`wine` tag to all three nodes in one commit:
 
 <!-- transcript: setup
 $ GIT_COMMITTER_DATE=2026-04-10T12:30:00Z git -C mykb commit -q --date=2026-04-10T12:30:00Z -am "Refresh modified"
@@ -166,12 +154,12 @@ warning wine/tannin.md: modified 2026-04-10 disagrees with git last-commit 2026-
 2 drift warning(s)
 ```
 
-You didn't rewrite acidity on May 1; you added a word to its tags. Run
-`node refresh` now and it stamps May 1 on both nodes, and March 2 and April 10
-are gone for good. (Body has no `modified` field at all, and there's nothing
-for git to contradict.)
+You didn't rewrite acidity on May 1. You added a word to its tags. If you run
+`node refresh` now, it puts May 1 on acidity and tannin. March 2 and April 10
+are gone for good. (Body has no `modified` field at all. There's nothing
+there for git to contradict.)
 
-List the commit in `.okf-drift-ignore-revs` at the bundle root instead:
+Put the commit in `.okf-drift-ignore-revs` at the bundle root:
 
 ```text
 $ git -C mykb rev-parse HEAD >> mykb/.okf-drift-ignore-revs
@@ -179,20 +167,18 @@ $ okfctl validate mykb
 OK: bundle conforms to the OKF spec floor
 ```
 
-When a node's last commit is on the list, drift looks past it to the one
-underneath. Here that's the typo fix for tannin and the first commit for
-acidity. Commits you didn't
-list drift as usual. Next week's typo fix still gets caught. If you've used
-`git blame --ignore-revs-file`, the format is the same: one SHA per line, the
-whole hash or at least seven characters of it, with blank lines and `#`
-comments ignored. Check
-it in.
+If a node's last commit is on the list, drift looks past it to the commit
+under it. Tannin falls back to the typo fix. For acidity it's the first commit.
+Commits you didn't list still count (next week's typo fix gets caught as
+usual). The format is the one `git blame --ignore-revs-file` reads. Put one SHA
+per line, the whole hash or at least seven characters of it. Blank lines and
+`#` comments are ignored. Check the file in.
 
 Two parts of okfctl point you here. `okfctl migrate --apply` prints a hint to
-list its commit after you make it. And `node refresh` won't run when at least
-10 of the nodes it would change, and at least half of them, trace back to one
-commit. It prints that commit and the line to add instead. `--yes` overrides
-the refusal, but that rewrites the dates.
+list its commit after you make it. And `node refresh` won't run if 10 or more
+of the nodes it would change (and at least half of them) trace back to one
+commit. It prints that commit and the line to add. `--yes` overrides the
+refusal, but then it rewrites the dates.
 
 ## Next
 
