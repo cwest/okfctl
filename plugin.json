@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "okfctl",
-  "description": "Author and maintain Open Knowledge Format (OKF) bundles from your agent — scaffold and validate nodes, run curation health checks, migrate v0.1 and v0.2 bundles to OKF v0.3, and query the opt-in semantic layer.",
+  "description": "Skills that drive okfctl, a command-line tool for Open Knowledge Format (OKF) bundles. Use them to add and rename nodes with the links kept intact, to check a bundle with validate and lint, to bring v0.1 and v0.2 bundles up to OKF v0.3 with migrate, and to find look-alike nodes with okfctl-search. You'll need the okfctl binary.",
   "author": {
     "name": "Casey West",
     "email": "casey@geeknest.com",

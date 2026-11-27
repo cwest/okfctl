@@ -1,26 +1,30 @@
 # okfctl
 
-> A command-line tool for authoring and maintaining Open Knowledge Format (OKF)
-> bundles. Pure Go — no CGO, no Python, no model runtime. okfctl does not author
-> the OKF specification; it is a conformant consumer that enforces the spec floor
-> and keeps anything stricter behind an explicit opt-in overlay.
+> okfctl is a command-line tool that writes and checks Open Knowledge Format
+> (OKF) bundles: folders of linked Markdown files with YAML frontmatter. Pure
+> Go, runs offline.
 
-okfctl scaffolds a bundle, adds and moves nodes without breaking links, keeps the
-reserved `index.md`/`log.md` files current, checks a corpus against the spec, and
-reports on its health and link graph.
+`okfctl node mv` renames a node and rewrites each link that pointed at it.
+`okfctl validate` exits 1 if a bundle breaks the OKF spec floor (frontmatter
+that doesn't parse is one example). `okfctl lint --strict` exits 1 on any
+curation finding, like a node that names another with no link to it.
+`okfctl migrate` upgrades v0.1 and v0.2 bundles to OKF v0.3 and writes what it
+won't guess to a plan file. okfctl follows the OKF spec and adds no rules of
+its own. Checks stricter than the spec, like `validate --templates`, are
+opt-in.
 
 ## Docs
 
-- [Command reference](https://okfctl.dev/reference/commands/): Every command, its flags, and a runnable example — generated from and kept in sync with the binary.
-- [Concepts](https://okfctl.dev/concepts/): Bundles, nodes, the link graph, and the reserved files.
-- [Authoring a bundle](https://okfctl.dev/guides/authoring/): From an empty directory to a validated bundle.
-- [Curation health](https://okfctl.dev/guides/curation-health/): Using `lint`, `analyze`, and `--strict` in CI.
-- [Migrating to OKF v0.3](https://okfctl.dev/guides/migrating/): The two-phase `migrate` plan and apply for v0.1 and v0.2 bundles.
+- [Command reference](https://okfctl.dev/reference/commands/): All commands and flags, each with an example, generated from the binary's help text.
+- [Concepts](https://okfctl.dev/concepts/): Bundles, nodes, the link graph, plus the reserved `index.md` and `log.md` files.
+- [Authoring a bundle](https://okfctl.dev/guides/authoring/): From an empty directory to a bundle that passes `validate`.
+- [Curation health](https://okfctl.dev/guides/curation-health/): `lint`, `analyze`, and `--strict` in CI.
+- [Migrating to OKF v0.3](https://okfctl.dev/guides/migrating/): `migrate` plan, dry-run, then apply, for v0.1 and v0.2 bundles.
 
 ## Specification
 
-- [Open Knowledge Format spec (SPEC.md)](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md): The authoritative OKF specification (v0.3), maintained in `open-knowledge-format/open-knowledge-format`. The former `GoogleCloudPlatform/open-knowledge-format` repo is deprecated and frozen at v0.2. Where the spec defines behavior, the spec wins.
+- [Open Knowledge Format spec (SPEC.md)](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md): The OKF specification, v0.3, in `open-knowledge-format/open-knowledge-format`. The older `GoogleCloudPlatform/open-knowledge-format` repo is deprecated and frozen at v0.2. Where the spec defines behavior, okfctl follows the spec.
 
 ## Source
 
-- [GitHub repository](https://github.com/cwest/okfctl): Source, releases, and issues.
+- [GitHub repository](https://github.com/cwest/okfctl): Source, releases, issues.
