@@ -243,15 +243,15 @@ whichever direction wins.
 | :-- | :-- | :-- | :-- |
 | A1 | Fix the wrong facts: §-citations (F2), homepage output (F3), `--generated-by` actors (F4), `llms.txt` cadence (F8) | S | docs, touches `cmd/node.go` and `index.astro` |
 | A2 | Transcript test: replay every `$ okfctl` block in `docs/` and the README against the built binary, fail on drift | M | code |
-| A3 | Rest of the README, plus `docs/README.md` and `docs/install.md` | M | writing |
-| A4 | Guides, part 1: `authoring`, `index-and-freshness`, `curation-health` | M | writing |
-| A5 | Guides, part 2: `search`, `remote-sources`, `plugins` | M | writing |
-| A6 | `docs/concepts.md`, one proving command per idea | M | writing |
-| A7 | CLI help, author group: `bundle`, `node`, `index`, `log` (regenerate the reference) | M | writing |
-| A8 | CLI help, check and explore groups: `validate`, `lint`, `eval`, `analyze`, `search`, `graph`, `serve` | M | writing |
-| A9 | CLI help, extend group: `template`, `registry`, `connect`, `plugin`, `config`, `completion`, `version` | S | writing |
-| A10 | Homepage copy (`index.astro`), including the "at scale" tab | M | writing |
-| A11 | The four skills plus `plugin.json` and `llms.txt`, in an agent register | M | writing |
+| A3 | Rest of the README, plus `docs/README.md` and `docs/install.md` | M | docs |
+| A4 | Guides, part 1: `authoring`, `index-and-freshness`, `curation-health` | M | docs |
+| A5 | Guides, part 2: `search`, `remote-sources`, `plugins` | M | docs |
+| A6 | `docs/concepts.md`, one proving command per idea | M | docs |
+| A7 | CLI help, author group: `bundle`, `node`, `index`, `log` (regenerate the reference) | M | docs |
+| A8 | CLI help, check and explore groups: `validate`, `lint`, `eval`, `analyze`, `search`, `graph`, `serve` | M | docs |
+| A9 | CLI help, extend group: `template`, `registry`, `connect`, `plugin`, `config`, `completion`, `version` | S | docs |
+| A10 | Homepage copy (`index.astro`), including the "at scale" tab | M | docs |
+| A11 | The four skills plus `plugin.json` and `llms.txt`, in an agent register | M | docs |
 | A12 | Extend `scan_page_prose.py` to `llms.txt` and the `plugin.json` description | S | code |
 
 If O1 wins, A2 should land ahead of A3-A10 so each rewrite ships with its
