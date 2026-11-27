@@ -19,6 +19,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 // TestCommandReference_EveryTopLevelCommandHasStableAnchor asserts the generated
@@ -83,4 +85,24 @@ func commandReferencePath(t *testing.T) string {
 	}
 	// Tests run with the package dir (cmd/) as cwd; docs/ is one level up.
 	return filepath.Join(wd, "..", "docs", "commands", "README.md")
+}
+
+// TestCommandReference_DedentsExamples asserts the reference strips the common
+// indent cobra examples carry for the terminal, so the first line and the rest
+// line up, and a `$ okfctl` transcript line starts at column 0 where the doc
+// transcript test (internal/transcript) can find and replay it.
+func TestCommandReference_DedentsExamples(t *testing.T) {
+	root := &cobra.Command{Use: "okfctl"}
+	root.AddCommand(&cobra.Command{
+		Use:     "demo",
+		Short:   "demo",
+		Long:    "demo",
+		Example: "  $ okfctl demo\n  output line\n\n    indented more\n",
+		Run:     func(*cobra.Command, []string) {},
+	})
+	ref := GenerateCommandReference(root)
+	want := "```\n$ okfctl demo\noutput line\n\n  indented more\n```"
+	if !strings.Contains(ref, want) {
+		t.Errorf("example not dedented; want block:\n%s\ngot reference:\n%s", want, ref)
+	}
 }

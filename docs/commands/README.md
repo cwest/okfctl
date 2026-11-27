@@ -34,13 +34,13 @@ Example:
 
 ```
 # Report on the bundle in the current directory
-  okfctl analyze
+okfctl analyze
 
-  # Report on a bundle elsewhere
-  okfctl analyze ./mykb
+# Report on a bundle elsewhere
+okfctl analyze ./mykb
 
-  # The same report as JSON, for a script
-  okfctl analyze --json ./mykb
+# The same report as JSON, for a script
+okfctl analyze --json ./mykb
 ```
 
 Flags:
@@ -75,10 +75,10 @@ Example:
 
 ```
 # Summarize the bundle in the current directory
-  okfctl bundle info
+okfctl bundle info
 
-  # Summarize a bundle elsewhere
-  okfctl bundle info ./bundles/knowledge
+# Summarize a bundle elsewhere
+okfctl bundle info ./bundles/knowledge
 ```
 
 
@@ -96,10 +96,10 @@ Example:
 
 ```
 # Scaffold a new bundle in the current directory
-  okfctl bundle init
+okfctl bundle init
 
-  # Scaffold in a named directory
-  okfctl bundle init ./my-bundle
+# Scaffold in a named directory
+okfctl bundle init ./my-bundle
 ```
 
 
@@ -119,13 +119,13 @@ Example:
 
 ```
 # Load bash completions for the current shell
-  source <(okfctl completion bash)
+source <(okfctl completion bash)
 
-  # Install zsh completions
-  okfctl completion zsh > "${fpath[1]}/_okfctl"
+# Install zsh completions
+okfctl completion zsh > "${fpath[1]}/_okfctl"
 
-  # Install fish completions
-  okfctl completion fish > ~/.config/fish/completions/okfctl.fish
+# Install fish completions
+okfctl completion fish > ~/.config/fish/completions/okfctl.fish
 ```
 
 
@@ -150,7 +150,7 @@ Example:
 
 ```
 # Print one config value
-  okfctl config get model_path
+okfctl config get model_path
 ```
 
 
@@ -168,7 +168,7 @@ Example:
 
 ```
 # Show every stored config key and value
-  okfctl config list
+okfctl config list
 ```
 
 
@@ -186,7 +186,7 @@ Example:
 
 ```
 # Point okfctl-search at a local model2vec model
-  okfctl config set model_path ~/models/potion-base-8M
+okfctl config set model_path ~/models/potion-base-8M
 ```
 
 
@@ -208,13 +208,13 @@ Example:
 
 ```
 # Clone a registered remote into a directory named after the source
-  okfctl connect knowledge
+okfctl connect knowledge
 
-  # Clone an ad-hoc git URL into a chosen directory
-  okfctl connect https://github.com/acme/kb.git ./kb
+# Clone an ad-hoc git URL into a chosen directory
+okfctl connect https://github.com/acme/kb.git ./kb
 
-  # Re-run to fast-forward an existing checkout
-  okfctl connect knowledge ./kb
+# Re-run to fast-forward an existing checkout
+okfctl connect knowledge ./kb
 ```
 
 
@@ -247,10 +247,10 @@ Example:
 
 ```
 # A worksheet for 5 random nodes
-  okfctl eval sample --sample 5 --format md ./mykb
+okfctl eval sample --sample 5 --format md ./mykb
 
-  # JSON for the nodes changed on this branch
-  okfctl eval sample --changed-since origin/main ./mykb
+# JSON for the nodes changed on this branch
+okfctl eval sample --changed-since origin/main ./mykb
 ```
 
 Flags:
@@ -292,13 +292,13 @@ Example:
 
 ```
 # Report findings (exits 0)
-  okfctl eval transparency ./mykb
+okfctl eval transparency ./mykb
 
-  # Fail CI on any finding
-  okfctl eval transparency --strict ./mykb
+# Fail CI on any finding
+okfctl eval transparency --strict ./mykb
 
-  # Print findings as JSON
-  okfctl eval transparency --json ./mykb
+# Print findings as JSON
+okfctl eval transparency --json ./mykb
 ```
 
 Flags:
@@ -332,13 +332,13 @@ Example:
 
 ```
 # Print the graph of the bundle in the current directory as JSON
-  okfctl graph export
+okfctl graph export
 
-  # Print a bundle elsewhere as Graphviz DOT
-  okfctl graph export --format dot ./mykb
+# Print a bundle elsewhere as Graphviz DOT
+okfctl graph export --format dot ./mykb
 
-  # Draw it as an SVG with Graphviz
-  okfctl graph export --format dot ./mykb | dot -Tsvg > graph.svg
+# Draw it as an SVG with Graphviz
+okfctl graph export --format dot ./mykb | dot -Tsvg > graph.svg
 ```
 
 Flags:
@@ -370,10 +370,10 @@ Example:
 
 ```
 # Regenerate index.md for the current bundle
-  okfctl index build
+okfctl index build
 
-  # Regenerate for a bundle elsewhere
-  okfctl index build ./bundles/knowledge
+# Regenerate for a bundle elsewhere
+okfctl index build ./bundles/knowledge
 ```
 
 Flags:
@@ -402,10 +402,10 @@ Example:
 
 ```
 # Verify the index is current (exit 0) or report drift (exit 1)
-  okfctl index check
+okfctl index check
 
-  # Check a bundle elsewhere, e.g. in CI
-  okfctl index check ./bundles/knowledge
+# Check a bundle elsewhere, e.g. in CI
+okfctl index check ./bundles/knowledge
 ```
 
 Flags:
@@ -457,16 +457,16 @@ Example:
 
 ```
 # Report findings for the bundle in the current directory (exits 0)
-  okfctl lint
+okfctl lint
 
-  # Fail CI on any finding
-  okfctl lint --strict ./mykb
+# Fail CI on any finding
+okfctl lint --strict ./mykb
 
-  # Print findings as JSON for another tool
-  okfctl lint --json ./mykb
+# Print findings as JSON for another tool
+okfctl lint --json ./mykb
 
-  # Add the similarity checks (needs okfctl-search index build ./mykb first)
-  okfctl lint --semantic ./mykb
+# Add the similarity checks (needs okfctl-search index build ./mykb first)
+okfctl lint --semantic ./mykb
 ```
 
 Flags:
@@ -501,10 +501,10 @@ Example:
 
 ```
 # Record a manual change
-  okfctl log append --message "reworded the revenue concept"
+okfctl log append --message "reworded the revenue concept"
 
-  # Record against a bundle elsewhere
-  okfctl log append --message "imported Q3 sources" ./bundles/knowledge
+# Record against a bundle elsewhere
+okfctl log append --message "imported Q3 sources" ./bundles/knowledge
 ```
 
 Flags:
@@ -528,10 +528,10 @@ Example:
 
 ```
 # Print the change history for the current bundle
-  okfctl log show
+okfctl log show
 
-  # Print the history for a bundle elsewhere
-  okfctl log show ./bundles/knowledge
+# Print the history for a bundle elsewhere
+okfctl log show ./bundles/knowledge
 ```
 
 
@@ -555,13 +555,13 @@ Example:
 
 ```
 # Write the plan; nothing in the bundle changes
-  okfctl migrate ./mykb --plan migrate-plan.json --generated-by human:casey
+okfctl migrate ./mykb --plan migrate-plan.json --generated-by human:casey
 
-  # See the diff the apply would write, without writing it
-  okfctl migrate ./mykb --apply --plan migrate-plan.json --dry-run
+# See the diff the apply would write, without writing it
+okfctl migrate ./mykb --apply --plan migrate-plan.json --dry-run
 
-  # Apply the plan, declare v0.3 if nothing is held, and validate
-  okfctl migrate ./mykb --apply --plan migrate-plan.json
+# Apply the plan, declare v0.3 if nothing is held, and validate
+okfctl migrate ./mykb --apply --plan migrate-plan.json
 ```
 
 Flags:
@@ -594,10 +594,10 @@ Example:
 
 ```
 # Edit a node, then re-validate on save
-  okfctl node edit concepts/revenue
+okfctl node edit concepts/revenue
 
-  # Use a specific editor for this edit
-  OKFCTL_EDITOR="code --wait" okfctl node edit concepts/revenue
+# Use a specific editor for this edit
+OKFCTL_EDITOR="code --wait" okfctl node edit concepts/revenue
 ```
 
 Flags:
@@ -621,10 +621,10 @@ Example:
 
 ```
 # List every node in the current bundle
-  okfctl node list
+okfctl node list
 
-  # List nodes in a bundle elsewhere
-  okfctl node list --bundle ./bundles/knowledge
+# List nodes in a bundle elsewhere
+okfctl node list --bundle ./bundles/knowledge
 ```
 
 Flags:
@@ -648,10 +648,10 @@ Example:
 
 ```
 # Rename a node and rewrite inbound links
-  okfctl node mv concepts/revenue concepts/net-revenue
+okfctl node mv concepts/revenue concepts/net-revenue
 
-  # Preview the move and rewrites without touching disk
-  okfctl node mv concepts/revenue concepts/net-revenue --dry-run
+# Preview the move and rewrites without touching disk
+okfctl node mv concepts/revenue concepts/net-revenue --dry-run
 ```
 
 Flags:
@@ -676,13 +676,13 @@ Example:
 
 ```
 # Create a node of an open type
-  okfctl node new concepts/revenue --type Concept --title Revenue
+okfctl node new concepts/revenue --type Concept --title Revenue
 
-  # Create in a bundle elsewhere
-  okfctl node new concepts/revenue --type Concept --bundle ./bundles/knowledge
+# Create in a bundle elsewhere
+okfctl node new concepts/revenue --type Concept --bundle ./bundles/knowledge
 
-  # Scaffold from a referenced template bundle, overriding the .okf reference
-  okfctl node new runbooks/deploy --type Playbook --templates-from ../okf-type-templates
+# Scaffold from a referenced template bundle, overriding the .okf reference
+okfctl node new runbooks/deploy --type Playbook --templates-from ../okf-type-templates
 ```
 
 Flags:
@@ -709,13 +709,13 @@ Example:
 
 ```
 # Promote every directory-as-concept index in the bundle
-  okfctl node promote ./bundles/knowledge
+okfctl node promote ./bundles/knowledge
 
-  # Preview the moves and inbound-link rewrites without writing
-  okfctl node promote --dry-run ./bundles/knowledge
+# Preview the moves and inbound-link rewrites without writing
+okfctl node promote --dry-run ./bundles/knowledge
 
-  # Use a fixed basename for every promoted concept file
-  okfctl node promote --name overview ./bundles/knowledge
+# Use a fixed basename for every promoted concept file
+okfctl node promote --name overview ./bundles/knowledge
 ```
 
 Flags:
@@ -742,13 +742,13 @@ Example:
 
 ```
 # Fix every drifting node in the bundle
-  okfctl node refresh ./bundles/knowledge
+okfctl node refresh ./bundles/knowledge
 
-  # Preview the plan without writing anything
-  okfctl node refresh --dry-run ./bundles/knowledge
+# Preview the plan without writing anything
+okfctl node refresh --dry-run ./bundles/knowledge
 
-  # Fix a single node
-  okfctl node refresh ./bundles/knowledge concepts/income-statement.md
+# Fix a single node
+okfctl node refresh ./bundles/knowledge concepts/income-statement.md
 ```
 
 Flags:
@@ -773,10 +773,10 @@ Example:
 
 ```
 # Remove a node and see resulting orphans
-  okfctl node rm concepts/deprecated
+okfctl node rm concepts/deprecated
 
-  # Preview the removal without touching disk
-  okfctl node rm concepts/deprecated --dry-run
+# Preview the removal without touching disk
+okfctl node rm concepts/deprecated --dry-run
 ```
 
 Flags:
@@ -801,10 +801,10 @@ Example:
 
 ```
 # Show a node (the .md suffix is optional)
-  okfctl node show concepts/revenue
+okfctl node show concepts/revenue
 
-  # Show a node in a bundle elsewhere
-  okfctl node show concepts/revenue --bundle ./bundles/knowledge
+# Show a node in a bundle elsewhere
+okfctl node show concepts/revenue --bundle ./bundles/knowledge
 ```
 
 Flags:
@@ -837,10 +837,10 @@ Example:
 
 ```
 # Install a plugin executable into the managed plugins dir
-  okfctl plugin install ./okfctl-search
+okfctl plugin install ./okfctl-search
 
-  # Install into a specific directory
-  okfctl plugin install --dir ~/bin ./okfctl-search
+# Install into a specific directory
+okfctl plugin install --dir ~/bin ./okfctl-search
 ```
 
 Flags:
@@ -866,10 +866,10 @@ Example:
 
 ```
 # List discovered plugins on $PATH
-  okfctl plugin list
+okfctl plugin list
 
-  # Scan a specific PATH
-  okfctl plugin list --path ~/bin
+# Scan a specific PATH
+okfctl plugin list --path ~/bin
 ```
 
 Flags:
@@ -902,7 +902,7 @@ Example:
 
 ```
 # Register a remote bundle source
-  okfctl registry add knowledge https://github.com/acme/knowledge-base.git
+okfctl registry add knowledge https://github.com/acme/knowledge-base.git
 ```
 
 
@@ -920,7 +920,7 @@ Example:
 
 ```
 # List every registered remote source
-  okfctl registry list
+okfctl registry list
 ```
 
 
@@ -938,7 +938,7 @@ Example:
 
 ```
 # Unregister a remote source
-  okfctl registry remove knowledge
+okfctl registry remove knowledge
 ```
 
 
@@ -956,7 +956,7 @@ Example:
 
 ```
 # Print one remote's git URL
-  okfctl registry show knowledge
+okfctl registry show knowledge
 ```
 
 
@@ -978,13 +978,13 @@ Example:
 
 ```
 # Search every field in the bundle in the current directory
-  okfctl search "income statement"
+okfctl search "income statement"
 
-  # Match titles only, in a bundle elsewhere
-  okfctl search --field title revenue ./mykb
+# Match titles only, in a bundle elsewhere
+okfctl search --field title revenue ./mykb
 
-  # Nodes within 2 links of one node
-  okfctl search --neighbors concepts/income-statement.md --depth 2 ./mykb
+# Nodes within 2 links of one node
+okfctl search --neighbors concepts/income-statement.md --depth 2 ./mykb
 ```
 
 Flags:
@@ -1014,10 +1014,10 @@ Example:
 
 ```
 # Serve the bundle in the current directory on http://127.0.0.1:8080
-  okfctl serve
+okfctl serve
 
-  # Serve a bundle elsewhere on another port
-  okfctl serve --addr 127.0.0.1:9000 ./mykb
+# Serve a bundle elsewhere on another port
+okfctl serve --addr 127.0.0.1:9000 ./mykb
 ```
 
 Flags:
@@ -1052,13 +1052,13 @@ Example:
 
 ```
 # List templates declared by the current bundle
-  okfctl template list
+okfctl template list
 
-  # List templates in a bundle elsewhere
-  okfctl template list ./bundles/knowledge
+# List templates in a bundle elsewhere
+okfctl template list ./bundles/knowledge
 
-  # Resolve templates from a specific bundle, overriding the .okf reference
-  okfctl template list --templates-from ../okf-type-templates ./bundles/knowledge
+# Resolve templates from a specific bundle, overriding the .okf reference
+okfctl template list --templates-from ../okf-type-templates ./bundles/knowledge
 ```
 
 Flags:
@@ -1084,13 +1084,13 @@ Example:
 
 ```
 # Show the template that governs the "Runbook" type
-  okfctl template show Runbook
+okfctl template show Runbook
 
-  # Show a template in a bundle elsewhere
-  okfctl template show Runbook ./bundles/knowledge
+# Show a template in a bundle elsewhere
+okfctl template show Runbook ./bundles/knowledge
 
-  # Resolve from a specific template bundle, overriding the .okf reference
-  okfctl template show Runbook --templates-from ../okf-type-templates ./bundles/knowledge
+# Resolve from a specific template bundle, overriding the .okf reference
+okfctl template show Runbook --templates-from ../okf-type-templates ./bundles/knowledge
 ```
 
 Flags:
@@ -1120,16 +1120,16 @@ Example:
 
 ```
 # Check the bundle in the current directory
-  okfctl validate
+okfctl validate
 
-  # Check a bundle elsewhere
-  okfctl validate ./mykb
+# Check a bundle elsewhere
+okfctl validate ./mykb
 
-  # Also check type templates, and fail CI on any drift
-  okfctl validate --templates --strict ./mykb
+# Also check type templates, and fail CI on any drift
+okfctl validate --templates --strict ./mykb
 
-  # Take the templates from another bundle instead of the .okf reference
-  okfctl validate --templates --templates-from ../okf-type-templates ./mykb
+# Take the templates from another bundle instead of the .okf reference
+okfctl validate --templates --templates-from ../okf-type-templates ./mykb
 ```
 
 Flags:
@@ -1156,5 +1156,5 @@ Example:
 
 ```
 # Print the build version
-  okfctl version
+okfctl version
 ```
