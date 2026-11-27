@@ -226,6 +226,12 @@ func Load(root string, opts ...LoadOption) (*Bundle, error) {
 			b.place(rel, n)
 			return nil
 		}
+		if !IsReservedPath(rel) {
+			// OKF v0.3 §11.2: normalize null/empty/single-item values once, here,
+			// so every reader and command sees the same value. Reserved files are
+			// governed by §8/§9/§12 and keep their raw frontmatter.
+			normalizeConsumerValues(fm)
+		}
 		n := &Node{Path: rel, Frontmatter: fm, Body: body, HasFrontmatterBlock: present, RawFrontmatter: raw}
 		b.place(rel, n)
 		return nil
