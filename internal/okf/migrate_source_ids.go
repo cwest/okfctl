@@ -404,6 +404,9 @@ var (
 	// refNearRe is the text near a reference that may mean it names another
 	// document's list: "brief", "citation", "node", or a link.
 	refNearRe = regexp.MustCompile(`(?i)brief|citation|node|\]\(|https?://`)
+	// keyShapedRe is a bracket that reads as a citation: one or more keys
+	// (`3`, `1, 2`, `S1`) or a footnote reference (`^3`).
+	keyShapedRe = regexp.MustCompile(`^\^?[A-Za-z0-9-]+(?:, ?[A-Za-z0-9-]+)*$`)
 )
 
 // refWindow is how far from a reference refNearRe looks, in bytes.
@@ -494,15 +497,21 @@ func scanCitationRefs(body string, nodeKeys map[string]bool, refKeys map[string]
 	labels := definedRefLabels(body)
 	var rewrites []refRewrite
 	var unclear []string
-	chainEnd := -1 // end of the previous citation reference in a `[1][2]` run
 	locs := bracketTokenRe.FindAllStringSubmatchIndex(masked, -1)
 	skipUntil := 0
+	prevEnd, prevKeyShaped := -1, false
 	for _, loc := range locs {
 		s, e := loc[0], loc[1]
 		if s < skipUntil {
 			continue
 		}
 		inner := masked[loc[2]:loc[3]]
+		// A bracket right after a key-shaped bracket (`[3][2]`, `[^4][5]`)
+		// is the next item of a run of citations, not the label of a
+		// `[text][label]` link. The test reads only the token's shape, so
+		// the planner and the renderer (which knows fewer keys) agree.
+		inChain := prevEnd == s && prevKeyShaped
+		prevEnd, prevKeyShaped = e, keyShapedRe.MatchString(inner)
 		if strings.HasPrefix(inner, "^") || (s > 0 && (masked[s-1] == '\\' || masked[s-1] == '!')) {
 			continue
 		}
@@ -531,6 +540,7 @@ func scanCitationRefs(body string, nodeKeys map[string]bool, refKeys map[string]
 			old = m[0]
 			e = s + len(m[0])
 			skipUntil = e
+			prevEnd, prevKeyShaped = e, true
 		} else {
 			ks, ok := refKeysOf(inner, nodeKeys)
 			if !ok {
@@ -538,8 +548,6 @@ func scanCitationRefs(body string, nodeKeys map[string]bool, refKeys map[string]
 			}
 			keys, old = ks, masked[s:e]
 		}
-		inChain := chainEnd == s
-		chainEnd = e
 		ctx := refContext(body, s, e)
 		if s > 0 && masked[s-1] == ']' && !inChain {
 			unclear = append(unclear, ctx) // label of an undefined `[text][k]`

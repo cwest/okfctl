@@ -210,10 +210,10 @@ func TestConformance_MigrateSourceIDs_Section4_2_GroupedReferencesExpand(t *test
 	for i := 1; i <= 5; i++ {
 		cites.WriteString("[" + string(rune('0'+i)) + "] VERIFIED — src https://s" + string(rune('0'+i)) + ".example/\n")
 	}
-	node := "---\ntype: Concept\n---\n\n# Def\n\nRange claim [3]–[5]. List claim [1, 2]. Pair claim [1][2].\n\n# Citations\n\n" + cites.String()
+	node := "---\ntype: Concept\n---\n\n# Def\n\nRange claim [3]–[5]. List claim [1, 2]. Pair claim [1][2]. Run of ranges [1]–[2][3]–[5].\n\n# Citations\n\n" + cites.String()
 	dir, _ := migrateOnce(t, kb(node))
 	out := readRel(t, dir, "a.md")
-	want := "Range claim [^3][^4][^5]. List claim [^1][^2]. Pair claim [^1][^2]."
+	want := "Range claim [^3][^4][^5]. List claim [^1][^2]. Pair claim [^1][^2]. Run of ranges [^1][^2][^3][^4][^5]."
 	if !strings.Contains(out, want) {
 		t.Fatalf("R4: grouped references not expanded\n--- got\n%s\n--- want substring\n%s", out, want)
 	}
@@ -268,7 +268,7 @@ func TestConformance_MigrateSourceIDs_Section4_2_CrossDocumentReferenceIsJudgmen
 // re-applying the same plan changes nothing (§12).
 func TestConformance_MigrateSourceIDs_Section12_RerunPlansZeroEdits(t *testing.T) {
 	node := "---\ntype: Concept\nsources:\n  - resource: https://kept.example/\n    title: Kept\n---\n\n# Def\n\n" +
-		"Old claim [1]. New claim [2]. Ambiguous brief [2].\n\n# Citations\n\n" +
+		"Old claim [1]. New claim [2]. Ambiguous brief [2].\n\nThis paragraph is long enough to sit well outside the sixty-byte window. A chain with an unsourced entry first [3][2], then [2][3].\n\n# Citations\n\n" +
 		"[1] VERIFIED — *Kept*, https://kept.example/\n" +
 		"[2] VERIFIED — new https://new.example/\n" +
 		"[3] VERIFIED — on-box probe, no URL.\n"
@@ -283,6 +283,9 @@ func TestConformance_MigrateSourceIDs_Section12_RerunPlansZeroEdits(t *testing.T
 	}
 	if strings.Contains(out, "[^3]") {
 		t.Fatalf("an entry with no source gets no footnote (its label would join no sources[].id):\n%s", out)
+	}
+	if !strings.Contains(out, "first [3][^2], then [^2][3].") {
+		t.Fatalf("R4: in a [k][k] run each sourced key is rewritten, the unsourced one kept:\n%s", out)
 	}
 	nb := loadMigrate(t, dir)
 	if fs := Validate(nb); len(fs) != 0 {
