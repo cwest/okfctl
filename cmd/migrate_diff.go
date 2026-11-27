@@ -114,6 +114,19 @@ func writeMigrateSummary(out io.Writer, plan okf.MigratePlan) {
 	if ids+notes+refs > 0 {
 		fmt.Fprintf(out, "attribution: source ids %d, footnote definitions %d, body references->footnotes %d\n", ids, notes, refs)
 	}
+	var shortened, removed int
+	for _, nm := range plan.Nodes {
+		for _, r := range nm.Retitles {
+			if r.Title == "" {
+				removed++
+			} else {
+				shortened++
+			}
+		}
+	}
+	if shortened+removed > 0 {
+		fmt.Fprintf(out, "titles: full-citation titles->name %d, removed (no name) %d\n", shortened, removed)
+	}
 	byKind := map[okf.JudgmentKind]int{}
 	for _, j := range plan.Judgment {
 		byKind[j.Kind]++
