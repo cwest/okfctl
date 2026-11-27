@@ -170,6 +170,10 @@ func runMigrateApply(cmd *cobra.Command, dir, planPath string, dry bool) error {
 	} else {
 		fmt.Fprintf(out, "%d file(s) migrated; bundle declares v%s.\n", len(plan.Nodes), version)
 	}
+	if len(plan.Nodes) > 0 {
+		fmt.Fprintf(out, "hint: after committing, list that commit's SHA in %s so strict drift skips the mechanical edits (like git blame --ignore-revs-file).\n",
+			okf.DriftIgnoreRevsFile)
+	}
 	if len(findings) != 0 {
 		for _, f := range findings {
 			fmt.Fprintf(out, "%s: %s\n", f.Path, f.Message)

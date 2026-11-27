@@ -141,6 +141,46 @@ func TestMigrate_ApplySamePlanTwiceIsNoop(t *testing.T) {
 	}
 }
 
+// An apply that edits files ends with a hint naming .okf-drift-ignore-revs: the
+// commit that lands a bulk migrate is mechanical, and without the entry every
+// edited file reports drift on the next strict run.
+func TestMigrate_ApplyHintsDriftIgnoreRevs(t *testing.T) {
+	dir := mkPromoteCLIBundle(t, migrateFixtureFiles())
+	planPath := filepath.Join(t.TempDir(), "migrate-plan.json")
+	if out, err := runOKF(t, "migrate", dir, "--plan", planPath, "--generated-by", "human:casey"); err != nil {
+		t.Fatalf("plan: %v\n%s", err, out)
+	}
+	out, err := runOKF(t, "migrate", dir, "--apply", "--plan", planPath)
+	if err != nil {
+		t.Fatalf("apply: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, ".okf-drift-ignore-revs") {
+		t.Fatalf("apply that edited files must hint at .okf-drift-ignore-revs; got:\n%s", out)
+	}
+}
+
+// Negative control: an apply that edits no file prints no drift hint.
+func TestMigrate_ApplyNoEditsNoDriftHint(t *testing.T) {
+	dir := mkPromoteCLIBundle(t, map[string]string{
+		".okf":     "okf_version: \"0.3\"\n",
+		"index.md": "---\nokf_version: \"0.3\"\n---\n\n# KB\n",
+		"log.md":   "# Log\n",
+		"a.md": "---\ntype: Metric\nstatus: stable\ngenerated: { by: human:casey, at: 2026-06-20T22:53:05Z }\n" +
+			"sources:\n  - id: x\n    resource: https://wiki.acme/x\n---\n\n# Def\n",
+	})
+	planPath := filepath.Join(t.TempDir(), "p.json")
+	if out, err := runOKF(t, "migrate", dir, "--plan", planPath, "--generated-by", "human:casey"); err != nil {
+		t.Fatalf("plan: %v\n%s", err, out)
+	}
+	out, err := runOKF(t, "migrate", dir, "--apply", "--plan", planPath)
+	if err != nil {
+		t.Fatalf("apply: %v\n%s", err, out)
+	}
+	if strings.Contains(out, ".okf-drift-ignore-revs") {
+		t.Fatalf("apply that edited nothing must not print the drift hint; got:\n%s", out)
+	}
+}
+
 // `migrate --apply --dry-run` is BYTE-IDENTICAL to a real apply: the property
 // PR #38 gated on for bulk promote. Applying twice from the same plan — once
 // dry, once real — leaves the same bytes as the real run alone.
