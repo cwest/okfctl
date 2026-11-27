@@ -46,7 +46,7 @@ func newNodeCmd() *cobra.Command {
 			"fields and body headings (PRD §9.3). Templates live in the bundle itself or in " +
 			"another bundle named by the .okf templates key or --templates-from (PRD §9.2). Run " +
 			"`okfctl template list` to see them.\n\n" +
-			"Overwriting a node, writing outside the bundle and a path that starts with a dot " +
+			"Overwriting a node, writing outside the bundle, and a path that starts with a dot " +
 			"all exit 1.\n\n" +
 			"To edit the node in your editor, use `okfctl node edit`.",
 		Annotations: map[string]string{
@@ -122,7 +122,7 @@ func newNodeCmd() *cobra.Command {
 	showC := &cobra.Command{
 		Use:   "show <path>",
 		Short: "Print one node's path, type, and body",
-		Long: "show prints a node's path, its type and its Markdown body from the bundle --bundle " +
+		Long: "show prints a node's path and type, then its Markdown body, from the bundle --bundle " +
 			"names (the current directory by default). The .md suffix is optional. The type gets " +
 			"a line of its own: you see what kind of concept you're reading before the body " +
 			"starts (PRD §7.3). The rest of the frontmatter (title, timestamps, sources) stays " +
@@ -216,14 +216,14 @@ func newNodeCmd() *cobra.Command {
 		Short: "Move or rename a node and rewrite every link that points at it",
 		Long: "mv takes the node at <old> to <new> in the bundle --bundle names (the current " +
 			"directory by default, with the .md suffix optional on either path). Links find their " +
-			"target by path (OKF §6). That's why mv rewrites each link in the bundle that pointed " +
+			"target by path (OKF §6). So mv rewrites each link in the bundle that pointed " +
 			"at the old path, README files included: one that started with / still starts with " +
 			"/ while a relative one gets worked out again from its own file. Then mv adds \"moved " +
 			"<old> -> <new>\" to log.md and rebuilds each index.md.\n\n" +
-			"Try --dry-run first.\n\n" +
-			"It prints the move and each rewrite with nothing written. The links in the moved " +
+			"Try --dry-run first: it prints the move and each rewrite with nothing written.\n\n" +
+			"The links in the moved " +
 			"node stay as written. Relative ones that worked from the old directory can " +
-			"break from the new one. `okfctl lint` reports them as broken-link.\n\n" +
+			"point at nothing from the new one. `okfctl lint` reports them as broken-link.\n\n" +
 			"With a file at <new>, mv exits 1 and changes nothing. It won't move index.md " +
 			"or log.md, nor put a node at either name.",
 		Example: "  $ okfctl bundle init map\n" +
@@ -278,7 +278,7 @@ func newNodeCmd() *cobra.Command {
 		Short: "Delete a node and list the nodes it leaves with no inbound links",
 		Long: "rm deletes the node at <path> from the bundle --bundle names (the current directory " +
 			"by default). The .md suffix is optional. Then it adds \"removed <path>\" to log.md, " +
-			"rebuilds each index.md and prints the orphans: nodes the deleted one linked to that " +
+			"rebuilds each index.md, and prints the orphans: nodes the deleted one linked to that " +
 			"nothing else links to now (OKF §6.4). In the example oak was tannin's only link.\n\n" +
 			"Run it with --dry-run first to print the same list and leave the node in place.\n\n" +
 			"Links that pointed at the deleted node stay as they were. The spec allows a broken " +
@@ -340,7 +340,7 @@ func newNodeCmd() *cobra.Command {
 			"is optional. In the example the editor is true: it exits right away.\n\n" +
 			"After the editor closes, edit validates the whole bundle (OKF §11.1) and, if that " +
 			"passes with the node's type still set, sets modified to now, adds \"edited <path>\" " +
-			"to log.md and rebuilds each index.md. created stays as it was. A node changed in " +
+			"to log.md, and rebuilds each index.md. created stays as it was. A node changed in " +
 			"your editor without okfctl keeps its old modified date. validate reports that later " +
 			"as git drift.\n\n" +
 			"A failed check prints the findings and exits 1. So does an emptied type (the file " +
@@ -561,17 +561,18 @@ func newNodePromoteCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "promote <bundle>",
 		Short: "Turn each subdirectory index.md that holds a concept into its own node",
-		Long: "promote fixes a layout validate fails: a concept written as a subdirectory's " +
-			"index.md. OKF §8 says an index file there has no frontmatter. promote moves each " +
-			"one to a node beside it named after the directory (grape/index.md becomes " +
-			"grape/grape.md), or to the one name --name gives. Links to the old place get " +
+		Long: "promote fixes a concept written as a subdirectory's index.md, which validate " +
+			"fails. OKF §8 says an index file there has no frontmatter. promote " +
+			"moves each one to a node beside it named after the directory, so grape/index.md " +
+			"turns into grape/grape.md. --name picks another name. The body and created carry over " +
+			"as they were. Links to the old place get " +
 			"rewritten in both spellings, grape/index.md and grape/. One log.md line goes in per " +
 			"move. Then the index is rebuilt and grape/index.md is a generated list again.\n\n" +
 			"--dry-run prints each move and rewrite with nothing written.\n\n" +
-			"Run promote before anything rebuilds the index. index build and the node commands " +
-			"that rebuild when they finish delete a subdirectory index.md, frontmatter and all, " +
-			"once its directory holds no other node. The body and created carry over as they " +
-			"were. The root index.md isn't touched; §8.1 lets it hold bundle metadata. A taken " +
+			"Run promote first. A rebuild deletes a subdirectory index.md, " +
+			"frontmatter and all, when its directory holds no other node. index build " +
+			"rebuilds, and so does each node command that changes the bundle. The root " +
+			"index.md isn't touched; §8.1 lets it hold bundle metadata. A taken " +
 			"target name makes promote exit 1 with nothing changed.",
 		Annotations: map[string]string{
 			transcriptAnnotation: "<!-- transcript: exit 1 okfctl validate handbook -->",

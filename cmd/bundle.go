@@ -67,9 +67,9 @@ func newBundleCmd() *cobra.Command {
 		Short: "Show a bundle's node count and declared OKF version",
 		Long: "info prints three lines about the bundle in dir (the current directory by " +
 			"default): how many concept nodes it has, how many reserved files (index.md and " +
-			"log.md at each level, OKF §3.1), plus the okf_version it declares (§12). One node " +
-			"in a subdirectory makes three reserved files in the example. wine/ gets an " +
-			"index.md of its own.\n\n" +
+			"log.md at each level, OKF §3.1), and the okf_version it declares (§12). In the " +
+			"example wine/ gets an index.md of its own, so one node in a subdirectory makes " +
+			"three reserved files.\n\n" +
 			"The version comes from the frontmatter of the bundle-root index.md (§8.1). When " +
 			"that has none, info reads the older .okf sidecar file. If neither declares one, " +
 			"info prints undeclared. okfctl then applies the v0.2 fallbacks §12.1 allows.\n\n" +

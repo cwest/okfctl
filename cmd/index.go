@@ -54,15 +54,14 @@ func newIndexCmd() *cobra.Command {
 			"fixes it.\n\n" +
 			"You'll seldom need it.\n\n" +
 			"Six node commands (new, mv, rm, edit, refresh, promote) rebuild the index when they " +
-			"finish. Build is for the times you add, move or delete node files yourself.\n\n" +
+			"finish. build is for the times you add, move, or delete node files yourself.\n\n" +
 			"Each subdirectory's link ends with a short summary (concept count, types, the tags " +
-			"common to most of its nodes, a subtree total for deeper trees) that tells you " +
-			"what's in a branch up front. --shape-tag-min and --shape-tag-max tune the tag list. " +
+			"common to most of its nodes, a subtree total for deeper trees) that tells you what a branch holds. --shape-tag-min and --shape-tag-max tune the tag list. " +
 			"--no-shape drops the summary.\n\n" +
-			"Only the root index.md keeps its frontmatter through a rebuild (that frontmatter is " +
-			"where the bundle's okf_version, title and description live, §8.1). Everything below " +
+			"Only the root index.md's frontmatter survives a rebuild (that frontmatter is " +
+			"where the bundle's okf_version, title, and description live, §8.1). Everything below " +
 			"it in each index.md is rewritten " +
-			"from scratch. One in a directory with no nodes is deleted. Subdirectory index.md " +
+			"from scratch. An index.md in a directory with no nodes is deleted. Subdirectory index.md " +
 			"files with frontmatter go too: each is a concept stored where §8 puts an index " +
 			"(validate fails it). Run `okfctl node promote` on such a file first or build throws " +
 			"away what you wrote there.",
@@ -114,10 +113,10 @@ func newIndexCmd() *cobra.Command {
 		Long: "check renders each index.md the way `okfctl index build` would and compares the " +
 			"result with what's on disk (OKF §8). It writes nothing. When every file matches it " +
 			"prints \"OK: index.md is current\" and exits 0. Otherwise it names the first file " +
-			"that's missing, stale or left in a directory with no nodes, then exits 1. In the " +
-			"example the node written with printf isn't in the index yet.\n\n" +
-			"Put check in CI. lint --strict won't catch a stale index for you.\n\n" +
-			"Pass the --shape-tag-min, --shape-tag-max and --no-shape flags you built with. " +
+			"that's missing, stale, or left in a directory with no nodes, then exits 1. In the " +
+			"example the node written with printf hasn't reached the index.\n\n" +
+			"Put check in CI. lint --strict won't flag a stale index.\n\n" +
+			"Pass the --shape-tag-min, --shape-tag-max, and --no-shape flags you built with. " +
 			"Build with --no-shape and check with the default flags: any index that links a " +
 			"subdirectory reads as stale.\n\n" +
 			"check doesn't fix anything. build does.",

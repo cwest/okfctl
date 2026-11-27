@@ -34,8 +34,8 @@ func newLogCmd() *cobra.Command {
 			"creates it. The example prints <DATE> where your run prints today's date.\n\n" +
 			"You need it only for changes made outside okfctl. Six node commands (new, mv, rm, " +
 			"edit, refresh, promote) write their own line.\n\n" +
-			"Whatever sits above the first date heading, your title included, is left alone. Two " +
-			"things change as append writes. The placeholder line `okfctl bundle init` wrote " +
+			"Whatever sits above the first date heading, your title included, is left alone. " +
+			"The placeholder line `okfctl bundle init` wrote " +
 			"goes away, and older okfctl bullets with their date inline move under a date " +
 			"heading of their own. Only the first line of a message gets in. Leave off --message " +
 			"and append exits 1.",

@@ -65,7 +65,7 @@ Create a bundle or summarize one
 
 Show a bundle's node count and declared OKF version
 
-info prints three lines about the bundle in dir (the current directory by default): how many concept nodes it has, how many reserved files (index.md and log.md at each level, OKF §3.1), plus the okf_version it declares (§12). One node in a subdirectory makes three reserved files in the example. wine/ gets an index.md of its own.
+info prints three lines about the bundle in dir (the current directory by default): how many concept nodes it has, how many reserved files (index.md and log.md at each level, OKF §3.1), and the okf_version it declares (§12). In the example wine/ gets an index.md of its own, so one node in a subdirectory makes three reserved files.
 
 The version comes from the frontmatter of the bundle-root index.md (§8.1). When that has none, info reads the older .okf sidecar file. If neither declares one, info prints undeclared. okfctl then applies the v0.2 fallbacks §12.1 allows.
 
@@ -381,11 +381,11 @@ build writes an index.md into the bundle root and into each directory under it t
 
 You'll seldom need it.
 
-Six node commands (new, mv, rm, edit, refresh, promote) rebuild the index when they finish. Build is for the times you add, move or delete node files yourself.
+Six node commands (new, mv, rm, edit, refresh, promote) rebuild the index when they finish. build is for the times you add, move, or delete node files yourself.
 
-Each subdirectory's link ends with a short summary (concept count, types, the tags common to most of its nodes, a subtree total for deeper trees) that tells you what's in a branch up front. --shape-tag-min and --shape-tag-max tune the tag list. --no-shape drops the summary.
+Each subdirectory's link ends with a short summary (concept count, types, the tags common to most of its nodes, a subtree total for deeper trees) that tells you what a branch holds. --shape-tag-min and --shape-tag-max tune the tag list. --no-shape drops the summary.
 
-Only the root index.md keeps its frontmatter through a rebuild (that frontmatter is where the bundle's okf_version, title and description live, §8.1). Everything below it in each index.md is rewritten from scratch. One in a directory with no nodes is deleted. Subdirectory index.md files with frontmatter go too: each is a concept stored where §8 puts an index (validate fails it). Run `okfctl node promote` on such a file first or build throws away what you wrote there.
+Only the root index.md's frontmatter survives a rebuild (that frontmatter is where the bundle's okf_version, title, and description live, §8.1). Everything below it in each index.md is rewritten from scratch. An index.md in a directory with no nodes is deleted. Subdirectory index.md files with frontmatter go too: each is a concept stored where §8 puts an index (validate fails it). Run `okfctl node promote` on such a file first or build throws away what you wrote there.
 
 ```
 okfctl index build [dir] [flags]
@@ -431,11 +431,11 @@ Flags:
 
 Exit 1 if any index.md is out of date, without writing
 
-check renders each index.md the way `okfctl index build` would and compares the result with what's on disk (OKF §8). It writes nothing. When every file matches it prints "OK: index.md is current" and exits 0. Otherwise it names the first file that's missing, stale or left in a directory with no nodes, then exits 1. In the example the node written with printf isn't in the index yet.
+check renders each index.md the way `okfctl index build` would and compares the result with what's on disk (OKF §8). It writes nothing. When every file matches it prints "OK: index.md is current" and exits 0. Otherwise it names the first file that's missing, stale, or left in a directory with no nodes, then exits 1. In the example the node written with printf hasn't reached the index.
 
-Put check in CI. lint --strict won't catch a stale index for you.
+Put check in CI. lint --strict won't flag a stale index.
 
-Pass the --shape-tag-min, --shape-tag-max and --no-shape flags you built with. Build with --no-shape and check with the default flags: any index that links a subdirectory reads as stale.
+Pass the --shape-tag-min, --shape-tag-max, and --no-shape flags you built with. Build with --no-shape and check with the default flags: any index that links a subdirectory reads as stale.
 
 check doesn't fix anything. build does.
 
@@ -546,7 +546,7 @@ append adds --message as one line under today's date in the log.md at the root o
 
 You need it only for changes made outside okfctl. Six node commands (new, mv, rm, edit, refresh, promote) write their own line.
 
-Whatever sits above the first date heading, your title included, is left alone. Two things change as append writes. The placeholder line `okfctl bundle init` wrote goes away, and older okfctl bullets with their date inline move under a date heading of their own. Only the first line of a message gets in. Leave off --message and append exits 1.
+Whatever sits above the first date heading, your title included, is left alone. The placeholder line `okfctl bundle init` wrote goes away, and older okfctl bullets with their date inline move under a date heading of their own. Only the first line of a message gets in. Leave off --message and append exits 1.
 
 ```
 okfctl log append [dir] [flags]
@@ -657,7 +657,7 @@ Open a node in your editor, then validate and log the change
 
 edit opens the node at <path> in your editor and waits for it to close. The editor is $OKFCTL_EDITOR, then $VISUAL, then $EDITOR (vi if none is set). The .md suffix is optional. In the example the editor is true: it exits right away.
 
-After the editor closes, edit validates the whole bundle (OKF §11.1) and, if that passes with the node's type still set, sets modified to now, adds "edited <path>" to log.md and rebuilds each index.md. created stays as it was. A node changed in your editor without okfctl keeps its old modified date. validate reports that later as git drift.
+After the editor closes, edit validates the whole bundle (OKF §11.1) and, if that passes with the node's type still set, sets modified to now, adds "edited <path>" to log.md, and rebuilds each index.md. created stays as it was. A node changed in your editor without okfctl keeps its old modified date. validate reports that later as git drift.
 
 A failed check prints the findings and exits 1. So does an emptied type (the file is no longer a concept, §3.2). Either way your change stays on disk and nothing else is touched. Fix it and run edit again.
 
@@ -731,11 +731,11 @@ Flags:
 
 Move or rename a node and rewrite every link that points at it
 
-mv takes the node at <old> to <new> in the bundle --bundle names (the current directory by default, with the .md suffix optional on either path). Links find their target by path (OKF §6). That's why mv rewrites each link in the bundle that pointed at the old path, README files included: one that started with / still starts with / while a relative one gets worked out again from its own file. Then mv adds "moved <old> -> <new>" to log.md and rebuilds each index.md.
+mv takes the node at <old> to <new> in the bundle --bundle names (the current directory by default, with the .md suffix optional on either path). Links find their target by path (OKF §6). So mv rewrites each link in the bundle that pointed at the old path, README files included: one that started with / still starts with / while a relative one gets worked out again from its own file. Then mv adds "moved <old> -> <new>" to log.md and rebuilds each index.md.
 
-Try --dry-run first.
+Try --dry-run first: it prints the move and each rewrite with nothing written.
 
-It prints the move and each rewrite with nothing written. The links in the moved node stay as written. Relative ones that worked from the old directory can break from the new one. `okfctl lint` reports them as broken-link.
+The links in the moved node stay as written. Relative ones that worked from the old directory can point at nothing from the new one. `okfctl lint` reports them as broken-link.
 
 With a file at <new>, mv exits 1 and changes nothing. It won't move index.md or log.md, nor put a node at either name.
 
@@ -780,7 +780,7 @@ Then new adds "created <path>" to log.md and rebuilds each index.md, and that's 
 
 With a type template for --type in the bundle, the node starts from that template's fields and body headings (PRD §9.3). Templates live in the bundle itself or in another bundle named by the .okf templates key or --templates-from (PRD §9.2). Run `okfctl template list` to see them.
 
-Overwriting a node, writing outside the bundle and a path that starts with a dot all exit 1.
+Overwriting a node, writing outside the bundle, and a path that starts with a dot all exit 1.
 
 To edit the node in your editor, use `okfctl node edit`.
 
@@ -825,11 +825,11 @@ Flags:
 
 Turn each subdirectory index.md that holds a concept into its own node
 
-promote fixes a layout validate fails: a concept written as a subdirectory's index.md. OKF §8 says an index file there has no frontmatter. promote moves each one to a node beside it named after the directory (grape/index.md becomes grape/grape.md), or to the one name --name gives. Links to the old place get rewritten in both spellings, grape/index.md and grape/. One log.md line goes in per move. Then the index is rebuilt and grape/index.md is a generated list again.
+promote fixes a concept written as a subdirectory's index.md, which validate fails. OKF §8 says an index file there has no frontmatter. promote moves each one to a node beside it named after the directory, so grape/index.md turns into grape/grape.md. --name picks another name. The body and created carry over as they were. Links to the old place get rewritten in both spellings, grape/index.md and grape/. One log.md line goes in per move. Then the index is rebuilt and grape/index.md is a generated list again.
 
 --dry-run prints each move and rewrite with nothing written.
 
-Run promote before anything rebuilds the index. index build and the node commands that rebuild when they finish delete a subdirectory index.md, frontmatter and all, once its directory holds no other node. The body and created carry over as they were. The root index.md isn't touched; §8.1 lets it hold bundle metadata. A taken target name makes promote exit 1 with nothing changed.
+Run promote first. A rebuild deletes a subdirectory index.md, frontmatter and all, when its directory holds no other node. index build rebuilds, and so does each node command that changes the bundle. The root index.md isn't touched; §8.1 lets it hold bundle metadata. A taken target name makes promote exit 1 with nothing changed.
 
 ```
 okfctl node promote <bundle> [flags]
@@ -916,7 +916,7 @@ Flags:
 
 Delete a node and list the nodes it leaves with no inbound links
 
-rm deletes the node at <path> from the bundle --bundle names (the current directory by default). The .md suffix is optional. Then it adds "removed <path>" to log.md, rebuilds each index.md and prints the orphans: nodes the deleted one linked to that nothing else links to now (OKF §6.4). In the example oak was tannin's only link.
+rm deletes the node at <path> from the bundle --bundle names (the current directory by default). The .md suffix is optional. Then it adds "removed <path>" to log.md, rebuilds each index.md, and prints the orphans: nodes the deleted one linked to that nothing else links to now (OKF §6.4). In the example oak was tannin's only link.
 
 Run it with --dry-run first to print the same list and leave the node in place.
 
@@ -958,7 +958,7 @@ Flags:
 
 Print one node's path, type, and body
 
-show prints a node's path, its type and its Markdown body from the bundle --bundle names (the current directory by default). The .md suffix is optional. The type gets a line of its own: you see what kind of concept you're reading before the body starts (PRD §7.3). The rest of the frontmatter (title, timestamps, sources) stays hidden. cat the file for that.
+show prints a node's path and type, then its Markdown body, from the bundle --bundle names (the current directory by default). The .md suffix is optional. The type gets a line of its own: you see what kind of concept you're reading before the body starts (PRD §7.3). The rest of the frontmatter (title, timestamps, sources) stays hidden. cat the file for that.
 
 show never writes. Any path that isn't a concept node exits 1 with "node not found", index.md and log.md included. The spec says neither is ever a concept (§3.1).
 
