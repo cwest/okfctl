@@ -13,6 +13,16 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ### Added
 
+- `migrate` gives each source it converts from a `# Citations` entry a §5.1
+  `id`, writes the entry's full text as the footnote definition `[^id]: …`
+  just above `# Citations`, and rewrites the body's `[k]` references to
+  `[^id]` (§4.2), expanding `[3]–[5]` and `[1, 2]`. The id is the entry key
+  when it is a plain slug unique after case folding, else the ordered-list
+  number, else `cite-<n>`; a number-looking id is quoted. A node whose ids
+  would collide is refused (`source-id-collision`), a `[k]` near "brief",
+  "citation", "node", or a link is left for review (`citation-ref-unclear`),
+  and a second entry for one resource gets no footnote
+  (`citation-unattached`). The plan summary gains an `attribution:` line.
 - `migrate` builds a source's `resource` from a DOI, arXiv id, PubMed id, or
   ISBN when a v0.1 `# Citations` entry names no URL: `doi.org`, `arxiv.org`,
   `pubmed.ncbi.nlm.nih.gov`, or Open Library for books. It works offline from a

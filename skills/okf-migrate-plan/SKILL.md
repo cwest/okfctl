@@ -31,16 +31,18 @@ nodes: 2
 reserved: 2
 okf_version: 0.1 (declared in .okf)
 $ okfctl migrate mykb --plan migrate-plan.json
-Wrote migrate-plan.json: 2 file(s) with deterministic edits (3 edit(s)), 3 judgment item(s).
+Wrote migrate-plan.json: 2 file(s) with deterministic edits (5 edit(s)), 3 judgment item(s).
 version: 0.1 -> hold (3 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
 edits: 2 file(s); timestamp->generated 0, citations->sources 2, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+attribution: source ids 2, footnote definitions 2, body references->footnotes 0
 judgment: 3 item(s); missing-actor 2, prose-citation 1
 3 item(s) need a decision before they can migrate; see the plan file.
 ```
 
 Planning reads the bundle and writes nothing but `migrate-plan.json`. There are
 two kinds of work in it. Edits are changes the tool can make safely (here, two
-URL citations turn into `sources` entries and the root-relative link gets a
+URL citations turn into `sources` entries, each with an `id` and a footnote
+definition holding the entry's text, and the root-relative link gets a
 leading `/`). Judgment items are the ones it won't guess at. Neither
 `timestamp` says who generated its node, and the Montalcino citation names no
 resource. Since those three items still lean on v0.1 fallbacks, the version
@@ -73,7 +75,14 @@ $ cat migrate-plan.json
       "path": "wine/acidity.md",
       "sources": [
         {
-          "resource": "https://en.wikipedia.org/wiki/Acids_in_wine"
+          "resource": "https://en.wikipedia.org/wiki/Acids_in_wine",
+          "id": "cite-1"
+        }
+      ],
+      "footnotes": [
+        {
+          "id": "cite-1",
+          "text": "https://en.wikipedia.org/wiki/Acids_in_wine"
         }
       ]
     },
@@ -81,7 +90,8 @@ $ cat migrate-plan.json
       "path": "wine/tannin.md",
       "sources": [
         {
-          "resource": "https://en.wikipedia.org/wiki/Tannin"
+          "resource": "https://en.wikipedia.org/wiki/Tannin",
+          "id": "cite-1"
         }
       ],
       "paths": [
@@ -89,6 +99,12 @@ $ cat migrate-plan.json
           "field": "link",
           "old": "wine/acidity.md",
           "new": "/wine/acidity.md"
+        }
+      ],
+      "footnotes": [
+        {
+          "id": "cite-1",
+          "text": "https://en.wikipedia.org/wiki/Tannin"
         }
       ]
     }
@@ -128,9 +144,10 @@ Pass `--generated-by` and each `missing-actor` item turns into a `timestamp` to
 
 ```text
 $ okfctl migrate mykb --plan migrate-plan.json --generated-by human:casey
-Wrote migrate-plan.json: 2 file(s) with deterministic edits (5 edit(s)), 1 judgment item(s).
+Wrote migrate-plan.json: 2 file(s) with deterministic edits (7 edit(s)), 1 judgment item(s).
 version: 0.1 -> hold (1 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
 edits: 2 file(s); timestamp->generated 2, citations->sources 2, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+attribution: source ids 2, footnote definitions 2, body references->footnotes 0
 judgment: 1 item(s); prose-citation 1
 1 item(s) need a decision before they can migrate; see the plan file.
 ```
@@ -147,27 +164,36 @@ a team handle.
 $ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
 --- a/wine/acidity.md
 +++ b/wine/acidity.md
-@@ -1,7 +1,9 @@
+@@ -1,12 +1,17 @@
  ---
  type: Reference
  title: Acidity
 -timestamp: 2026-06-02T09:15:00Z
 +generated: {by: "human:casey", at: "2026-06-02T09:15:00Z"}
 +sources:
-+  - resource: "https://en.wikipedia.org/wiki/Acids_in_wine"
++  - id: cite-1
++    resource: "https://en.wikipedia.org/wiki/Acids_in_wine"
  ---
 
  # Acidity
+
+ Acidity makes a wine taste fresh.
++
++[^cite-1]: https://en.wikipedia.org/wiki/Acids_in_wine
+
+ # Citations
+ - https://en.wikipedia.org/wiki/Acids_in_wine
 --- a/wine/tannin.md
 +++ b/wine/tannin.md
-@@ -1,13 +1,15 @@
+@@ -1,13 +1,18 @@
  ---
  type: Reference
  title: Tannin
 -timestamp: 2026-05-28T22:53:05Z
 +generated: {by: "human:casey", at: "2026-05-28T22:53:05Z"}
 +sources:
-+  - resource: "https://en.wikipedia.org/wiki/Tannin"
++  - id: cite-1
++    resource: "https://en.wikipedia.org/wiki/Tannin"
  ---
 
  # Tannin
@@ -175,11 +201,14 @@ $ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
  Tannin is the drying grip in red wine. It balances against
 -[acidity](wine/acidity.md).
 +[acidity](/wine/acidity.md).
++
++[^cite-1]: https://en.wikipedia.org/wiki/Tannin
 
  # Citations
  - https://en.wikipedia.org/wiki/Tannin
 version: 0.1 -> hold (1 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
 edits: 2 file(s); timestamp->generated 2, citations->sources 2, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+attribution: source ids 2, footnote definitions 2, body references->footnotes 0
 judgment: 1 item(s); prose-citation 1
 2 file(s) would change (dry run; nothing written).
 $ okfctl migrate mykb --apply --plan migrate-plan.json
@@ -192,8 +221,8 @@ note: 1 judgment item(s) were not applied (they need a decision; see the plan fi
 ```
 
 With the version held, `index.md` and `.okf` don't show up in the diff at all.
-The body `# Citations` list stays put. Migration adds frontmatter `sources` and
-deletes nothing. Keys the tool doesn't recognize come through
+The body `# Citations` list stays put. Migration adds frontmatter `sources`
+and footnote definitions and deletes nothing. Keys the tool doesn't recognize come through
 byte for byte (§11), and apply validates the bundle when it's done.
 
 Commit or copy the bundle ahead of a real apply if you want to diff it
@@ -246,6 +275,7 @@ comes back to you as a judgment item:
 | `timestamp:` (v0.1) | `generated: {by, at}` (§7) | you pass `--generated-by <actor>` | no actor: `missing-actor` |
 | body `# Citations` entry (v0.1) | `sources[]: {resource, title}` (§5.1) | the entry names exactly one resource, an absolute URL or a Markdown link to a bundle path, even across wrapped lines | it names none, or two different ones: `prose-citation`; it marks no work name: `source-title-unnamed` (the source is still added, untitled) |
 | body `# Citations` entry whose resource is already in `sources` | that source's `title` (§5.1) | the source has no `title` and the entry marks the work's name | it marks no name: `source-title-unnamed` (the title stays unset); the source already has a different `title`: `source-title-conflict` (the existing title stays) |
+| body `# Citations` entry with a source, and the body `[k]` that cites it | `sources[].id`, footnote definition `[^id]: <entry text>`, body `[^id]` (§5.1, §4.2) | always: id is the plain-slug key unique after case folding, else the ordered-list number, else `cite-<n>`; `[3]–[5]` and `[1, 2]` expand | a `[k]` within 60 characters of "brief", "citation", "node", or a link: `citation-ref-unclear`; a second entry for the same resource: `citation-unattached`; ids that collide once case is folded: `source-id-collision` (nothing written for that node) |
 | link or path field that resolves only from the bundle root (§12.1) | same target with a leading `/` (§6) | always | never |
 | §5 timestamp not in RFC 3339 form | `"2026-06-20T10:00:00Z"` | it has an offset (`Z`, `+0000`, `-05:00`) | no offset: `timestamp-no-offset`; not a date: `timestamp-invalid` |
 
@@ -276,9 +306,10 @@ $ cp -R "$TRANSCRIPT_FIXTURES/migrating/mykb" kb2
 -->
 ```text
 $ okfctl migrate kb2 --plan migrate-plan.json --generated-by human:casey --force-declare
-Wrote migrate-plan.json: 2 file(s) with deterministic edits (5 edit(s)), 1 judgment item(s).
+Wrote migrate-plan.json: 2 file(s) with deterministic edits (7 edit(s)), 1 judgment item(s).
 version: 0.1 -> declare v0.3 (forced: 1 prose-citation/missing-actor item(s) lose the §12.1 fallback)
 edits: 2 file(s); timestamp->generated 2, citations->sources 2, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+attribution: source ids 2, footnote definitions 2, body references->footnotes 0
 judgment: 1 item(s); prose-citation 1
 1 item(s) need a decision before they can migrate; see the plan file.
 ```
