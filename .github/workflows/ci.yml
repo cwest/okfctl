@@ -328,6 +328,17 @@ jobs:
         # It runs from the checkout (the same file okfctl.dev serves from
         # site/public/) so a PR that changes the installer tests its own copy
         # rather than whatever was last deployed.
+        #
+        # GITHUB_TOKEN authenticates the installer's api.github.com fallback.
+        # The installer reads the latest tag from the github.com releases
+        # redirect first; when that page errors (it returns 5xx at times), the
+        # fallback is an unauthenticated API call that a shared runner IP can
+        # find rate-limited, and the job went red with "could not determine
+        # the latest version". The token is this run's read-only one
+        # (workflow permissions: contents: read), and the installer sends it
+        # only to api.github.com.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.local/bin"
