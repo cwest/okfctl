@@ -65,10 +65,10 @@ const goInstallCmd = version.tag
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark light" />
-    <title>okfctl—a CLI for authoring and maintaining Open Knowledge Format bundles</title>
+    <title>okfctl: a CLI for authoring and maintaining Open Knowledge Format bundles</title>
     <meta
       name="description"
-      content="okfctl creates, moves, and checks Open Knowledge Format bundles. Rename a node and every link to it follows, then gate CI on the spec and on curation checks. Pure Go, runs offline."
+      content="okfctl scaffolds, validates, lints and migrates Open Knowledge Format bundles. Pure Go, and it runs offline."
     />
     <link rel="canonical" href="https://okfctl.dev/" />
     {/* Icons and the social share card. The docs pages get these from the
@@ -83,18 +83,18 @@ const goInstallCmd = version.tag
     <meta property="og:url" content="https://okfctl.dev/" />
     <meta
       property="og:title"
-      content="okfctl—a CLI for authoring and maintaining Open Knowledge Format bundles"
+      content="okfctl: a CLI for authoring and maintaining Open Knowledge Format bundles"
     />
     <meta
       property="og:description"
-      content="okfctl creates, moves, and checks Open Knowledge Format bundles. Rename a node and every link to it follows, then gate CI on the spec and on curation checks. Pure Go, runs offline."
+      content="okfctl scaffolds, validates, lints and migrates Open Knowledge Format bundles. Pure Go, and it runs offline."
     />
     <meta property="og:image" content="https://okfctl.dev/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="okfctl—author and maintain Open Knowledge Format bundles."
+      content="okfctl: author and maintain Open Knowledge Format bundles."
     />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="https://okfctl.dev/og.png" />
@@ -400,11 +400,8 @@ const goInstallCmd = version.tag
             </div>
             <div>
               <p class="lede">
-                The binary printed every line here. A test runs every tab against the current build and fails on the first line that drifts.
-                The first four tabs build on one bundle.{" "}
-                <code class="mono" style="color:var(--fg)">validate</code> always fails on a spec violation.{" "}
-                <code class="mono" style="color:var(--fg)">lint</code> and <code class="mono" style="color:var(--fg)">eval</code> report and exit 0
-                until you add <code class="mono" style="color:var(--fg)">--strict</code>.
+                The binary printed every line here. A test replays every tab against the current build and fails on the first line that drifts.
+                The first four tabs build on one bundle.
               </p>
             </div>
           </div>
@@ -447,7 +444,7 @@ const goInstallCmd = version.tag
 <span class="o">missing-xref: concepts/oak.md mentions "Tannin" but does not link to concepts/tannin.md</span>
 <span class="o">1 lint finding(s)</span>
 <span class="bad">okfctl: 1 lint finding(s)</span></pre>
-                <p class="term-note">The oak note mentions tannin and has no link to it. Plain <code class="mono">lint</code> reports it and exits 0. Add <code class="mono">--strict</code> and the same finding exits 1. Put that one in CI.</p>
+                <p class="term-note">The oak note says tannin but doesn't link to it. Plain <code class="mono">lint</code> prints the finding and exits 0, and <code class="mono">lint --strict</code> exits 1 on the same finding. Put the strict one in CI.</p>
               </div>
 
               <div role="tabpanel" id="t-eval" aria-labelledby="tab-eval" tabindex="0" hidden>
@@ -460,7 +457,7 @@ const goInstallCmd = version.tag
 <span class="o">uncited: concepts/tannin.md carries no citations (no sources, no # Citations, no internal reference)</span>
 <span class="o">4 transparency finding(s)</span>
 <span class="bad">okfctl: 4 transparency finding(s)</span></pre>
-                <p class="term-note">Both notes pass the spec and neither one cites anything. This gate wants a source and a confidence grade on every node. Reading the source to see if it backs the claim is a person's job; <code class="mono">okfctl eval sample</code> hands that person a worksheet.</p>
+                <p class="term-note">Both notes pass the spec, and neither one cites a source or grades its confidence. Checking that a source really backs a claim takes a person. <code class="mono">okfctl eval sample</code> picks the nodes and writes that person a worksheet.</p>
               </div>
 
               <div role="tabpanel" id="t-val" aria-labelledby="tab-val" tabindex="0" hidden>
@@ -470,7 +467,7 @@ const goInstallCmd = version.tag
 <span class="p">$</span> <span class="c">okfctl validate</span> <span class="f">mykb</span>
 <span class="bad">FAIL concepts/tannin.md: unparseable frontmatter</span>
 <span class="bad">okfctl: 1 conformance finding(s)</span></pre>
-                <p class="term-note">One stray bracket and the frontmatter won't parse. The spec's floor says it has to (§11.1), and <code class="mono">validate</code> exits 1 with or without <code class="mono">--strict</code>. Softer findings stay warnings until you pass <code class="mono">--strict</code>, like git history that disagrees with a node's <code class="mono">modified</code> date.</p>
+                <p class="term-note">One stray bracket and the frontmatter won't parse. Spec §11.1 says it has to, and <code class="mono">validate</code> exits 1.</p>
               </div>
 
               <div role="tabpanel" id="t-scale" aria-labelledby="tab-scale" tabindex="0" hidden>
@@ -537,15 +534,15 @@ const goInstallCmd = version.tag
             <article class="why-item">
               <div><span class="n">03 conformance</span><h3>You choose which checks fail the build.</h3></div>
               <div>
-                <p><code class="mono" style="color:var(--fg)">validate</code> fails on a spec violation every time. Everything else warns: git history that disagrees with a node's <code class="mono" style="color:var(--fg)">modified</code> date, drift from your team's type templates, the curation findings from <code class="mono" style="color:var(--fg)">lint</code>. Add <code class="mono" style="color:var(--fg)">--strict</code> to the ones you want to gate on.</p>
-                <p class="ev"><b>okfctl lint --strict ./bundles/knowledge</b> exits 1 on any finding. Add <code class="mono">--json</code> for a script to read; a clean bundle prints <code class="mono">[]</code>, never <code class="mono">null</code>.</p>
+                <p>Broken frontmatter fails <code class="mono" style="color:var(--fg)">validate</code> every time. Nothing else fails until you say so. Git contradicting a node's <code class="mono" style="color:var(--fg)">modified</code> date, a note that drifted from your team's template, a <code class="mono" style="color:var(--fg)">lint</code> finding: okfctl prints each one and exits 0 until you add <code class="mono" style="color:var(--fg)">--strict</code> to that command.</p>
+                <p class="ev"><b>okfctl lint --strict ./bundles/knowledge</b> fails on any finding. With <code class="mono">--json</code>, a clean bundle prints <code class="mono">[]</code> and never <code class="mono">null</code>.</p>
               </div>
             </article>
 
             <article class="why-item" style="border-bottom:0">
               <div><span class="n">04 scale</span><h3>Built against a real knowledge base.</h3></div>
               <div>
-                <p>The checks were tuned on a private knowledge base of <b style="color:var(--fg);font-weight:500">more than 350 nodes and 6,000 links between them</b>. At that size, link counts and stale dates tell you things a grep can't. <code class="mono" style="color:var(--fg)">analyze</code> shows where a bundle is thin: uncited nodes, short ones, ones not reviewed in 180 days. <code class="mono" style="color:var(--fg)">lint</code> shows what's broken. One reports and one gates. That's why they're two commands.</p>
+                <p>okfctl gates a private knowledge base of <b style="color:var(--fg);font-weight:500">more than 350 nodes and 6,700 links</b>. Each pull request there runs <code class="mono" style="color:var(--fg)">validate --strict</code>, <code class="mono" style="color:var(--fg)">index check</code> and <code class="mono" style="color:var(--fg)">lint --strict</code>, and one finding blocks the merge. At that size, link counts and stale dates tell you things a grep can't. <code class="mono" style="color:var(--fg)">analyze</code> shows where a bundle is thin: uncited nodes, short ones, ones not reviewed in 180 days. <code class="mono" style="color:var(--fg)">lint</code> shows what's broken.</p>
                 <p class="ev"><b>okfctl graph export --format dot | dot -Tsvg &gt; graph.svg</b> draws the link graph, and <code class="mono">okfctl serve</code> opens it in a browser.</p>
               </div>
             </article>
@@ -816,7 +813,7 @@ const goInstallCmd = version.tag
           "tab-cold": [0, "a fresh bundle that passes validate"],
           "tab-lint": [1, "lint exits 0; --strict exits 1"],
           "tab-eval": [1, "--strict turns the findings into a failure"],
-          "tab-val": [1, "a spec violation fails with or without --strict"],
+          "tab-val": [1, "a spec violation fails validate"],
           "tab-scale": [0, "a bundle someone else wrote"],
         };
         const select = (id) => {
