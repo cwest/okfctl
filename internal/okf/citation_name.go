@@ -83,13 +83,9 @@ func citationName(entry string) (string, bool) {
 	}
 	if m := nameLeadURL.FindStringSubmatch(text); m != nil {
 		rest := strings.TrimSpace(m[1])
-		if q := leadingQuote(rest); q != "" {
+		if q, after := leadingQuote(rest); q != "" {
 			// A quoted excerpt is evidence, not the page's name: a name is
 			// followed by a colon, a parenthetical, or a dash.
-			after := rest[len(q)+2:]
-			if strings.HasPrefix(rest, "“") {
-				after = rest[len(q)+len("“")+len("”"):]
-			}
 			for _, p := range []string{":", " (", " —", " –"} {
 				if strings.HasPrefix(after, p) {
 					return cleanName(q)
@@ -128,23 +124,26 @@ func citationName(entry string) (string, bool) {
 	// An italic container followed by a quoted piece (`*Podcast*, "Episode"`)
 	// cites the piece.
 	if text[start] == '*' && strings.HasPrefix(after, ", ") {
-		if q := leadingQuote(after[2:]); q != "" && nameSuffixOK(after[2+len(q)+2:], q) {
+		if q, rest := leadingQuote(after[2:]); q != "" && nameSuffixOK(rest, q) {
 			return cleanName(q)
 		}
 	}
 	return cleanName(inner)
 }
 
-// leadingQuote returns the text of a quoted span that opens s, or "".
-func leadingQuote(s string) string {
+// leadingQuote returns the text of a quoted span that opens s and the text
+// after its closing quote, or "" and s. Straight quotes are one byte and
+// curly quotes three, so the caller never computes the offset itself.
+func leadingQuote(s string) (quote, rest string) {
 	for _, q := range [][2]string{{`"`, `"`}, {"“", "”"}} {
 		if strings.HasPrefix(s, q[0]) {
-			if i := strings.Index(s[len(q[0]):], q[1]); i > 0 {
-				return s[len(q[0]) : len(q[0])+i]
+			body := s[len(q[0]):]
+			if i := strings.Index(body, q[1]); i > 0 {
+				return body[:i], body[i+len(q[1]):]
 			}
 		}
 	}
-	return ""
+	return "", s
 }
 
 // namePrefixOK reports whether the text before a marked span puts the span

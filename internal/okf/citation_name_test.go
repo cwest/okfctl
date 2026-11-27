@@ -37,6 +37,7 @@ func TestConformance_CitationName_Section5_1_FindsTheWorkName(t *testing.T) {
 		// Italics mark the container, quotes the piece inside it: the piece is
 		// the cited work.
 		"- [1] Elizabeth Stone (CTO, Netflix), *Lenny's Podcast*, \"How Netflix builds a culture of excellence,\" published 2025. https://www.youtube.com/x": "How Netflix builds a culture of excellence",
+		"- [2] Jane Doe, *Lenny's Podcast*, “How Netflix ships,” published 2025. https://www.youtube.com/y":                                                  "How Netflix ships",
 	} {
 		got, ok := citationName(entry)
 		if !ok || got != want {
