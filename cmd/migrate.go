@@ -54,7 +54,8 @@ func newMigrateCmd() *cobra.Command {
 			"result. With --dry-run, apply prints the diff it would write and writes nothing.\n\n" +
 			"A rule makes each edit. For a v0.1 bundle (Appendix B), timestamp turns into " +
 			"generated.at. Any body # Citations entry that names one follow-able resource " +
-			"is copied to the sources list, titled with the entry's text. An entry with no " +
+			"is copied to the sources list, titled with the cited work's name when the entry " +
+			"marks one (never the full entry text, §5.1). An entry with no " +
 			"URL but one DOI, arXiv id, PubMed id, or ISBN (checksum verified) gets a " +
 			"resource built from it, offline: doi.org, arxiv.org, pubmed.ncbi.nlm.nih.gov, " +
 			"or openlibrary.org. Nothing is fetched to check it. The v0.2 changes " +
@@ -65,7 +66,9 @@ func newMigrateCmd() *cobra.Command {
 			"citation with no resource or with two (§5.1). missing-actor marks a timestamp " +
 			"rename with no actor (§7). timestamp-no-offset is a date-time with no offset " +
 			"(§5, §13.2), and timestamp-invalid is a §5 value where no date can be found. " +
-			"All four wait for you to decide them. While a prose-citation or missing-actor " +
+			"source-title-unnamed marks an entry whose untitled source gets no name, and " +
+			"source-title-conflict one that names a different work than its source's title. " +
+			"All of them wait for you to decide them. While a prose-citation or missing-actor " +
 			"item is left, apply holds the version: those items need the v0.1 " +
 			"fallbacks §12.1 grants only to bundles declaring 0.2 or older (or nothing). " +
 			"--force-declare on the first run overrides the hold.\n\n" +
