@@ -379,7 +379,10 @@ list. An item goes away when the node stops producing it.
 - **A whole-entry title kept (`source-title-unpreserved`).** No footnote
   `[^id]` holds the entry's text, so the tool left the title alone. Make the
   footnote definition hold the entry, or shorten the title yourself once the
-  text lives somewhere else.
+  text lives somewhere else. A hand-annotated title (one that opens with the
+  entry's `[key]` but says more) lands here when the author already wrote
+  `[^id]`: the tool never edits an author's footnote, so add the title's text
+  to it yourself.
 - **A title that differs from the citation (`source-title-conflict`).** The
   tool didn't touch the old `title`. Decide which name is right and edit the
   source.

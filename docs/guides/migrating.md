@@ -263,7 +263,11 @@ From v0.1 (v0.3 Appendix B), two renames:
   An earlier run may have written the whole entry into `title`. Once the
   entry's text is the footnote definition of the source's `id`, that title
   is cut to the work's name, or removed with a `source-title-unnamed` item
-  when the entry names none. A title that is already a name stays, and so
+  when the entry names none. A title that opens with the entry's `[key]` but
+  was annotated by hand past the entry's text (`[S8] iCIMS, AI recruiting
+  software page (fetched 2026-11-27). VENDOR-DOC.`) has that text appended
+  to the footnote definition `migrate` writes, then is cut or removed the
+  same way, so nothing is lost. A title that is already a name stays, and so
   do the source's other keys (`note`, `x-` keys; §4.1). The plan summary
   counts these on a `titles:` line.
   An entry with no URL that carries exactly one DOI, arXiv id, PubMed id,
