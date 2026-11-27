@@ -43,21 +43,21 @@ func newSearchCmd() *cobra.Command {
 
 	c := &cobra.Command{
 		Use:   "search [query] [bundle-dir]",
-		Short: "Search the bundle lexically or by graph neighborhood (core, stdlib-only)",
-		Long: "search queries the bundle from the CLI without a model or index.\n\n" +
-			"Lexical mode (default): okfctl search \"query\" [dir] matches concept nodes by\n" +
-			"title, tag, type, or body substring (case-insensitive). Restrict the fields\n" +
-			"with --field title|tag|type|body.\n\n" +
-			"Graph-structural mode: okfctl search --neighbors <node-path> [dir] returns the\n" +
-			"nodes within --depth hops of a node in the link graph (edges are undirected).\n\n" +
-			"Semantic (vector) search is the separate okfctl-search plugin: run\n" +
-			"`okfctl-search --semantic \"query\"` (PRD §8).",
-		Example: "  # Lexical search across all fields in the current bundle\n" +
+		Short: "Find nodes by text or by link distance, with no model or index",
+		Long: "search finds the nodes that contain your query in one of four fields (title, " +
+			"tags, type, body) and prints each with its path, type, and matching fields. Case " +
+			"doesn't matter. It needs no model or index. --field narrows it to one of those " +
+			"fields. No match prints nothing and exits 0.\n\n" +
+			"--neighbors <node-path> asks a different question: which nodes sit within --depth " +
+			"links of that node, following links either way.\n\n" +
+			"It never edits a file. To search by meaning, install the okfctl-search plugin and " +
+			"run `okfctl-search --semantic \"query\"` (PRD §8).",
+		Example: "  # Search every field in the bundle in the current directory\n" +
 			"  okfctl search \"income statement\"\n\n" +
-			"  # Restrict the match to titles, in a bundle elsewhere\n" +
-			"  okfctl search --field title revenue ./bundles/knowledge\n\n" +
-			"  # Graph mode: nodes within 2 hops of a node in the link graph\n" +
-			"  okfctl search --neighbors concepts/income-statement.md --depth 2 ./bundles/knowledge",
+			"  # Match titles only, in a bundle elsewhere\n" +
+			"  okfctl search --field title revenue ./mykb\n\n" +
+			"  # Nodes within 2 links of one node\n" +
+			"  okfctl search --neighbors concepts/income-statement.md --depth 2 ./mykb",
 		Args: cobra.MaximumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Neighborhood mode: --neighbors names the start node; positionals

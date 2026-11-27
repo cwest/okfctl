@@ -26,7 +26,7 @@ import (
 func newGraphCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "graph",
-		Short: "Query and export the bundle's knowledge graph",
+		Short: "Export the bundle's link graph",
 	}
 	c.AddCommand(newGraphExportCmd())
 	return c
@@ -37,16 +37,18 @@ func newGraphExportCmd() *cobra.Command {
 	var noIgnore *bool
 	c := &cobra.Command{
 		Use:   "export [bundle-dir]",
-		Short: "Export the graph in a machine format (json or dot)",
-		Long: "graph export serializes the bundle's concept-node link graph for use in " +
-			"other tools and CI. Formats: json (default) and dot. For SVG, pipe dot to " +
-			"Graphviz: okfctl graph export --format dot | dot -Tsvg > graph.svg",
-		Example: "  # Export the current bundle's graph as JSON\n" +
+		Short: "Print the link graph as JSON or Graphviz DOT",
+		Long: "graph export prints the bundle's link graph for another tool to draw or check. " +
+			"Each node is a concept with its path, title, type, and top-level directory. Orphans " +
+			"are flagged. Each edge is a link or path field from one concept to another (§6.4).\n\n" +
+			"JSON is the default. --format dot writes Graphviz DOT. Pipe that to dot -Tsvg for a " +
+			"picture. It never edits a file.",
+		Example: "  # Print the graph of the bundle in the current directory as JSON\n" +
 			"  okfctl graph export\n\n" +
-			"  # Export a bundle elsewhere as Graphviz DOT\n" +
-			"  okfctl graph export --format dot ./bundles/knowledge\n\n" +
-			"  # Render an SVG via Graphviz\n" +
-			"  okfctl graph export --format dot ./bundles/knowledge | dot -Tsvg > graph.svg",
+			"  # Print a bundle elsewhere as Graphviz DOT\n" +
+			"  okfctl graph export --format dot ./mykb\n\n" +
+			"  # Draw it as an SVG with Graphviz\n" +
+			"  okfctl graph export --format dot ./mykb | dot -Tsvg > graph.svg",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."
