@@ -1,8 +1,8 @@
 # Starting and authoring a bundle
 
 You'll start in an empty directory and end with a couple of linked nodes, then
-move one, delete one, and hold new ones to a template. I ran each block below with okfctl itself,
-and the docs test suite replays each one whenever the binary changes.
+move one, delete one, and hold new ones to a template. The docs test suite replays the blocks below
+whenever the binary changes.
 
 ## From nothing to a valid bundle
 
@@ -80,9 +80,8 @@ Oak barrels add [tannin](tannins.md) to red wine.
 ```
 
 Look at the last line. The link in `oak.md` now says `tannins.md`, and it's
-still the short relative link you typed and not a rewritten path from the
-bundle root; when you diff the move you see one changed word. `node mv` logged the move and rebuilt
-the index as well.
+still the short relative link you typed. A diff of the move shows one changed
+word. `node mv` logged the move and rebuilt the index as well.
 
 `node rm` deletes a node and tells you which nodes lost their last inbound link:
 

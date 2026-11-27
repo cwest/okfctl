@@ -2,8 +2,8 @@
 
 Your bundle can go stale in two ways you won't see at first. Its `index.md`
 files stop listing all the nodes. Its `modified` dates drift away from what
-git remembers. Below, okfctl finds each one on a three-node bundle. I pasted
-these blocks from my terminal. Each one ends on the line that fails CI.
+git remembers. Below, okfctl finds each one on a three-node bundle, and each
+block ends on the line that fails CI.
 
 ## Catch a stale index
 
@@ -68,25 +68,24 @@ relative to it.
 ## What `index build` keeps and what it owns
 
 Rebuilding is safe to repeat. The root `index.md` is the one index that gets
-frontmatter, and §8.1 says a tool that regenerates the file MUST leave that
-block as it was. okfctl does, byte for byte (`okf_version`, `title`,
-`description`, `license`, and keys like `x-acme-owner` all come through). If
+frontmatter. §8.1 says a tool that regenerates the file MUST leave that
+block as it was. okfctl does, byte for byte. `okf_version`, `title`,
+`description`, `license`, and keys like `x-acme-owner` all come through. If
 there's no block at all and a legacy `.okf` sidecar declares `okf_version`, you
 get a new block holding that one key.
 
 okfctl adds the `(3 concepts · Reference · shared tags: taste)` part itself.
 It tells a reader (a person or an agent) what `wine/` holds so they don't
-have to open it: how many concepts, their types, and up to 12 tags
+have to open it: how many concepts there are and of what type, with up to 12 tags
 (`--shape-tag-max`) that at least two of them carry (`--shape-tag-min`, default
 2). Directories that nest deeper also get a `· N in
 subtree` total. `--no-shape` drops the whole thing.
 
-Most hand edits to an index disappear on the next build.
-
-Two don't. One is the H1. The other is a description you add to a subdirectory
-entry, like `* [Wine](wine/) - tasting vocabulary`. Windows line endings stay
-put too. An `index.md` checked out with CRLF stays CRLF, and `index check`
-won't call it stale over that.
+Most hand edits to an index disappear on the next build. The H1 survives. So
+does a description you add to a subdirectory entry, like
+`* [Wine](wine/) - tasting vocabulary`. Windows line endings survive as well.
+An `index.md` checked out with CRLF stays CRLF. `index check` won't call it
+stale over that.
 
 ## Catch a `modified` date that git contradicts
 
