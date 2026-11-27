@@ -165,11 +165,16 @@ func middleOps(am, bm []string, off int) []diffOp {
 		}
 		return ops
 	}
-	// One flat table of (n+1)*(m+1) cells; both dimensions are below
-	// maxLCSLines, so the product is at most about maxLCSLines² and cannot
-	// overflow an int.
-	w := m + 1
-	cells := make([]int, (n+1)*w)
+	// One flat table of (n+1)*(m+1) cells, grown by append inside loops that
+	// the guard above bounds (both dimensions below maxLCSLines, the product
+	// within maxLCSCells), so no allocation size is computed arithmetically.
+	w := len(bm) + 1
+	var cells []int
+	for i := 0; i <= n; i++ {
+		for j := 0; j <= m; j++ {
+			cells = append(cells, 0)
+		}
+	}
 	at := func(i, j int) int { return cells[i*w+j] }
 	for i := n - 1; i >= 0; i-- {
 		for j := m - 1; j >= 0; j-- {
