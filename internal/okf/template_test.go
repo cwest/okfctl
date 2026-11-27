@@ -121,7 +121,7 @@ func TestTemplateDrift_Conformant_NoFindings(t *testing.T) {
 }
 
 func TestTemplateDrift_NoGoverningTemplate_NoFindings(t *testing.T) {
-	// A node whose type has no template — unknown types are fine (§7.4).
+	// A node whose type has no template — unknown types are fine (PRD §7.4).
 	b := mkLintBundle(t, map[string]string{
 		"templates/playbook.md": playbookTemplate,
 		"wine/tannin.md":        lintDoc("Concept", "Tannin", "Body."),

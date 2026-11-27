@@ -24,7 +24,7 @@ import (
 )
 
 // NewNode creates a conformant concept node at relPath (bundle-relative) with a
-// required non-empty type (§7.2). It refuses an empty type and refuses to
+// required non-empty type (PRD §7.2). It refuses an empty type and refuses to
 // overwrite an existing file. Frontmatter is YAML-marshaled (never concatenated)
 // so a type/title containing newlines or YAML metacharacters is safely quoted
 // and cannot inject additional frontmatter keys. Returns the absolute path written.
@@ -44,7 +44,7 @@ func NewNode(root, relPath, typ, title string) (string, error) {
 // refusals apply. Returns the absolute path written.
 func NewNodeFromTemplate(root, relPath, typ, title string, t Template) (string, error) {
 	if strings.TrimSpace(typ) == "" {
-		return "", fmt.Errorf("type is required and must be non-empty (OKF §7)")
+		return "", fmt.Errorf("type is required and must be non-empty (OKF §4.1)")
 	}
 	if !strings.HasSuffix(relPath, ".md") {
 		relPath += ".md"
@@ -95,7 +95,7 @@ func NewNodeFromTemplate(root, relPath, typ, title string, t Template) (string, 
 	appendKV("created", birth)
 	appendKV("modified", birth)
 	// Stub the template's fields. Required fields get a "TODO" placeholder so the
-	// node starts life free of template drift (§9.3: "conformant to both the spec
+	// node starts life free of template drift (PRD §9.3: "conformant to both the spec
 	// floor and the team's convention") while still signalling the author what to
 	// fill in; recommended fields are stubbed empty (they are advisory, never
 	// drift). Skip keys already written (type, title).
