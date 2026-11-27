@@ -156,13 +156,13 @@ wine/oak.md                              Barrel Note  depth=1
 Nodes link to each other with ordinary Markdown links (§6.1), and those links
 are the edges of the bundle graph (§6.4). The export shows one directed edge,
 from oak to tannin. Tannin has no link to oak, and `search --neighbors` finds
-oak one hop away anyway. okfctl ignores edge direction when it walks the graph,
-so a node that links to you counts as your neighbor the same as one you link to.
+oak one hop away anyway. okfctl ignores edge direction when it walks the graph.
+A node that links to you is your neighbor the same as one you link to.
 `graph export` also writes JSON (the default), and `okfctl serve` draws the
 same graph in a browser.
 
-A node's path is its identity, and renaming one changes the graph. `node mv`
-rewrites each link that points at the old path:
+A link names a file by its path. Rename the file with plain `mv` and the links
+to it break. `node mv` renames it and fixes the links too:
 
 ```text
 $ okfctl node mv wine/tannin wine/tannins --bundle kb
@@ -245,7 +245,7 @@ Plain `validate` passes. OKF forbids a consumer from rejecting keys it doesn't
 know (§4.1, §11.2). The floor never reads templates either. Neither the unknown
 key nor the missing `owner` counts against you. Add `--templates` and the
 template checks report as warnings. Add `--strict` as well and those warnings
-exit 1, the setting you'd use in CI. Templates can't leak into the floor.
+exit 1, the setting you'd use in CI.
 
 ## The Version a Bundle Declares Decides How okfctl Reads It
 
@@ -268,24 +268,25 @@ $ okfctl validate v01
 OK: bundle conforms to the OKF spec floor
 ```
 
-That bundle still carries a `timestamp` key and a body `# Citations` list. Those
-are v0.1 habits. v0.2 renamed them to `generated.at` and frontmatter `sources`.
-Consumers MAY fall back to the old forms (§12.1, Appendix B). That's why v0.1
-bundles still read fine.
+That bundle still carries a `timestamp` key and a body `# Citations` list, both
+v0.1 habits. v0.2 renamed them to `generated.at` and frontmatter `sources`, and
+consumers MAY fall back to the old forms (§12.1, Appendix B). So v0.1 bundles
+still read fine.
 
-v0.3 has two breaking changes (§13.1). The first is about links. In v0.3 a link
-with no leading `/` resolves from the directory of its file, where it used to
-resolve from the bundle root. This bundle declares no version, and its tannin
-node writes the link the old way:
+v0.3 has two breaking changes (§13.1). The first is about path fields, the
+frontmatter keys such as `resource` that hold a path (§6.2). In v0.3 a path
+field with no leading `/` resolves from the directory of its file. The v0.2
+examples wrote those values from the bundle root. This bundle declares no
+version, and its tannin node writes `resource` the old way:
 
 <!-- transcript: setup
 $ mkdir -p old/wine
-$ printf -- '---\ntype: Concept\ntitle: Acidity\n---\n\nAcidity sharpens [tannin](/wine/tannin.md).\n' > old/wine/acidity.md
-$ printf -- '---\ntype: Concept\ntitle: Tannin\n---\n\nTannin balances [acidity](wine/acidity.md).\n' > old/wine/tannin.md
+$ printf -- '---\ntype: Concept\ntitle: Acidity\n---\n\nAcidity sharpens [tannin](tannin.md).\n' > old/wine/acidity.md
+$ printf -- '---\ntype: Concept\ntitle: Tannin\nresource: wine/acidity.md\n---\n\nTannin balances [acidity](acidity.md).\n' > old/wine/tannin.md
 -->
 ```text
-$ tail -1 old/wine/tannin.md
-Tannin balances [acidity](wine/acidity.md).
+$ grep resource old/wine/tannin.md
+resource: wine/acidity.md
 $ okfctl bundle info old
 nodes: 2
 reserved: 0
@@ -294,16 +295,13 @@ $ okfctl lint old
 OK: no lint findings
 $ printf -- '---\nokf_version: "0.3"\n---\n' > old/index.md
 $ okfctl lint old
-orphan: wine/acidity.md has no inbound links (unreachable by traversal)
-broken-link: wine/tannin.md links to wine/acidity.md which resolves to no node; did you mean /wine/acidity.md?
-missing-xref: wine/tannin.md mentions "Acidity" but does not link to wine/acidity.md
-3 lint finding(s)
+broken-link: wine/tannin.md path field resource: wine/acidity.md resolves to no node (§6.2); did you mean /wine/acidity.md?
+1 lint finding(s)
 ```
 
-With no version declared, okfctl falls back to the bundle root and the link
-works. OKF grants that fallback to path fields such as `resource` (§6.2,
-§12.1), and okfctl extends it to body links. Declare v0.3 and the same link points
-at `wine/wine/acidity.md`. There's no such file. With the fallback tied to
+With no version declared, okfctl falls back to the bundle root and the path
+resolves (§6.2, §12.1). Declare v0.3 and the same value points at
+`wine/wine/acidity.md`. There's no such file. With the fallback tied to
 what the bundle declares, an old bundle goes on working until you move it on
 purpose. [Migrating a bundle to OKF v0.3](guides/migrating.md) makes that move
 for you.
