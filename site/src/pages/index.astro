@@ -39,6 +39,10 @@
 import "../styles/tokens.css";
 import "../styles/homepage.css";
 import { fetchLatestVersion } from "../lib/version.ts";
+// The social card URL, versioned by og.png's content hash; the same helper
+// feeds the Starlight head in astro.config.mjs.
+import { versionedOgUrl } from "../../scripts/og-image.mjs";
+import ogVersion from "../../.share-assets/og-version.json";
 // Google Analytics 4. This standalone route is one of the site's two <head>
 // render paths (the other is the Starlight `head` array in astro.config.mjs);
 // both draw the tag from the same src/lib/analytics.ts, so they cannot diverge.
@@ -46,6 +50,7 @@ import { fetchLatestVersion } from "../lib/version.ts";
 import Analytics from "../components/Analytics.astro";
 
 const version = await fetchLatestVersion();
+const ogImage = versionedOgUrl(ogVersion.hash);
 // The chip shows the derived tag when a release exists, or a neutral,
 // version-free label otherwise. Never a hardcoded number.
 const versionLabel = version.tag ?? "latest";
@@ -89,7 +94,7 @@ const goInstallCmd = version.tag
       property="og:description"
       content="okfctl scaffolds, validates, lints and migrates Open Knowledge Format bundles. Pure Go, and it runs offline."
     />
-    <meta property="og:image" content="https://okfctl.dev/og.png" />
+    <meta property="og:image" content={ogImage} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
@@ -97,7 +102,7 @@ const goInstallCmd = version.tag
       content="okfctl: author and maintain Open Knowledge Format bundles."
     />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="https://okfctl.dev/og.png" />
+    <meta name="twitter:image" content={ogImage} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

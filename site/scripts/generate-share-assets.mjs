@@ -17,6 +17,7 @@
 // theme the pages render:
 //
 //   public/og.png            1200x630  — the og:image / twitter:image social card
+//   .share-assets/og-version.json      — og.png's content hash, the ?v= on its URL
 //   public/apple-touch-icon.png  180x180  — iOS home-screen icon
 //   public/favicon.png           180x180  — PNG fallback for the SVG favicon
 //
@@ -31,6 +32,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Resvg } from "@resvg/resvg-js";
 import { brand } from "./brand.mjs";
+import { ogHash, ogVersionFile } from "./og-image.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const siteRoot = join(here, "..");
@@ -101,9 +103,15 @@ async function main() {
   //    lines: words inside a PNG are invisible to every text check. It lives
   //    outside public/ so it is not deployed.
   const card = cardSvg();
-  await writeFile(join(publicDir, "og.png"), rasterize(card, 1200));
+  const ogPng = rasterize(card, 1200);
+  await writeFile(join(publicDir, "og.png"), ogPng);
   console.log("share-assets: wrote public/og.png (1200x630)");
   await mkdir(shareDir, { recursive: true });
+  // The card's content hash, read by og-image.mjs to version the og:image URL
+  // on every page so link previews refetch the card whenever its bytes change.
+  const hash = ogHash(ogPng);
+  await writeFile(ogVersionFile, JSON.stringify({ hash }) + "\n");
+  console.log(`share-assets: wrote .share-assets/og-version.json (v=${hash})`);
   await writeFile(join(shareDir, "og.svg"), card);
   console.log("share-assets: wrote .share-assets/og.svg (card text for the prose gate)");
 
