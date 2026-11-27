@@ -1,12 +1,12 @@
 ---
 name: okf-migrate-plan
-description: Use when working an okfctl migrate-plan.json — the judgment items okfctl migrate refuses to guess when upgrading a v0.1 bundle to v0.2. Covers the deterministic/judgment split, handing a plan to any agent or working it by hand, and verifying the applied migration.
-version: 1.0.0
+description: Use when working an okfctl migrate-plan.json — the judgment items okfctl migrate refuses to guess when upgrading a v0.1 or v0.2 bundle to OKF v0.3. Covers the deterministic/judgment split, handing a plan to any agent or working it by hand, and verifying the applied migration.
+version: 1.1.0
 author: okfctl
 license: Apache-2.0
 metadata:
   hermes:
-    tags: [okfctl, okf, migrate, migrate-plan, provenance, v0.2, knowledge-graph]
+    tags: [okfctl, okf, migrate, migrate-plan, provenance, v0.3, knowledge-graph]
     related_skills: [okf-authoring, okf-curation-health]
     sharing: shareable
 ---
@@ -15,8 +15,8 @@ metadata:
 
 ## Overview
 
-`okfctl migrate` upgrades an OKF bundle from spec **v0.1 to v0.2**. It runs in
-two phases, and the split is the whole point:
+`okfctl migrate` upgrades an OKF bundle that declares **v0.1 or v0.2, or no
+version, to v0.3**. It runs in two phases, and the split is the whole point:
 
 - **Phase 1 (`okfctl migrate <bundle>`)** is a **pure read**. It computes every
   edit it can make *safely and deterministically*, and for everything else it
@@ -37,7 +37,7 @@ API key for `okfctl`, that instruction is wrong — the tool does not take one.
 
 ## When to Use
 
-- You ran `okfctl migrate` on a v0.1 bundle and are staring at a
+- You ran `okfctl migrate` on a v0.1 or v0.2 bundle and are staring at a
   `migrate-plan.json` for the first time.
 - The plan reports "N item(s) need a decision before they can migrate" and you
   want to know what to do with them.
@@ -50,16 +50,22 @@ plan-and-apply loop.
 
 ## The deterministic / judgment split
 
-`okfctl migrate` applies the §13.1 breaking renames. Two of them are sometimes
-deterministic and sometimes a judgment call — the tool decides per item:
+`okfctl migrate` applies the v0.1 renames (OKF v0.3 Appendix B) and the v0.2 →
+v0.3 edits (§13.1). Each is sometimes deterministic and sometimes a judgment
+call — the tool decides per item:
 
-| v0.1 form | v0.2 form | Deterministic when… | Judgment when… |
+| Old form | v0.3 form | Deterministic when… | Judgment when… |
 |---|---|---|---|
-| `timestamp:` frontmatter | `generated: {by, at}` (§7) | you pass `--generated-by <actor>` | no actor supplied → `missing-actor` |
-| body `# Citations` item | `sources[].resource` (§5.1) | the item carries a follow-able resource — a bare URL, or a markdown link whose target the parser can extract (§6) | it is prose with no resource → `prose-citation` |
+| `timestamp:` frontmatter (v0.1) | `generated: {by, at}` (§7) | you pass `--generated-by <actor>` | no actor supplied → `missing-actor` |
+| body `# Citations` item (v0.1) | `sources[].resource` (§5.1) | the item carries a follow-able resource — a bare URL, or a markdown link whose target the parser can extract (§6) | it is prose with no resource → `prose-citation` |
+| bare link or path field that resolves only from the bundle root (v0.2, §12.1) | the same target with a leading `/` (§6 rule 2) | always: the tool knows which file it resolves to today | never |
+| §5 timestamp not in RFC 3339 form | `"2026-06-20T10:00:00Z"` | it carries an offset (`Z`, `+0000`, `-05:00`), so the instant is fixed | no offset → `timestamp-no-offset`; not a date at all → `timestamp-invalid` |
 
-Two version markers are always deterministic: the `.okf` sidecar `okf_version`
-and the bundle-root `index.md` marker (§8/§12) both go to `0.2` on apply.
+The version marker is always deterministic: the bundle-root `index.md` declares
+`okf_version: "0.3"` (§8.1) on apply, and a legacy `.okf` sidecar, if present,
+is bumped too. A bundle that declares v0.3 already, a later version, or one the
+tool doesn't recognize is never rewritten to an older version (§12): the plan
+says `keep`.
 
 **Why the refusals are correct, not lazy.** §5.1 makes `resource` *required* for
 every `sources` entry. A "citation" that is actually an evidence finding —
@@ -69,6 +75,9 @@ a `resource`**, and a made-up provenance URL is worse than an honest gap. That i
 the exact failure the two-phase design exists to prevent. Same for provenance
 actors (§7): the tool will not invent *who* generated a node, so a `timestamp`
 with no supplied actor stays a judgment item rather than a guessed `generated.by`.
+And a date-time with no offset (`2026-06-20T10:00:00`) names no instant (§5,
+§13.2): only the author knows whether it meant UTC or local time, so the tool
+won't pick one.
 
 ## Cold start: from a v0.1 bundle you own
 
@@ -77,13 +86,18 @@ put it on PATH). Everything below was run against a scratch two-node v0.1 bundle
 (`concepts/mouthfeel.md`, `concepts/tannin.md`); the output is reproduced
 verbatim. The two nodes carry, between them, every citation shape that matters: a
 bare URL, a markdown link the parser resolves, a markdown link it does *not* (see
-the pitfall below), and pure prose findings.
+the pitfall below), and pure prose findings. `tannin.md` also links
+`[mouthfeel](concepts/mouthfeel.md)`, a bare path that resolves only from the
+bundle root.
 
 ### 1. Plan (phase 1, pure read)
 
 ```sh
 $ okfctl migrate mykb --plan migrate-plan.json
-Wrote migrate-plan.json: 2 node(s) with deterministic edits (3 edit(s)), 5 judgment item(s).
+Wrote migrate-plan.json: 2 file(s) with deterministic edits (4 edit(s)), 5 judgment item(s).
+version: 0.1 -> declare v0.3
+edits: 2 file(s); timestamp->generated 0, citations->sources 3, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+judgment: 5 item(s); missing-actor 2, prose-citation 3
 5 item(s) need a decision before they can migrate; see the plan file.
 ```
 
@@ -91,7 +105,9 @@ Nothing was written to the bundle — only the plan file. Inspect it:
 
 ```json
 {
-  "target_version": "0.2",
+  "target_version": "0.3",
+  "declared_version": "0.1",
+  "version_action": "bump",
   "nodes": [
     {
       "path": "concepts/mouthfeel.md",
@@ -104,6 +120,9 @@ Nothing was written to the bundle — only the plan file. Inspect it:
       "path": "concepts/tannin.md",
       "sources": [
         { "resource": "https://en.wikipedia.org/wiki/Tannin" }
+      ],
+      "paths": [
+        { "field": "link", "old": "concepts/mouthfeel.md", "new": "/concepts/mouthfeel.md" }
       ]
     }
   ],
@@ -111,7 +130,7 @@ Nothing was written to the bundle — only the plan file. Inspect it:
     { "path": "concepts/mouthfeel.md", "kind": "missing-actor",  "context": "2026-02-03" },
     { "path": "concepts/mouthfeel.md", "kind": "prose-citation", "context": "- [mouthfeel](/concepts/mouthfeel.md)" },
     { "path": "concepts/mouthfeel.md", "kind": "prose-citation", "context": "- Personal observation from a comparative tasting, 2026. Not published anywhere." },
-    { "path": "concepts/tannin.md",    "kind": "missing-actor",  "context": "2026-01-15" },
+    { "path": "concepts/tannin.md",    "kind": "missing-actor",  "context": "2026-01-15T09:30:00Z" },
     { "path": "concepts/tannin.md",    "kind": "prose-citation", "context": "- Tasting notes from a 2026 barrel sampling; no public source." }
   ]
 }
@@ -122,7 +141,10 @@ Read the file top to bottom:
 - **`nodes[]`** — the deterministic edits the tool already worked out. `mouthfeel`
   got two `sources`: a bundle-relative link (`[tannin glossary](/concepts/tannin.md)`,
   whose target the parser extracted and kept relative per §6) and a bare
-  Wikipedia URL. `tannin` got its one bare URL. You do not need to touch these.
+  Wikipedia URL. `tannin` got its one bare URL, and its root-relative link
+  `concepts/mouthfeel.md` becomes `/concepts/mouthfeel.md` (`paths[]`), which
+  resolves to the same file once the bundle declares v0.3. You do not need to
+  touch these.
 - **`judgment[]`** — one entry per thing the tool refused to guess. Each carries
   the `path` (which node), the `kind` (`missing-actor` or `prose-citation`), and
   the verbatim `context` (the timestamp value, or the citation line) you need to
@@ -138,7 +160,10 @@ Supplying the provenance actor turns every `missing-actor` item into a real
 
 ```sh
 $ okfctl migrate mykb --plan migrate-plan.json --generated-by "human:alex"
-Wrote migrate-plan.json: 2 node(s) with deterministic edits (5 edit(s)), 3 judgment item(s).
+Wrote migrate-plan.json: 2 file(s) with deterministic edits (6 edit(s)), 3 judgment item(s).
+version: 0.1 -> declare v0.3
+edits: 2 file(s); timestamp->generated 2, citations->sources 3, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+judgment: 3 item(s); prose-citation 3
 3 item(s) need a decision before they can migrate; see the plan file.
 ```
 
@@ -157,7 +182,7 @@ cleanly into any coding-agent session or chat window. A good prompt names the
 node, the citation line, and the *rules* — never "find a source," which invites a
 hallucinated URL:
 
-> Here is a `prose-citation` judgment item from an OKF v0.2 migration plan:
+> Here is a `prose-citation` judgment item from an OKF migration plan:
 > `{ "path": "concepts/mouthfeel.md", "kind": "prose-citation",
 > "context": "- Personal observation from a comparative tasting, 2026." }`
 > §5.1 requires a real `resource` per source. Only three outcomes are valid:
@@ -198,70 +223,88 @@ fine; unresolved is a valid end state.
 
 ### 4. Apply (phase 2) — but dry-run first, and diff
 
-**Always dry-run before the real apply.** `--dry-run` writes nothing and its
-outcome is byte-identical to the real run, so it is a faithful preview:
+**Always dry-run before the real apply.** `--dry-run` writes nothing and prints
+the unified diff the real apply would write, through the same renderer, so it is
+a faithful preview:
 
 ```sh
 $ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
-would rewrite concepts/mouthfeel.md: timestamp -> generated { by: human:alex, at: 2026-02-03 }
-would add concepts/mouthfeel.md: sources[].resource = /concepts/tannin.md
-would add concepts/mouthfeel.md: sources[].resource = https://en.wikipedia.org/wiki/Mouthfeel
-would rewrite concepts/tannin.md: timestamp -> generated { by: human:alex, at: 2026-01-15 }
-would add concepts/tannin.md: sources[].resource = https://en.wikipedia.org/wiki/Tannin
-2 node(s) would be migrated to v0.2 (dry run; nothing written).
+--- a/.okf
++++ b/.okf
+@@ -1,1 +1,1 @@
+-okf_version: 0.1
++okf_version: "0.3"
+--- a/concepts/mouthfeel.md
++++ b/concepts/mouthfeel.md
+@@ -1,7 +1,10 @@
+ ---
+ type: Reference
+ title: Mouthfeel
+-timestamp: 2026-02-03
++generated: {by: "human:alex", at: 2026-02-03}
++sources:
++  - resource: /concepts/tannin.md
++  - resource: "https://en.wikipedia.org/wiki/Mouthfeel"
+ ---
+
+ # Mouthfeel
+--- a/concepts/tannin.md
++++ b/concepts/tannin.md
+@@ -1,12 +1,14 @@
+ ---
+ type: Reference
+ title: Tannin
+-timestamp: 2026-01-15T09:30:00Z
++generated: {by: "human:alex", at: "2026-01-15T09:30:00Z"}
++sources:
++  - resource: "https://en.wikipedia.org/wiki/Tannin"
+ ---
+
+ # Tannin
+
+-Polyphenols that bind proteins; part of [mouthfeel](concepts/mouthfeel.md).
++Polyphenols that bind proteins; part of [mouthfeel](/concepts/mouthfeel.md).
+
+ # Citations
+ - https://en.wikipedia.org/wiki/Tannin
+--- a/index.md
++++ b/index.md
+@@ -1,1 +1,5 @@
++---
++okf_version: "0.3"
++---
++
+ # Knowledge Base
+version: 0.1 -> declare v0.3
+edits: 2 file(s); timestamp->generated 2, citations->sources 3, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+judgment: 3 item(s); prose-citation 3
+4 file(s) would change (dry run; nothing written).
 ```
 
+Read the diff: `timestamp` became `generated` (the value carried across verbatim,
+at full precision), the follow-able citations became `sources`, the root-relative
+link gained its leading `/`, and the root `index.md` now declares v0.3. Everything
+else — including any unrecognized keys — is byte-for-byte unchanged (§11: the
+migration is additive and never drops a key it doesn't understand). The body
+`# Citations` list is **left in place**; the migration *adds* frontmatter
+`sources`, it does not delete the prose list, so prose findings you chose not to
+migrate simply stay where they were.
+
 If that is what you expect, apply for real. Snapshot the bundle first (a copy, or
-just commit it to git) so you can diff — never accept a migration you cannot
-inspect:
+just commit it to git) so you can diff afterwards too:
 
 ```sh
 $ cp -r mykb mykb-before          # or: git add -A && git commit
 $ okfctl migrate mykb --apply --plan migrate-plan.json
 migrated concepts/mouthfeel.md
 migrated concepts/tannin.md
-2 node(s) migrated to v0.2.
-bundle valid as v0.2
+2 file(s) migrated; bundle declares v0.3.
+bundle valid as v0.3
 note: 3 judgment item(s) were not applied (they need a decision; see the plan file).
 ```
 
-The apply **re-validates automatically** and reports `bundle valid as v0.2`. The
+The apply **re-validates automatically** and reports `bundle valid as v0.3`. The
 closing note is the tool being honest: unresolved judgment items were left alone.
-
-Diff to see exactly what changed:
-
-```sh
-$ diff mykb-before/concepts/tannin.md mykb/concepts/tannin.md
-3c3,5
-< timestamp: 2026-01-15T09:30:00Z
----
-> generated: {by: "human:alex", at: 2026-01-15}
-> sources:
->   - resource: "https://en.wikipedia.org/wiki/Tannin"
-```
-
-`timestamp` became `generated` (the datetime normalized to a date on the `at`
-field) and the one URL citation became a `sources` entry. The `mouthfeel` node
-changed the same way, with two sources:
-
-```sh
-$ diff mykb-before/concepts/mouthfeel.md mykb/concepts/mouthfeel.md
-3c3,6
-< timestamp: 2026-02-03
----
-> generated: {by: "human:alex", at: 2026-02-03}
-> sources:
->   - resource: /concepts/tannin.md
->   - resource: "https://en.wikipedia.org/wiki/Mouthfeel"
-```
-
-In both nodes `timestamp` became `generated` and the follow-able citations became
-`sources`. Everything else — including any unrecognized keys — is byte-for-byte
-unchanged (§11: the migration
-is additive and never drops a key it doesn't understand). The body `# Citations`
-list is **left in place**; the migration *adds* frontmatter `sources`, it does
-not delete the prose list, so prose findings you chose not to migrate simply stay
-where they were.
 
 ### 5. Verify
 
@@ -270,12 +313,12 @@ where they were.
 ```sh
 $ okfctl validate mykb
 OK: bundle conforms to the OKF spec floor
-$ cat mykb/.okf
-okf_version: 0.2
+$ okfctl bundle info mykb | tail -1
+okf_version: 0.3 (declared in index.md)
 ```
 
 The migration is also **idempotent**: re-running plan+apply on an
-already-migrated bundle finds `0 node(s) with deterministic edits` and produces a
+already-migrated bundle finds `0 file(s) with deterministic edits` and produces a
 zero-byte diff. Safe to re-run; safe to run twice.
 
 ## Common Pitfalls
@@ -292,8 +335,8 @@ zero-byte diff. Safe to re-run; safe to run twice.
    with an actor you can stand behind. It is stamped verbatim into provenance
    (§7); a placeholder pollutes the graph.
 
-4. **Applying without a dry-run or a snapshot.** `--dry-run` is byte-identical to
-   the real run and free. Preview it, snapshot the bundle (copy or git commit),
+4. **Applying without a dry-run or a snapshot.** `--dry-run` shows the exact
+   diff the real run writes, and it is free. Preview it, snapshot the bundle (copy or git commit),
    apply, then diff. A migration you can't inspect is one you can't trust.
 
 5. **Expecting apply to delete the body `# Citations` list.** It doesn't — the
@@ -332,5 +375,6 @@ zero-byte diff. Safe to re-run; safe to run twice.
 - [ ] `--apply --dry-run` previewed the exact edits and you snapshotted the
       bundle (copy or git commit) before the real apply
 - [ ] Real apply reported `bundle valid as v<target>`; you diffed before/after
-- [ ] `okfctl validate <bundle>` exits 0 and `.okf` shows `okf_version: 0.2`
+- [ ] `okfctl validate <bundle>` exits 0 and `okfctl bundle info <bundle>` shows
+      `okf_version: 0.3 (declared in index.md)`
 - [ ] Re-running plan+apply produces a zero diff (idempotent)
