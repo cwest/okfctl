@@ -81,6 +81,13 @@ func GenerateCommandReference(root *cobra.Command) string {
 	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
+// transcriptAnnotation is the cobra annotation that carries doc transcript
+// directives (internal/transcript) for a command's Example: an exit status
+// other than 0, or setup the example assumes. The generator writes the value,
+// verbatim, between "Example:" and the example block, where the transcript
+// test reads it. --help never prints annotations.
+const transcriptAnnotation = "okfctl.dev/transcript"
+
 // isDocumentable reports whether a command belongs in the reference. It filters
 // the same set cobra hides from help (unavailable, additional-help-topic) plus
 // the framework-generated `help` command whose text we do not author.
@@ -110,9 +117,12 @@ func renderCommand(b *bytes.Buffer, c *cobra.Command, level int) {
 	if c.Runnable() {
 		fmt.Fprintf(b, "```\n%s\n```\n\n", c.UseLine())
 	}
-	if ex := strings.TrimSpace(c.Example); ex != "" {
+	if ex := dedent(trimTrailingSpaceEachLine(c.Example)); ex != "" {
 		b.WriteString("Example:\n\n")
-		fmt.Fprintf(b, "```\n%s\n```\n\n", trimTrailingSpaceEachLine(ex))
+		if d := strings.TrimSpace(c.Annotations[transcriptAnnotation]); d != "" {
+			fmt.Fprintf(b, "%s\n", d)
+		}
+		fmt.Fprintf(b, "```\n%s\n```\n\n", ex)
 	}
 	writeFlags(b, c)
 }
@@ -140,6 +150,33 @@ func trimTrailingSpaceEachLine(s string) string {
 	lines := strings.Split(s, "\n")
 	for i, ln := range lines {
 		lines[i] = strings.TrimRight(ln, " \t")
+	}
+	return strings.Join(lines, "\n")
+}
+
+// dedent drops leading and trailing blank lines and removes the indent every
+// non-blank line shares. Example strings are indented two spaces for the
+// terminal; in the reference the block itself sets them apart, and a `$ okfctl`
+// line has to start at column 0 for the doc transcript test to replay it.
+func dedent(s string) string {
+	lines := strings.Split(strings.Trim(s, "\n"), "\n")
+	common := -1
+	for _, ln := range lines {
+		if strings.TrimSpace(ln) == "" {
+			continue
+		}
+		n := len(ln) - len(strings.TrimLeft(ln, " "))
+		if common < 0 || n < common {
+			common = n
+		}
+	}
+	if common <= 0 {
+		return strings.Join(lines, "\n")
+	}
+	for i, ln := range lines {
+		if len(ln) >= common {
+			lines[i] = ln[common:]
+		}
 	}
 	return strings.Join(lines, "\n")
 }

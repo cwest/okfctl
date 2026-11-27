@@ -22,19 +22,33 @@ import (
 )
 
 func newBundleCmd() *cobra.Command {
-	bundle := &cobra.Command{Use: "bundle", Short: "Bundle lifecycle commands"}
+	bundle := &cobra.Command{Use: "bundle", Short: "Create a bundle or summarize one"}
 	bundle.AddCommand(&cobra.Command{
 		Use:   "init [dir]",
-		Short: "Scaffold a minimal conformant OKF bundle",
-		Long: "init scaffolds a minimal bundle that conforms to the OKF spec floor: the two " +
-			"reserved files (index.md and log.md, OKF §3.1). The bundle-root index.md declares " +
-			"okf_version \"0.3\" in its frontmatter (§8.1, §12). It doesn't create any concept " +
-			"nodes — a fresh bundle has zero nodes; use `okfctl node new` to add them. It refuses " +
-			"to overwrite an existing bundle.",
-		Example: "  # Scaffold a new bundle in the current directory\n" +
-			"  okfctl bundle init\n\n" +
-			"  # Scaffold in a named directory\n" +
-			"  okfctl bundle init ./my-bundle",
+		Short: "Create a bundle with index.md and log.md, declared OKF v0.3",
+		Long: "init creates a bundle in dir (the current directory if you leave dir off) and " +
+			"makes the directory when it's missing. It writes the two reserved files (OKF §3.1). " +
+			"The root index.md declares okf_version \"0.3\" in its frontmatter (§8.1, §12). " +
+			"log.md starts with a placeholder line.\n\n" +
+			"There are no concept nodes at first. Add them with `okfctl node new`; index.md " +
+			"and log.md change with each node you add.\n\n" +
+			"init never checks for a bundle that's there. Run it on one and it exits 0 after " +
+			"overwriting index.md and log.md. The root frontmatter (a title or description you " +
+			"added) and the change history are gone, but none of your nodes are touched. If " +
+			"you aren't sure a directory is empty, run `okfctl bundle info` on it first.",
+		Example: "  $ okfctl bundle init newkb\n" +
+			"  Initialized OKF bundle in newkb\n" +
+			"  $ ls newkb\n" +
+			"  index.md\n" +
+			"  log.md\n" +
+			"  $ cat newkb/index.md\n" +
+			"  ---\n" +
+			"  okf_version: \"0.3\"\n" +
+			"  ---\n" +
+			"\n" +
+			"  # Knowledge Base\n" +
+			"\n" +
+			"  _Progressive-disclosure entry point. Add \"start here\" links as nodes land._",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."
@@ -50,17 +64,24 @@ func newBundleCmd() *cobra.Command {
 	})
 	bundle.AddCommand(&cobra.Command{
 		Use:   "info [dir]",
-		Short: "Summarize a bundle (node count, spec version)",
-		Long: "info prints a one-glance summary of a bundle: how many concept nodes it holds, " +
-			"how many reserved files (index.md/log.md, OKF §3.1) it carries, and its okf_version " +
-			"(§12). The version is read from the bundle-root index.md frontmatter (§8.1), falling " +
-			"back to the legacy .okf sidecar. A bundle that declares neither is reported as " +
-			"undeclared: per §12.1 it is read with the v0.2 fallbacks. It's read-only and never " +
-			"mutates the bundle. It doesn't validate conformance — use `okfctl validate` for that.",
-		Example: "  # Summarize the bundle in the current directory\n" +
-			"  okfctl bundle info\n\n" +
-			"  # Summarize a bundle elsewhere\n" +
-			"  okfctl bundle info ./bundles/knowledge",
+		Short: "Show a bundle's node count and declared OKF version",
+		Long: "info prints three lines about the bundle in dir (the current directory by " +
+			"default): how many concept nodes it has, how many reserved files (index.md and " +
+			"log.md at each level, OKF §3.1), and the okf_version it declares (§12). In the " +
+			"example wine/ gets an index.md of its own, so one node in a subdirectory makes " +
+			"three reserved files.\n\n" +
+			"The version comes from the frontmatter of the bundle-root index.md (§8.1). When " +
+			"that has none, info reads the older .okf sidecar file. If neither declares one, " +
+			"info prints undeclared. okfctl then applies the v0.2 fallbacks §12.1 allows.\n\n" +
+			"info only reads. To find out if the bundle conforms, run `okfctl validate`.",
+		Example: "  $ okfctl bundle init cellar\n" +
+			"  Initialized OKF bundle in cellar\n" +
+			"  $ okfctl node new wine/tannin --type Concept --bundle cellar\n" +
+			"  Created cellar/wine/tannin.md\n" +
+			"  $ okfctl bundle info cellar\n" +
+			"  nodes: 1\n" +
+			"  reserved: 3\n" +
+			"  okf_version: 0.3 (declared in index.md)",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."
