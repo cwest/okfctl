@@ -81,9 +81,10 @@ func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print the okfctl version",
-		Long: "version prints the okfctl build metadata: the release version, git commit, and " +
-			"build date. On a plain `go build` with no release ldflags these degrade to \"dev\". " +
-			"It's equivalent to `okfctl --version`.",
+		Long: "version prints the okfctl version, the git commit it came from, and the build " +
+			"date: the same line as `okfctl --version`. Release builds fill in all three. If " +
+			"you built from source or used `go install`, you'll see the module version Go " +
+			"recorded (dev when there isn't one) with commit none and built unknown.",
 		Example: "  # Print the build version\n" +
 			"  okfctl version",
 		Args: cobra.NoArgs,

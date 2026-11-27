@@ -28,7 +28,11 @@ import (
 func newPluginCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "plugin",
-		Short: "Discover and manage okfctl plugins (okfctl-<name> on PATH)",
+		Short: "Find and install okfctl-<name> plugins",
+		Long: "A plugin is any executable named okfctl-<name> on your PATH. When okfctl has no " +
+			"command called <name>, `okfctl <name>` runs okfctl-<name> with the rest of your " +
+			"arguments and exits with its status. git and kubectl do the same. okfctl's own " +
+			"commands always beat a plugin with the same name.",
 	}
 	c.AddCommand(newPluginListCmd())
 	c.AddCommand(newPluginInstallCmd())
@@ -40,10 +44,10 @@ func newPluginListCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "list",
 		Short: "List okfctl-<name> plugin executables found on PATH",
-		Long: "plugin list discovers okfctl-<name> executables on your PATH and prints each " +
-			"plugin's name and resolved path. These are the subcommands okfctl will dispatch to " +
-			"git/kubectl-style when you run `okfctl <name>`. Read-only. Scan a specific PATH with " +
-			"--path; the default is $PATH.",
+		Long: "plugin list prints each okfctl-<name> executable it finds on your PATH, with its " +
+			"path. When two directories hold the same name, the first one on PATH is the one " +
+			"`okfctl <name>` runs. --path scans a different list of directories.\n\n" +
+			"list only reads. When it finds no plugins it says so on stderr and exits 0.",
 		Example: "  # List discovered plugins on $PATH\n" +
 			"  okfctl plugin list\n\n" +
 			"  # Scan a specific PATH\n" +
@@ -75,11 +79,14 @@ func newPluginInstallCmd() *cobra.Command {
 	var dirOverride string
 	c := &cobra.Command{
 		Use:   "install <source>",
-		Short: "Install an okfctl-<name> plugin executable into the managed plugins dir",
-		Long: "Install copies the okfctl-<name> executable at <source> into the okfctl " +
-			"plugins dir (default $OKFCTL_CONFIG_HOME/plugins or <user config dir>/okfctl/plugins, " +
-			"override with --dir). Put that dir on your PATH so `okfctl plugin list` and " +
-			"subcommand dispatch discover the installed plugin.",
+		Short: "Copy an okfctl-<name> executable into okfctl's plugins directory",
+		Long: "plugin install copies an executable named okfctl-<name> into okfctl's plugins " +
+			"directory: $OKFCTL_CONFIG_HOME/plugins if that's set, otherwise okfctl/plugins under " +
+			"your OS's user config directory. --dir picks another directory. The copy gets mode " +
+			"755 and replaces any plugin with the same name there.\n\n" +
+			"A source that isn't named okfctl-<name> exits 1. install doesn't touch your PATH. " +
+			"If the directory isn't on it, install prints a note. Add the directory yourself " +
+			"so `okfctl <name>` and `okfctl plugin list` can find the plugin.",
 		Example: "  # Install a plugin executable into the managed plugins dir\n" +
 			"  okfctl plugin install ./okfctl-search\n\n" +
 			"  # Install into a specific directory\n" +

@@ -26,14 +26,21 @@ func loadConfig() (map[string]string, error) { return okfconfig.Load() }
 func saveConfig(m map[string]string) error   { return okfconfig.Save(m) }
 
 func newConfigCmd() *cobra.Command {
-	c := &cobra.Command{Use: "config", Short: "Get and set okfctl configuration"}
+	c := &cobra.Command{
+		Use:   "config",
+		Short: "Read and write okfctl's own settings",
+		Long: "config reads and writes config.json, okfctl's settings file. Set " +
+			"$OKFCTL_CONFIG_HOME to choose its directory; without it okfctl uses the okfctl " +
+			"directory under your OS's user config directory. Plugins read the file too " +
+			"(okfctl-search looks up model_path there). Names you save with `okfctl registry` " +
+			"go in it as keys that start with `registry.`. No bundle content lands in it.",
+	}
 	c.AddCommand(&cobra.Command{
 		Use: "set <key> <value>", Short: "Set a config value", Args: cobra.ExactArgs(2),
-		Long: "set writes a key/value pair into the single okfctl config store (a flat file " +
-			"under $OKFCTL_CONFIG_HOME or the OS user-config dir). An existing key is overwritten. " +
-			"This is okfctl's own tool configuration, not bundle content — it never touches a bundle.",
-		Example: "  # Pin a default remote registry URL prefix\n" +
-			"  okfctl config set default.remote https://github.com/acme",
+		Long: "set saves a value under a key and prints nothing. Setting a key again replaces " +
+			"its value. okfctl doesn't check key names. Misspell one and you've made a new key.",
+		Example: "  # Point okfctl-search at a local model2vec model\n" +
+			"  okfctl config set model_path ~/models/potion-base-8M",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			m, err := loadConfig()
 			if err != nil {
@@ -45,10 +52,10 @@ func newConfigCmd() *cobra.Command {
 	})
 	c.AddCommand(&cobra.Command{
 		Use: "get <key>", Short: "Get a config value", Args: cobra.ExactArgs(1),
-		Long: "get prints the value stored for a single config key, or exits non-zero if the " +
-			"key is unset. It's read-only. Use `okfctl config list` to see every key at once.",
+		Long: "get prints the value saved under one key. If the key isn't set, get exits 1. " +
+			"For all of them, run `okfctl config list`.",
 		Example: "  # Print one config value\n" +
-			"  okfctl config get default.remote",
+			"  okfctl config get model_path",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			m, err := loadConfig()
 			if err != nil {
@@ -64,9 +71,8 @@ func newConfigCmd() *cobra.Command {
 	})
 	c.AddCommand(&cobra.Command{
 		Use: "list", Short: "List all config values", Args: cobra.NoArgs,
-		Long: "list prints every stored config key and its value, sorted by key. It's read-only. " +
-			"Registered remote sources appear here too, under the registry. key prefix (see " +
-			"`okfctl registry list` for a focused view of those).",
+		Long: "list prints each saved key as key = value, sorted by key. Keys that " +
+			"start with `registry.` show up here too. `okfctl registry list` shows just those.",
 		Example: "  # Show every stored config key and value\n" +
 			"  okfctl config list",
 		RunE: func(cmd *cobra.Command, args []string) error {
