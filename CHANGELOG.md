@@ -16,8 +16,8 @@ tagged release, goreleaser generates the release notes from the commit log
 `migrate` now splits a `# Citations` entry that names several resources into
 one source per resource, and cuts a source title that holds its whole entry
 down to the work's name. This release also fixes a v0.6.0 bug: a source title
-could be a quoted excerpt instead of the work's name. A bundle migrated with
-0.6.0 keeps those titles until you fix them; see Fixed.
+could be a quoted excerpt instead of the work's name. To clean a bundle
+migrated with 0.6.0, see Fixed.
 
 ### Added
 
@@ -50,12 +50,13 @@ could be a quoted excerpt instead of the work's name. A bundle migrated with
   `source-title-unnamed`. The fix also covers the parts of a split entry.
   (#258)
 
-  If you migrated a bundle with 0.6.0, running `migrate` again does not fix
-  these titles: the plan finds nothing to change. Either run 0.7.0's plan and
-  apply on the bundle as it was before the 0.6.0 run (for example, after
-  `git revert` of that migration commit), or look at the `title` of each
-  source made from a `# Citations` entry and remove any that is a
-  description, an error message, or a sentence.
+  If you migrated a bundle with 0.6.0, run 0.7.0's plan and apply on it. A
+  title that holds its whole entry is cut to the work's name or removed, which
+  clears most excerpt titles. If no footnote holds a title's text, the title
+  is kept and reported as `source-title-unpreserved`. A re-run leaves alone a
+  title that is the excerpt by itself. Reverting the 0.6.0 migration commit
+  and migrating fresh gives the cleanest result. If you re-run instead, check
+  any `title` that reads like a description, an error message, or a sentence.
 - The okfctl.dev link-preview image URL now changes when the card changes, so
   a stale cached card is no longer shown. (#256)
 
