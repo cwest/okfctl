@@ -75,7 +75,7 @@ function cardSvg() {
 
   <!-- Tagline -->
   <text x="98" y="360" font-family="${xml(brand.sans)}" font-size="42" font-weight="500" fill="${brand.inkMuted}">${xml(brand.tagline)}</text>
-  <text x="98" y="418" font-family="${xml(brand.sans)}" font-size="42" font-weight="500" fill="${brand.inkMuted}">Pure Go — no CGO, no model runtime.</text>
+  <text x="98" y="418" font-family="${xml(brand.sans)}" font-size="42" font-weight="500" fill="${brand.inkMuted}">Pure Go. Runs offline.</text>
 
   <!-- Footer: domain + spec posture -->
   <text x="98" y="560" font-family="${xml(brand.mono)}" font-size="34" font-weight="600" fill="${brand.accentLight}">${xml(brand.domain)}</text>
