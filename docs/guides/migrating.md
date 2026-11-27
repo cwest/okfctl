@@ -164,9 +164,10 @@ label (§5.1: per-claim attribution is a footnote whose label is a
 entry's place in the list.
 
 A body `# Citations` list goes only when nothing in it would be lost: every
-entry's full text is the footnote definition of its source, every resource it
-names is a source's `resource`, the section holds nothing but entries, and no
-body `[k]` still points at it. `acidity.md` passes, so its list goes.
+entry's full text is the footnote definition of its source (or opens it, when
+a hand-annotated title was moved in after it), every resource it names is a
+source's `resource`, the section holds nothing but entries, and no body `[k]`
+still points at it. `acidity.md` passes, so its list goes.
 `tannin.md` fails on the Montalcino line, so its list stays as written.
 
 ### 3. Apply

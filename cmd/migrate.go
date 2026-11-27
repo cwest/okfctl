@@ -69,8 +69,8 @@ func newMigrateCmd() *cobra.Command {
 			"two or more resources (code spans aside) is split into one source per resource, " +
 			"with ids <id>, <id>-2, <id>-3; the first holds the full entry text as its " +
 			"footnote, a later one its link text or resource, and each body [k] becomes " +
-			"[^id][^id-2]... Once every entry's text is the footnote definition of its " +
-			"source and every resource it names is a source's resource, the body # Citations " +
+			"[^id][^id-2]... Once every entry's text opens the footnote definition of its " +
+			"source (alone, or followed by a moved title annotation) and every resource it names is a source's resource, the body # Citations " +
 			"list is removed (§4.2); otherwise it stays. The v0.2 changes " +
 			"(§13.1) give a leading / to any link or path field that resolves only from the " +
 			"bundle root (§12.1). It then points at the same file under v0.3 (§6). They " +

@@ -20,7 +20,9 @@ tagged release, goreleaser generates the release notes from the commit log
   title to the work's name or removes and reports it. A footnote the author
   already wrote is never edited; such a title is kept and reported
   (`source-title-unpreserved`). A bracketed name like `[Beta] Auto Routing`
-  is left alone.
+  is left alone. A footnote that holds its entry's text followed by a
+  moved annotation still counts as holding the entry, so the node's
+  `# Citations` list can still be removed.
 
 ## [0.7.0] - 2026-11-27
 

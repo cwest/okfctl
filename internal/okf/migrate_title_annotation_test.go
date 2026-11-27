@@ -197,3 +197,28 @@ func TestConformance_MigrateTitleAnnotation_Section5_1_ExistingFootnoteRefuses(t
 		t.Fatalf("a refused node must keep its bytes\n%s", out)
 	}
 }
+
+// §4.2 with §5.1: a footnote that holds its entry's text with a moved
+// annotation after it still holds the entry, so the `# Citations` list is
+// removed in the same apply. The annotation must not keep the list.
+func TestConformance_MigrateTitleAnnotation_Section4_2_MovedAnnotationStillRemovesList(t *testing.T) {
+	dir, plan := migrateOnce(t, kb(annotatedTitleNode))
+	if hasJudgment(plan, "a.md", JudgmentCitationsKept) {
+		t.Fatalf("§4.2: a moved annotation must not keep the list: %+v", plan.Judgment)
+	}
+	if nm := findNodeMigration(t, plan, "a.md"); !nm.RemoveCitations {
+		t.Fatalf("§4.2: want the list planned for removal, got %+v", nm)
+	}
+	out := readRel(t, dir, "a.md")
+	if strings.Contains(out, "# Citations") {
+		t.Fatalf("§4.2: the body list must be gone:\n%s", out)
+	}
+	want := "[^S8]: iCIMS AI recruiting. https://www.icims.com/products/ai-recruiting-software/. VERIFIED. " +
+		"iCIMS, AI recruiting software page (fetched 2026-11-27). VENDOR-DOC. VERIFIED.\n"
+	if !strings.Contains(out, want) {
+		t.Fatalf("§5.1: footnote must hold the entry text then the annotation, want %q in\n%s", want, out)
+	}
+	if fs := Validate(loadMigrate(t, dir)); len(fs) != 0 {
+		t.Fatalf("migrated bundle must validate: %+v", fs)
+	}
+}
