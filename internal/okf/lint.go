@@ -161,6 +161,13 @@ var (
 	// seen. Strip the whole matched line. Multi-line via (?m) so `^`/`$` anchor
 	// each definition line.
 	refLinkDefRe = regexp.MustCompile(`(?m)^ {0,3}\[[^\]]+\]:[ 	]*(?:<[^>]*>|\S+)(?:[ 	]+(?:"[^"]*"|'[^']*'|\([^)]*\)))?[ 	]*$`)
+	// A footnote DEFINITION `[^id]: text`, with up to three leading spaces, plus
+	// any continuation lines indented four spaces or a tab. OKF v0.3 §5.1 makes
+	// the footnote label a sources[].id and the definition the source's citation
+	// text, which consumers do not parse; it is not body prose, so a node title
+	// or time marker inside it is never a reader-written concept. The inline
+	// `[^id]` reference in the body is left alone.
+	proseFootnoteDefRe = regexp.MustCompile(`(?m)^ {0,3}\[\^[^\]\s]+\]:.*(?:\n(?: {4}|\t).*)*`)
 )
 
 // proseBody returns the node's prose body: the text a READER actually sees, with
@@ -168,7 +175,8 @@ var (
 // fenced and inline code, (3) inline markdown link DESTINATIONS while preserving
 // link TEXT, (4) bare autolink URLs, and (5) reference-style link DEFINITION
 // lines (`[label]: url "title"`) — their destinations are never seen while the
-// visible reference USAGE label (`[text][label]`) is left intact as prose. This
+// visible reference USAGE label (`[text][label]`) is left intact as prose, and
+// (6) `[^id]:` footnote definition blocks, which are §5.1 citation text. This
 // is the single seam every prose-matching check (missing-xref, coverage-gap
 // candidate terms, time-sensitive markers) must route through, so a title or
 // marker that appears only inside a URL, a code span, or frontmatter is never
@@ -198,6 +206,7 @@ func proseBody(n *Node) string {
 	}
 	body = fencedCodeRe.ReplaceAllString(body, " ")
 	body = inlineCodeRe.ReplaceAllString(body, " ")
+	body = proseFootnoteDefRe.ReplaceAllString(body, " ")
 	body = refLinkDefRe.ReplaceAllString(body, " ")
 	body = mdLinkStripRe.ReplaceAllString(body, "$1")
 	body = autolinkRe.ReplaceAllString(body, " ")
