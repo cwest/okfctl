@@ -320,14 +320,33 @@ func lintBrokenLinks(b *Bundle) []LintFinding {
 	for base := range byBase {
 		sort.Strings(byBase[base])
 	}
-	// hint returns the "did you mean" suggestion for a dangling target, or ""
-	// when no node shares its basename (a coverage gap, not a defect).
-	hint := func(tgt string) string {
+	// hint returns the "did you mean" suggestion for a target dangling from the
+	// file from, or "" when no node shares its basename (a coverage gap, not a
+	// defect). Each candidate is written in the form that resolves from `from`
+	// under every declared version: the `/`-rooted path (§6 rule 2). A bare
+	// bundle-relative path would only resolve through the §12.1 fallback, so in
+	// a v0.3 bundle it can echo the very value that failed to resolve.
+	hint := func(from, tgt string) string {
 		link := tgt
 		if i := strings.IndexAny(link, "#?"); i >= 0 {
 			link = link[:i]
 		}
-		candidates := byBase[path.Base(link)]
+		var candidates []string
+		for _, c := range byBase[path.Base(link)] {
+			// Prefer the `/`-rooted form, else the relative path from `from`.
+			// Keep the first that resolves to c and differs from what the
+			// author wrote; never suggest the unresolved value back.
+			for _, form := range []RefForm{FormRootAbs, FormFileRel} {
+				s := linkURLFor(from, c, form)
+				if s == link {
+					continue
+				}
+				if r := b.ResolveLink(from, s); r.Kind == RefBundle && r.Path == c {
+					candidates = append(candidates, s)
+					break
+				}
+			}
+		}
 		switch len(candidates) {
 		case 0:
 			return ""
@@ -342,7 +361,7 @@ func lintBrokenLinks(b *Bundle) []LintFinding {
 	for _, p := range sortedNodePaths(b) {
 		n := b.Nodes[p]
 		for _, tgt := range danglingTargets(b, p, n) {
-			if h := hint(tgt); h != "" {
+			if h := hint(p, tgt); h != "" {
 				out = append(out, LintFinding{
 					Check:   "broken-link",
 					Path:    p,
@@ -351,7 +370,7 @@ func lintBrokenLinks(b *Bundle) []LintFinding {
 			}
 		}
 		for _, f := range danglingPathFields(b, p, n) {
-			if h := hint(f.Value); h != "" {
+			if h := hint(p, f.Value); h != "" {
 				out = append(out, LintFinding{
 					Check: "broken-link",
 					Path:  p,

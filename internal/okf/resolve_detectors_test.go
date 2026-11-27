@@ -102,7 +102,7 @@ func TestConformance_Lint_BrokenLink_Section6_2_PathFieldDefect(t *testing.T) {
 	}
 	f := bl[0]
 	if f.Path != "a.md" || !strings.Contains(f.Message, "superseded_by") ||
-		!strings.Contains(f.Message, "gm.md") || !strings.Contains(f.Message, "did you mean metrics/gm.md?") {
+		!strings.Contains(f.Message, "gm.md") || !strings.Contains(f.Message, "did you mean /metrics/gm.md?") {
 		t.Fatalf("§6.2: finding must name the field, the value, and the candidate: %+v", f)
 	}
 }
