@@ -68,6 +68,26 @@ against a bundle that declares v0.3 and against a v0.1 bundle too. A v0.3
 bundle turns the legacy fallbacks off and an older one relies on them, so "it
 passes" on one alone isn't proof.
 
+## Shown output is tested
+
+`go test ./internal/transcript/` replays every fenced block in `README.md` and
+`docs/` that has a `$ okfctl` line, against the binary built from your tree. A
+`$ ` line is a command; the lines under it are what it must print, exactly.
+Blocks in one file share a working directory, so a later block sees what an
+earlier one made. If you change what a command prints, update the docs that
+show it, or this test fails and names the line.
+
+Write `<DATE>`, `<TIMESTAMP>`, `<SHA>`, or `<TMPDIR>` where a value changes
+from run to run. An HTML comment just above a block changes how it replays:
+
+- `<!-- transcript: exit 1 okfctl lint --strict mykb -->` says that command
+  exits 1. Every other command must exit 0.
+- `<!-- transcript: setup` then `$ ` lines then `-->` builds state the page
+  doesn't show. Fixtures live in `testdata/transcripts/`, at
+  `$TRANSCRIPT_FIXTURES`.
+- `<!-- transcript: skip REASON -->` leaves a block out. The reason is
+  required.
+
 ## What a good PR body contains
 
 - **Why** the change exists—the problem, not just the diff.

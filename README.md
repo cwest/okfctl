@@ -25,6 +25,7 @@ shows.
 Make a bundle with two nodes. Have one of them mention the other without
 linking to it:
 
+<!-- transcript: exit 1 okfctl lint --strict mykb -->
 ```text
 $ okfctl bundle init mykb
 Initialized OKF bundle in mykb
