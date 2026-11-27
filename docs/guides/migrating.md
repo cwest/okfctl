@@ -171,6 +171,14 @@ Give the Montalcino citation something to point at. Here we make it a link:
 
 Plan and apply again:
 
+<!-- transcript: setup
+$ cp -R "$TRANSCRIPT_FIXTURES/migrating/mykb" mykb
+$ okfctl migrate mykb --plan migrate-plan.json --generated-by human:casey
+$ okfctl migrate mykb --apply --plan migrate-plan.json
+$ grep -v Montalcino mykb/wine/tannin.md > tannin.tmp
+$ echo '- [Tasting notes, 2025 Montalcino trip](https://example.com/montalcino-2025)' >> tannin.tmp
+$ mv tannin.tmp mykb/wine/tannin.md
+-->
 ```text
 $ okfctl migrate mykb --plan migrate-plan.json --generated-by human:casey
 Wrote migrate-plan.json: 1 file(s) with deterministic edits (1 edit(s)), 0 judgment item(s).
@@ -200,6 +208,8 @@ write:
 $ okfctl migrate mykb --plan again.json
 Wrote again.json: 0 file(s) with deterministic edits (0 edit(s)), 0 judgment item(s).
 version: 0.3 -> keep (already v0.3)
+edits: 0 file(s); timestamp->generated 0, citations->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
+judgment: 0 item(s); none
 ```
 
 ## What `migrate` changes
