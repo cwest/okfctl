@@ -106,3 +106,43 @@ func TestParseFrontmatter_BodyLineStartingWithDashes(t *testing.T) {
 		t.Errorf("body lost content after an in-body --- rule; got %q", body)
 	}
 }
+
+// TestParseFrontmatter_BareCRIsALineBreak pins YAML 1.2 §5.4: CR, LF and CRLF
+// are each one line break. `0\r\r\n 0` is two breaks (CR, then CRLF), so the
+// plain scalar spans an empty line and folds to "0\n0" (§6.5). The splitter
+// must hand YAML the same breaks the source has, so the parsed value agrees with
+// a parse of the verbatim block (the splice writer's view of the same file).
+func TestParseFrontmatter_BareCRIsALineBreak(t *testing.T) {
+	cases := []struct {
+		name, src string
+		want      any
+	}{
+		{"CR before CRLF", "---\n0: 0\r\r\n 0\n---\n", "0\n0"},
+		{"CR before LF", "---\na: x\r\n\r\n y\n---\n", "x\ny"},
+		{"CRLF only folds", "---\r\na: x\r\n y\r\n---\r\n", "x y"},
+		{"bare CR between keys", "---\na: x\rb: 2\n---\n", "x"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fm, _, err := ParseFrontmatter([]byte(tc.src))
+			if err != nil {
+				t.Fatalf("ParseFrontmatter: %v", err)
+			}
+			key := "a"
+			if _, ok := fm["0"]; ok {
+				key = "0"
+			}
+			if fm[key] != tc.want {
+				t.Fatalf("%s = %q, want %q", key, fm[key], tc.want)
+			}
+			block, _, ok := splitFrontmatterRaw([]byte(tc.src))
+			if !ok {
+				t.Fatal("splitFrontmatterRaw: no block")
+			}
+			fm2, _, err := ParseFrontmatter(append(append([]byte("---\n"), block...), "---\n"...))
+			if err != nil || fm2[key] != tc.want {
+				t.Fatalf("splitFrontmatterRaw block: %s = %q (err %v), want %q", key, fm2[key], err, tc.want)
+			}
+		})
+	}
+}
