@@ -41,6 +41,30 @@ const annotatedTitleNode = "---\ntype: Concept\nsources:\n" +
 	"- [S2] Acme, *The FP&A Handbook*, 2024. https://wiki.acme/fpa\n" +
 	"- [S9] Routing docs. https://routing.example/\n"
 
+// annotatedTitle's contract, §5.1: only a title that opens with its own
+// entry's key and is not that entry's text is an annotation to move.
+func TestConformance_MigrateTitleAnnotation_Section5_1_AnnotatedTitlePredicate(t *testing.T) {
+	const entry = "- [S8] iCIMS AI recruiting. https://www.icims.com/products/ai-recruiting-software/. VERIFIED."
+	for _, c := range []struct {
+		title, entry string
+		want         bool
+	}{
+		{"[S8] iCIMS, AI recruiting software page (fetched 2026-11-27). VERIFIED.", entry, true},
+		{"[s8] lower-case key still matches (GFM folds labels)", entry, true},
+		{"[S8] iCIMS AI recruiting. https://www.icims.com/products/ai-recruiting-software/. VERIFIED.", entry, false}, // entry text
+		{"[S8] iCIMS AI recruiting.", entry, false},                                                                   // head of the entry text
+		{"[S9] another entry's key", entry, false},
+		{"[Beta] Auto Routing", entry, false},
+		{"[S8]", entry, false},                                           // the key alone says nothing
+		{"[] empty", "- iCIMS AI recruiting. https://x.example/", false}, // entry has no key
+		{"[docktail-docs] anything", "[docktail-docs]: https://docktail.org/docs/", false},
+	} {
+		if got := annotatedTitle(c.title, c.entry); got != c.want {
+			t.Errorf("annotatedTitle(%q, %q) = %v, want %v", c.title, c.entry, got, c.want)
+		}
+	}
+}
+
 // Positive control: an annotated title whose entry names no work is removed
 // and reported, and its text is in the footnote, so nothing is lost.
 func TestConformance_MigrateTitleAnnotation_Section5_1_AnnotationMovesToFootnoteThenRemoved(t *testing.T) {
