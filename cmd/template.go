@@ -27,7 +27,7 @@ func newTemplateCmd() *cobra.Command {
 	templateCmd := &cobra.Command{
 		Use:   "template",
 		Short: "Inspect the type templates a bundle uses",
-		Long: "A type template is just a node, typed `Type Template`, that says which fields and " +
+		Long: "A type template is a node, typed `Type Template`, that says which fields and " +
 			"body sections a node of some type should have. Only two other commands read " +
 			"templates. `okfctl node new --type` builds the new node from the one for that type, " +
 			"and `okfctl validate --templates` warns when a node drifts. Try `okfctl template " +
@@ -38,7 +38,7 @@ func newTemplateCmd() *cobra.Command {
 	listC := &cobra.Command{
 		Use:   "list [bundle-dir]",
 		Short: "List each type template's target type, field and section counts, and source",
-		Long: "template list prints one line per type template in the bundle: the type it " +
+		Long: "template list prints one line for each type template the bundle uses: the type it " +
 			"governs, how many fields and body sections it asks for, and its source file. With " +
 			"no templates it prints a notice and exits 0.\n\n" +
 			"A template can sit in the bundle itself or in a separate template bundle named by " +

@@ -1005,14 +1005,14 @@ Flags:
 
 Inspect the type templates a bundle uses
 
-A type template is just a node, typed `Type Template`, that says which fields and body sections a node of some type should have. Only two other commands read templates. `okfctl node new --type` builds the new node from the one for that type, and `okfctl validate --templates` warns when a node drifts. Try `okfctl template list` first to see what your bundle has.
+A type template is a node, typed `Type Template`, that says which fields and body sections a node of some type should have. Only two other commands read templates. `okfctl node new --type` builds the new node from the one for that type, and `okfctl validate --templates` warns when a node drifts. Try `okfctl template list` first to see what your bundle has.
 
 
 ### okfctl template list
 
 List each type template's target type, field and section counts, and source
 
-template list prints one line per type template in the bundle: the type it governs, how many fields and body sections it asks for, and its source file. With no templates it prints a notice and exits 0.
+template list prints one line for each type template the bundle uses: the type it governs, how many fields and body sections it asks for, and its source file. With no templates it prints a notice and exits 0.
 
 A template can sit in the bundle itself or in a separate template bundle named by `templates: <path>` in the bundle's .okf file. --templates-from points at a different one for this run. If the bundle and the referenced one both define a type, the local template wins and its line ends with [shadows referenced template].
 
