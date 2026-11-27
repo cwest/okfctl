@@ -259,6 +259,81 @@ func TestReplay_SessionStatePersistsAcrossBlocks(t *testing.T) {
 	}
 }
 
+func TestParseHTML_ReadsTranscriptPanels(t *testing.T) {
+	src := strings.Join([]string{
+		`<div class="term">`, // 1
+		`<pre>`,              // 2: no data-transcript, ignored
+		`$ okfctl not-a-transcript`,
+		`</pre>`, // 4
+		`<!-- transcript: exit 1 okfctl lint --strict kb -->`,                                            // 5
+		`<div role="tabpanel"><pre data-transcript>`,                                                     // 6
+		`<span class="p">$</span> <span class="c">okfctl lint</span> <span class="f">--strict</span> kb`, // 7
+		`<span class="o">missing-xref: a.md mentions &quot;B&quot; &amp; more</span>`,                    // 8
+		`<span class="p">$</span> echo hi &gt; f</pre></div>`,                                            // 9
+		`</div>`, // 10
+	}, "\n")
+	blocks, err := ParseHTML("index.astro", []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(blocks) != 1 {
+		t.Fatalf("got %d blocks, want 1 (a <pre> without data-transcript is not a transcript)", len(blocks))
+	}
+	b := blocks[0]
+	if b.File != "index.astro" || b.Line != 6 {
+		t.Fatalf("block identity = %s line %d, want index.astro line 6", b.File, b.Line)
+	}
+	if len(b.Steps) != 2 {
+		t.Fatalf("got %d steps, want 2: %+v", len(b.Steps), b.Steps)
+	}
+	s := b.Steps[0]
+	if s.Cmd != "okfctl lint --strict kb" || s.Line != 7 || s.WantExit != 1 {
+		t.Fatalf("step 0 = %+v, want the tag-stripped command on line 7 exiting 1", s)
+	}
+	if len(s.Want) != 1 || s.Want[0].Text != `missing-xref: a.md mentions "B" & more` || s.Want[0].Num != 8 {
+		t.Fatalf("step 0 output = %+v, want entities unescaped on line 8", s.Want)
+	}
+	if s := b.Steps[1]; s.Cmd != "echo hi > f" || s.Line != 9 || len(s.Want) != 0 {
+		t.Fatalf("step 1 = %+v, want the command before </pre> on line 9", s)
+	}
+}
+
+func TestParseHTML_ErrorsNameTheSourceLine(t *testing.T) {
+	src := strings.Join([]string{
+		`<p>intro</p>`,                    // 1
+		`<p>more</p>`,                     // 2
+		`<!-- transcript: frobnicate -->`, // 3
+		`<pre data-transcript>`,           // 4
+		`$ okfctl x</pre>`,                // 5
+	}, "\n")
+	_, err := ParseHTML("index.astro", []byte(src))
+	if err == nil || !strings.HasPrefix(err.Error(), "index.astro:3:") {
+		t.Fatalf("want an error at index.astro:3, got %v", err)
+	}
+}
+
+func TestParseHTML_JSXCommentDirectives(t *testing.T) {
+	src := strings.Join([]string{
+		`{/* transcript: exit 1 okfctl lint kb */}`, // 1
+		`{/* transcript: setup`,                     // 2
+		`$ okfctl bundle init kb`,                   // 3
+		`*/}`,                                       // 4
+		`<pre data-transcript>`,                     // 5
+		`$ okfctl lint kb</pre>`,                    // 6
+	}, "\n")
+	blocks, err := ParseHTML("index.astro", []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(blocks) != 1 || blocks[0].Steps[0].WantExit != 1 || len(blocks[0].Setup) != 1 || blocks[0].Setup[0].Num != 3 {
+		t.Fatalf("JSX-comment directives must apply like HTML ones, got %+v", blocks)
+	}
+	detached := "{/* transcript: skip a reason */}\n<div>\n<pre data-transcript>\n$ okfctl x</pre>\n"
+	if _, err := ParseHTML("index.astro", []byte(detached)); err == nil || !strings.HasPrefix(err.Error(), "index.astro:1:") {
+		t.Fatalf("markup between a directive and its panel must detach it, got %v", err)
+	}
+}
+
 func TestReplay_TmpdirPlaceholder(t *testing.T) {
 	env := fakeOkfctl(t, `echo "wrote $PWD/kb"`)
 	src := fence + "\n$ okfctl x\nwrote <TMPDIR>/kb\n" + fence + "\n"

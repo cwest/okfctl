@@ -54,6 +54,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"html"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -91,6 +92,119 @@ const (
 	directiveClose = "-->"
 	prompt         = "$ "
 )
+
+// ParseHTML finds every transcript in an HTML or Astro page: each
+// <pre data-transcript> element. Inside one, tags are stripped and entities
+// unescaped, so a panel can color its spans and still read as a transcript.
+// Directives work as in Markdown: an HTML comment directly above the element.
+// Block, step, and error line numbers name lines of the page source.
+func ParseHTML(file string, src []byte) ([]Block, error) {
+	lines := strings.Split(strings.ReplaceAll(string(src), "\r\n", "\n"), "\n")
+	var md []string
+	var srcLine []int // srcLine[i] is the source line of md line i+1
+	emit := func(text string, n int) {
+		md = append(md, text)
+		srcLine = append(srcLine, n)
+	}
+	inPre, inDirective := false, false
+	for i, text := range lines {
+		n := i + 1
+		trimmed := jsxDirective(strings.TrimSpace(text))
+		switch {
+		case inDirective:
+			emit(trimmed, n)
+			inDirective = trimmed != directiveClose
+		case inPre:
+			body, rest, closed := strings.Cut(text, "</pre>")
+			if t := htmlText(body); t != "" || !closed {
+				emit(t, n)
+			}
+			if closed {
+				emit("```", n)
+				inPre = false
+				if strings.Contains(rest, "<pre") {
+					return nil, fmt.Errorf("%s:%d: a transcript <pre> must end its line", file, n)
+				}
+			}
+		case strings.HasPrefix(trimmed, directiveOpen):
+			emit(trimmed, n)
+			inDirective = !strings.HasSuffix(trimmed, directiveClose)
+		case preOpenRE.MatchString(text):
+			if strings.TrimSpace(text[preOpenRE.FindStringIndex(text)[1]:]) != "" {
+				return nil, fmt.Errorf("%s:%d: put a transcript's first line on the line after <pre data-transcript>", file, n)
+			}
+			emit("```", n)
+			inPre = true
+		case trimmed == "":
+			emit("", n)
+		default:
+			// Markup between a directive and its panel detaches the
+			// directive, the same as prose would in Markdown.
+			emit("<markup>", n)
+		}
+	}
+	if inPre {
+		return nil, fmt.Errorf("%s: a <pre data-transcript> is never closed", file)
+	}
+
+	blocks, err := Parse(file, []byte(strings.Join(md, "\n")))
+	at := func(mdLine int) int {
+		if mdLine < 1 || mdLine > len(srcLine) {
+			return mdLine
+		}
+		return srcLine[mdLine-1]
+	}
+	if err != nil {
+		prefix := file + ":"
+		msg := err.Error()
+		if num, rest, ok := strings.Cut(strings.TrimPrefix(msg, prefix), ":"); ok && strings.HasPrefix(msg, prefix) {
+			if k, convErr := strconv.Atoi(num); convErr == nil {
+				return nil, fmt.Errorf("%s%d:%s", prefix, at(k), rest)
+			}
+		}
+		return nil, err
+	}
+	for bi := range blocks {
+		b := &blocks[bi]
+		b.Line = at(b.Line)
+		for j := range b.Setup {
+			b.Setup[j].Num = at(b.Setup[j].Num)
+		}
+		for j := range b.Steps {
+			s := &b.Steps[j]
+			s.Line = at(s.Line)
+			for k := range s.Want {
+				s.Want[k].Num = at(s.Want[k].Num)
+			}
+		}
+	}
+	return blocks, nil
+}
+
+var (
+	preOpenRE = regexp.MustCompile(`<pre\b[^>]*\bdata-transcript\b[^>]*>`)
+	tagRE     = regexp.MustCompile(`<[^>]*>`)
+)
+
+// htmlText strips tags from one line of a transcript panel and unescapes its
+// entities, leaving the text a reader sees.
+func htmlText(s string) string {
+	return html.UnescapeString(tagRE.ReplaceAllString(s, ""))
+}
+
+// jsxDirective rewrites a directive written as an Astro/JSX comment,
+// {/* transcript: ... */}, into the HTML-comment form Parse reads. Astro drops
+// JSX comments from its output, so the directives don't ship to readers. Any
+// other line comes back unchanged.
+func jsxDirective(trimmed string) string {
+	if rest, ok := strings.CutPrefix(trimmed, "{/* transcript:"); ok {
+		trimmed = directiveOpen + rest
+	}
+	if body, ok := strings.CutSuffix(trimmed, "*/}"); ok {
+		trimmed = body + directiveClose
+	}
+	return trimmed
+}
 
 // Parse finds every transcript block in a Markdown file. It returns an error,
 // naming the file and line, for a malformed directive or transcript.
