@@ -87,6 +87,15 @@ function withFrontmatter({ title, slug, sidebarLabel, sidebarOrder, description 
 // this and holds the short, commented list of deliberate exceptions.
 export const pages = [
   {
+    // The start page: docs/README.md sends new readers here first.
+    src: "install.md",
+    out: "install.md",
+    title: "Install",
+    sidebarLabel: "Install",
+    sidebarOrder: 0,
+    description: "Install okfctl and the okfctl-search plugin with Homebrew, Go, a prebuilt archive, or a Debian or RPM package, then check the release.",
+  },
+  {
     src: "concepts.md",
     out: "concepts.md",
     title: "Concepts",

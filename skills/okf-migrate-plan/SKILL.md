@@ -33,7 +33,7 @@ okf_version: 0.1 (declared in .okf)
 $ okfctl migrate mykb --plan migrate-plan.json
 Wrote migrate-plan.json: 2 file(s) with deterministic edits (3 edit(s)), 3 judgment item(s).
 version: 0.1 -> hold (3 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
-edits: 2 file(s); timestamp->generated 0, citations->sources 2, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 2 file(s); timestamp->generated 0, citations->sources 2, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
 judgment: 3 item(s); missing-actor 2, prose-citation 1
 3 item(s) need a decision before they can migrate; see the plan file.
 ```
@@ -123,14 +123,14 @@ v0.3, or a version the tool doesn't know.
 
 ### 2. Supply the actor
 
-Pass `--generated-by` and each `missing-actor` item becomes a `timestamp` to
+Pass `--generated-by` and each `missing-actor` item turns into a `timestamp` to
 `generated` rename:
 
 ```text
 $ okfctl migrate mykb --plan migrate-plan.json --generated-by human:casey
 Wrote migrate-plan.json: 2 file(s) with deterministic edits (5 edit(s)), 1 judgment item(s).
 version: 0.1 -> hold (1 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
-edits: 2 file(s); timestamp->generated 2, citations->sources 2, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 2 file(s); timestamp->generated 2, citations->sources 2, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
 judgment: 1 item(s); prose-citation 1
 1 item(s) need a decision before they can migrate; see the plan file.
 ```
@@ -179,7 +179,7 @@ $ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
  # Citations
  - https://en.wikipedia.org/wiki/Tannin
 version: 0.1 -> hold (1 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
-edits: 2 file(s); timestamp->generated 2, citations->sources 2, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 2 file(s); timestamp->generated 2, citations->sources 2, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
 judgment: 1 item(s); prose-citation 1
 2 file(s) would change (dry run; nothing written).
 $ okfctl migrate mykb --apply --plan migrate-plan.json
@@ -212,7 +212,7 @@ $ mv tannin.tmp mykb/wine/tannin.md
 $ okfctl migrate mykb --plan migrate-plan.json
 Wrote migrate-plan.json: 0 file(s) with deterministic edits (0 edit(s)), 0 judgment item(s).
 version: 0.1 -> declare v0.3
-edits: 0 file(s); timestamp->generated 0, citations->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 0 file(s); timestamp->generated 0, citations->sources 0, citation titles->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
 judgment: 0 item(s); none
 $ okfctl migrate mykb --apply --plan migrate-plan.json
 0 file(s) migrated; bundle declares v0.3.
@@ -226,7 +226,7 @@ okf_version: 0.3 (declared in index.md)
 $ okfctl migrate mykb --plan migrate-plan.json
 Wrote migrate-plan.json: 0 file(s) with deterministic edits (0 edit(s)), 0 judgment item(s).
 version: 0.3 -> keep (already v0.3)
-edits: 0 file(s); timestamp->generated 0, citations->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 0 file(s); timestamp->generated 0, citations->sources 0, citation titles->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
 judgment: 0 item(s); none
 ```
 
@@ -244,20 +244,28 @@ comes back to you as a judgment item:
 | Old form | v0.3 form | Edit when | Judgment item when |
 |---|---|---|---|
 | `timestamp:` (v0.1) | `generated: {by, at}` (§7) | you pass `--generated-by <actor>` | no actor: `missing-actor` |
-| body `# Citations` entry (v0.1) | `sources[]: {resource, title}` (§5.1) | the entry names exactly one resource, an absolute URL or a Markdown link to a bundle path, even across wrapped lines | it names none, or two different ones: `prose-citation` |
+| body `# Citations` entry (v0.1) | `sources[]: {resource, title}` (§5.1) | the entry names exactly one resource, an absolute URL or a Markdown link to a bundle path, even across wrapped lines | it names none, or two different ones: `prose-citation`; it marks no work name: `source-title-unnamed` (the source is still added, untitled) |
+| body `# Citations` entry whose resource is already in `sources` | that source's `title` (§5.1) | the source has no `title` and the entry marks the work's name | it marks no name: `source-title-unnamed` (the title stays unset); the source already has a different `title`: `source-title-conflict` (the existing title stays) |
 | link or path field that resolves only from the bundle root (§12.1) | same target with a leading `/` (§6) | always | never |
 | §5 timestamp not in RFC 3339 form | `"2026-06-20T10:00:00Z"` | it has an offset (`Z`, `+0000`, `-05:00`) | no offset: `timestamp-no-offset`; not a date: `timestamp-invalid` |
 
-Words around the single URL in a citation entry end up as its `title`, whereas
-a bare URL gets no `title`. If the same URL shows up twice in one entry, it
-counts as one.
+Feed it `[1] Smith, *Tannin chemistry*, 2024. https://…` and the new
+`title` is `Tannin chemistry`. The authors, year, and URL stay in the body. The
+tool only takes a name the entry marks for it, like the text of a leading link,
+words in quotes or italics, or the page name after a leading URL. If it can't
+find one, you get no `title` and a `source-title-unnamed` item. Bare URLs get
+no `title` and no item. When one entry has the same URL twice, that's one
+source.
+
+The `source-title-*` items don't hold the version back. Their resources are in
+`sources` now, and v0.3 readers find them there.
 
 ### Why the version waits
 
 You can still read `prose-citation` and `missing-actor` items through the v0.1
 fallbacks (the body `# Citations` list and `timestamp`, Appendix B). §12.1
-grants those fallbacks only to a bundle that declares 0.2 or lower (or
-nothing). Declare 0.3 with items left over and v0.3 consumers stop reading
+only grants those fallbacks to a bundle that declares 0.2 or lower (or
+nothing). Declare 0.3 while items are open and v0.3 consumers stop reading
 them. That's why the plan says `hold`. The edits go in and the declaration
 waits.
 
@@ -271,7 +279,7 @@ $ cp -R "$TRANSCRIPT_FIXTURES/migrating/mykb" kb2
 $ okfctl migrate kb2 --plan migrate-plan.json --generated-by human:casey --force-declare
 Wrote migrate-plan.json: 2 file(s) with deterministic edits (5 edit(s)), 1 judgment item(s).
 version: 0.1 -> declare v0.3 (forced: 1 prose-citation/missing-actor item(s) lose the §12.1 fallback)
-edits: 2 file(s); timestamp->generated 2, citations->sources 2, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+edits: 2 file(s); timestamp->generated 2, citations->sources 2, citation titles->sources 0, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
 judgment: 1 item(s); prose-citation 1
 1 item(s) need a decision before they can migrate; see the plan file.
 ```
@@ -294,10 +302,16 @@ Fix the source node and re-plan. Each plan re-reads the body `# Citations`
 list. An item goes away when the node stops producing it.
 
 - **A citation with a real resource.** Add it to the entry, for example
-  `- Winemaker interview, 2026. https://example.org/interviews/winemaker-2026`.
-  The next plan makes it a `sources` entry with the text as `title`.
-- **A citation with no resource.** Move the claim out of `# Citations`, into
-  the body or a §5.2 `verified` event. Or delete it.
+  `- *Winemaker interview*, 2026. https://example.org/interviews/winemaker-2026`.
+  The next plan makes it a `sources` entry titled with the work's name, if the
+  entry marks one.
+- **A citation that marks no name (`source-title-unnamed`).** Put the work's
+  name in quotes or italics in the entry, or set `title` on the source by hand.
+- **A title that differs from the citation (`source-title-conflict`).** The
+  tool didn't touch the old `title`. Decide which name is right and edit the
+  source.
+- **A citation with no resource.** Move the claim out of `# Citations` and into
+  the body, or into a §5.2 `verified` event. Or delete it.
 - **A citation with two URLs.** Split it into one entry per resource. The tool
   won't pick one or split it for you.
 - **A timestamp with no offset.** Add the offset the author meant.

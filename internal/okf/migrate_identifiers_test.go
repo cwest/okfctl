@@ -55,10 +55,35 @@ func TestConformance_MigrateIdentifier_Section5_1_EachKindBuildsResource(t *test
 			t.Errorf("§5.1: entry %q resource = %q, want %q", entry, s.Resource, want)
 		}
 		// Casey's rule: a title is the work's name only, never the full
-		// citation. The name extractor is a separate change, so an
-		// identifier-built source carries no title rather than the entry text.
-		if s.Title != "" {
+		// citation. An identifier-built source is titled by citationName
+		// like any other, so it is never the entry text.
+		if s.Title == entryText(entry) {
 			t.Errorf("§5.1: identifier-built source must not carry the entry text as title, got %q", s.Title)
+		}
+	}
+}
+
+// TestConformance_MigrateIdentifier_Section5_1_IdentifierSourceGetsNameOnly:
+// a source built from a DOI, arXiv id, PubMed id or ISBN is titled with the
+// cited work's name (citationName), the same as one read from a URL. An entry
+// that marks no name gets no title.
+func TestConformance_MigrateIdentifier_Section5_1_IdentifierSourceGetsNameOnly(t *testing.T) {
+	for entry, want := range map[string]SourceEdit{
+		"[1] VERIFIED — N. F. Liu et al., *Lost in the Middle: How Language Models Use Long Contexts*, TACL 2023. arXiv:2307.03172.": {
+			Resource: "https://arxiv.org/abs/2307.03172",
+			Title:    "Lost in the Middle: How Language Models Use Long Contexts",
+		},
+		"[2] Smith, \"A Quoted Paper Title,\" J. Things 4, 2019. doi:10.1000/xyz123": {
+			Resource: "https://doi.org/10.1000/xyz123",
+			Title:    "A Quoted Paper Title",
+		},
+		"[3] Same DOI twice, doi:10.1000/ABC and again DOI 10.1000/abc.": {
+			Resource: "https://doi.org/10.1000/ABC",
+		},
+	} {
+		s, ok := citationSource(entry)
+		if !ok || s != want {
+			t.Errorf("entry %q = %+v ok=%v, want %+v", entry, s, ok, want)
 		}
 	}
 }
@@ -83,20 +108,19 @@ func TestConformance_MigrateIdentifier_Section5_1_BadISBNChecksumNotLinked(t *te
 // an entry that already names a URL keeps it as its one resource. An
 // identifier that repeats the URL (or names another document) adds nothing, so
 // the DOI never becomes a second source and the conversion is the one made
-// before identifiers were read.
+// before identifiers were read. The title is the work's name only
+// (citationName): none for an entry that marks no name.
 func TestConformance_MigrateIdentifier_Section5_1_URLAlreadyPresentNotDuplicated(t *testing.T) {
 	for entry, want := range map[string]SourceEdit{
 		"[1] Ordóñez & Roggen, *Sensors* 2016, DOI 10.3390/s16010115. <https://doi.org/10.3390/s16010115>": {
 			Resource: "https://doi.org/10.3390/s16010115",
-			Title:    "[1] Ordóñez & Roggen, *Sensors* 2016, DOI 10.3390/s16010115. <https://doi.org/10.3390/s16010115>",
 		},
 		"[2] Paper, arXiv:2310.20410 — https://arxiv.org/abs/2310.20410": {
 			Resource: "https://arxiv.org/abs/2310.20410",
-			Title:    "[2] Paper, arXiv:2310.20410 — https://arxiv.org/abs/2310.20410",
 		},
 		"[3] [The paper](https://example.org/p), doi:10.1000/xyz": {
 			Resource: "https://example.org/p",
-			Title:    "[3] [The paper](https://example.org/p), doi:10.1000/xyz",
+			Title:    "The paper",
 		},
 	} {
 		s, ok := citationSource(entry)
@@ -151,7 +175,7 @@ func TestConformance_MigrateIdentifier_Section5_1_PlanBuildsAndIsIdempotent(t *t
 	}
 	want := []SourceEdit{
 		{Resource: "https://doi.org/10.2139/ssrn.2690435"},
-		{Resource: "https://openlibrary.org/isbn/9780321486813"},
+		{Resource: "https://openlibrary.org/isbn/9780321486813", Title: "Compilers"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("a.md sources = %+v, want %+v", got, want)

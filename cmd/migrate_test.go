@@ -346,3 +346,29 @@ func TestMigrate_ApplyWithoutPlanErrors(t *testing.T) {
 		t.Fatalf("node vanished on a failed apply: %v", statErr)
 	}
 }
+
+// The plan summary counts a name filled into an existing source (§5.1), so
+// a plan with only title edits does not read as "edits: 1 file(s)" with every
+// counter at zero; source-title-conflict and source-title-unnamed show by kind.
+func TestMigrate_PlanSummaryCountsSourceTitles_Section5_1(t *testing.T) {
+	dir := mkPromoteCLIBundle(t, map[string]string{
+		"index.md": "# KB\n",
+		"log.md":   "# Log\n",
+		"a.md": "---\ntype: Concept\nsources:\n  - resource: https://wiki.acme/fpa\n" +
+			"  - resource: https://kept.example/\n    title: Kept\n" +
+			"  - resource: https://noname.example/\n---\n\n# Def\n\n# Citations\n" +
+			"- [1] Acme, *The FP&A Handbook*, 2024. https://wiki.acme/fpa\n" +
+			"- [2] Acme, *Other Work*, 2025. https://kept.example/\n" +
+			"- [3] on-box probe of https://noname.example/ returned 200.\n",
+	})
+	planPath := filepath.Join(t.TempDir(), "migrate-plan.json")
+	out, err := runOKF(t, "migrate", dir, "--plan", planPath)
+	if err != nil {
+		t.Fatalf("migrate --plan: err=%v out=%q", err, out)
+	}
+	for _, want := range []string{"citation titles->sources 1", "source-title-conflict 1", "source-title-unnamed 1"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("summary missing %q:\n%s", want, out)
+		}
+	}
+}

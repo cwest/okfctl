@@ -21,6 +21,16 @@ tagged release, goreleaser generates the release notes from the commit log
   `sources` already hold (in any letter case, or under `dx.doi.org`) is not
   added again.
 
+### Changed
+
+- `migrate` titles a source made from a `# Citations` entry with the cited
+  work's name only (§5.1 "a label for humans"), never the entry's full text.
+  An entry that marks no name leaves the title unset and reports
+  `source-title-unnamed`. This applies to sources built from an identifier
+  too. When the entry's resource is already in `sources` (a DOI matched in any
+  spelling), an untitled source gets the name, and a source with a different
+  title keeps it and reports `source-title-conflict`.
+
 ### Fixed
 
 - `migrate` and `analyze` no longer split a `# Citations` entry at a
