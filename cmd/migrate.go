@@ -54,7 +54,10 @@ func newMigrateCmd() *cobra.Command {
 			"result. With --dry-run, apply prints the diff it would write and writes nothing.\n\n" +
 			"A rule makes each edit. For a v0.1 bundle (Appendix B), timestamp turns into " +
 			"generated.at. Any body # Citations entry that names one follow-able resource " +
-			"is copied to the sources list, titled with the entry's text. The v0.2 changes " +
+			"is copied to the sources list, titled with the entry's text. An entry with no " +
+			"URL but one DOI, arXiv id, PubMed id, or ISBN (checksum verified) gets a " +
+			"resource built from it, offline: doi.org, arxiv.org, pubmed.ncbi.nlm.nih.gov, " +
+			"or openlibrary.org. Nothing is fetched to check it. The v0.2 changes " +
 			"(§13.1) give a leading / to any link or path field that resolves only from the " +
 			"bundle root (§12.1). It then points at the same file under v0.3 (§6). They " +
 			"also respell a §5 timestamp that has an offset but isn't in RFC 3339 form.\n\n" +

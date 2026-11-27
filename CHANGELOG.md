@@ -11,6 +11,16 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+### Added
+
+- `migrate` builds a source's `resource` from a DOI, arXiv id, PubMed id, or
+  ISBN when a v0.1 `# Citations` entry names no URL: `doi.org`, `arxiv.org`,
+  `pubmed.ncbi.nlm.nih.gov`, or Open Library for books. It works offline from a
+  fixed pattern and fetches nothing. An ISBN must pass its check digit, an
+  entry with two identifiers stays a judgment item, and a DOI that the node's
+  `sources` already hold (in any letter case, or under `dx.doi.org`) is not
+  added again.
+
 ## [0.5.0] - 2026-11-27
 
 okfctl now targets **OKF v0.3**. New bundles declare `okf_version: "0.3"` on
