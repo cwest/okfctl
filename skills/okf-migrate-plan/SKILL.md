@@ -58,6 +58,7 @@ call — the tool decides per item:
 |---|---|---|---|
 | `timestamp:` frontmatter (v0.1) | `generated: {by, at}` (§7) | you pass `--generated-by <actor>` | no actor supplied → `missing-actor` |
 | body `# Citations` entry (v0.1) | `sources[]: {resource, title}` (§5.1) | the entry names exactly one follow-able resource — an absolute URL or a markdown link to a bundle path (§6.2) — anywhere in it, even across wrapped lines; `title` is the cited work's name only, when the entry marks one | it names no resource, or two different ones → `prose-citation`; it marks no name → `source-title-unnamed` (the source is still added, untitled) |
+| body `# Citations` entry whose resource is already in `sources` | that source's `title` (§5.1) | the source has no `title` and the entry marks the work's name: the name is set as `title` | the entry marks no name → `source-title-unnamed` (the title stays unset); the source already has a different `title` → `source-title-conflict` (the existing title stays) |
 | bare link or path field that resolves only from the bundle root (v0.2, §12.1) | the same target with a leading `/` (§6 rule 2) | always: the tool knows which file it resolves to today | never |
 | §5 timestamp not in RFC 3339 form | `"2026-06-20T10:00:00Z"` | it carries an offset (`Z`, `+0000`, `-05:00`), so the instant is fixed | no offset → `timestamp-no-offset`; not a date at all → `timestamp-invalid` |
 
