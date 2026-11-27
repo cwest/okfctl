@@ -2,9 +2,9 @@
 
 `validate` tells you if a bundle is legal OKF. It won't tell you that a link
 points nowhere. Nor will it notice a node that talks about tannin with no link
-to it. Half your nodes could cite nothing and it would still pass. Here okfctl's three curation checks run on one four-node
-bundle that has all of those problems. Then you'll see which of them to put in
-CI.
+to it, or half your nodes citing nothing. Here okfctl's three curation checks
+run on one four-node bundle that has all of those problems. Then you'll see
+which of them to put in CI.
 
 ## One bundle, three checks
 
@@ -35,13 +35,13 @@ missing-xref: wine/oak.md mentions "Acidity" but does not link to wine/acidity.m
 6 lint finding(s)
 ```
 
-`validate` passed. It was right to. OKF v0.3 §11.2 forbids a consumer to
-reject a bundle over a broken link. A `status` outside the defined vocabulary,
-like `retired`, is kept as written. The bundle stays conformant (§11.2,
-rule 4). The `type` spellings, the missing cross-links, and the timestamp with
-no offset are curation problems `validate` doesn't look for. `lint` looks past
-the floor and finds all six. It still exits
-0. Add `--strict` to change that:
+`validate` passed. It was right to. OKF v0.3 §11.2 forbids a consumer from
+rejecting a bundle over a broken link. A `status` outside the defined
+vocabulary, like `retired`, is kept as written. The bundle stays conformant
+(§11.2, rule 4). The `type` spellings, the missing cross-links, and the
+timestamp with no offset are curation problems `validate` doesn't look for.
+`lint` looks past the floor and finds all six. It still exits 0. Add
+`--strict` to change that:
 
 <!-- transcript: exit 1 okfctl lint --strict mykb -->
 ```text
@@ -88,8 +88,8 @@ and decide for yourself.
 The last two are frontmatter OKF accepts but reads differently than you
 probably meant:
 
-- `status-lifecycle`: `retired` isn't `draft`, `stable`, or `deprecated`, the
-  three values §5.4 defines. A concept with any other status isn't stable. A
+- `status-lifecycle`: `retired` isn't one of `draft`, `stable`, or
+  `deprecated`. Per §5.4 a concept with any other status isn't stable. A
   tool that filters to current knowledge drops it.
 - `timestamp-form`: `2026-06-20 10:00:00` has no offset. It names no
   instant (§5). `lint` checks `generated.at`, `verified[].at`, `stale_after`,
@@ -101,13 +101,13 @@ This bundle doesn't trip six more checks:
 - `orphan` is a node nothing links to. A directory's `index.md` counts as a
   link.
 - `coverage-gap` is a term at least three nodes mention (`--coverage-threshold`)
-  that has no node of its own.
+  with no node of its own.
 - `verified-event` is a `verified` entry missing `by` or `at`. Consumers
   ignore those (§5.2).
 - `superseded-by` is a `superseded_by` that resolves to nothing. It also fires
   when one sits on a concept that isn't `deprecated` (§5.4).
 - `source-missing-resource` is a `sources` entry with no `resource`. §5.1
-  asks for one, and consumers skip the entry.
+  requires one, and consumers skip the entry.
 - `spec-version` is a node with its own `okf_spec_version`. The version
   belongs only on the root `index.md` (§12).
 
@@ -243,12 +243,12 @@ $ okfctl analyze mykb
 17 actionable signal(s) across all dimensions.
 ```
 
-`analyze` always exits 0. Part of this repeats what you saw above (the dangling link is
-`lint`'s broken link, the uncited nodes came from `eval`). The rest is news. All
-four nodes are under 15 lines (`--thin-lines`), two cite one source apiece, and
-none of them says when anybody last reviewed it. Aging lists all four as
-undated (`--aging-days`, default 180). Each has one inbound link, from its directory's
-index.
+`analyze` always exits 0. Part of this repeats what you saw above (the
+dangling link is `lint`'s broken link, the uncited nodes came from `eval`). The
+rest is news. All four nodes are under 15 lines (`--thin-lines`), two cite one
+source apiece, and none of them says when anybody last reviewed it. Aging lists
+all four as undated (`--aging-days`, default 180). Each has one inbound link,
+from its directory's index.
 
 Nothing in this report fails a build. Read it as a to-do list for the next time
 you sit down with the bundle.
@@ -299,8 +299,9 @@ names them all. A partial pass can't look clean that way.
 
 The findings are only as good as the embedder behind the index. With the
 default `hash` embedder, `similar-unlinked` means two nodes use the same words.
-With `--embedder model2vec` it means they're about related things. If you'll act on the findings, use
-`model2vec`. The [search guide](search.md) has embedder setup.
+With `--embedder model2vec` it means they're about related things. If you'll
+act on the findings, use `model2vec`. The [search guide](search.md) has
+embedder setup.
 
 ## What every walk skips
 
@@ -319,11 +320,11 @@ OK: bundle conforms to the OKF spec floor
 
 That's a copy of the bundle with a `node_modules` directory and a `README.md`
 added. Any command that walks a bundle (`validate`, `lint`, `analyze`,
-`search`, `graph export`, `index build`, and `index check`) skips the two of them.
+`search`, `graph export`, `index build`, and `index check`) skips both.
 
 OKF itself leaves out two kinds of file (§3.2). A file or directory whose name
-starts with `.` isn't part of the bundle. okfctl never reads `.git`. It skips
-`.venv` and `.drafts/` too. A `.md` file with no frontmatter (or no `type`) isn't
+starts with `.` isn't part of the bundle. okfctl never reads `.git`,
+`.venv`, or `.drafts/`. A `.md` file with no frontmatter (or no `type`) isn't
 a concept either. Most `README.md` and `AGENTS.md` files fall in that group.
 They stay out of the graph, lint, the index, and search. `validate` warns about them and doesn't fail.
 
