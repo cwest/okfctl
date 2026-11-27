@@ -40,7 +40,10 @@ CONTRIBUTING.md, docs/*.md, docs/guides/*.md, docs/commands/README.md, and
 site/public/llms.txt (Markdown by the llms.txt convention, so it rides the
 Markdown front end despite its .txt extension). JSON: the top-level description
 of plugin.json, the blurb an agent client shows when it lists the plugin; every
-other manifest value is data and is never scanned. Internal,
+other manifest value is data and is never scanned. SVG: the <text> lines of the
+social card, which generate-share-assets.mjs writes to site/.share-assets/og.svg
+beside the og.png it rasterizes. The card's second line once read "Pure Go --
+no CGO, no model runtime." because no check ever read the image. Internal,
 unpublished Markdown (docs/PRD.md, docs/adr/, docs/plans/, docs/specs/, testdata/)
 is deliberately excluded: it is working material full of fixture prose, not
 reader-facing copy, and gating it would train everyone to ignore the check. The
@@ -108,9 +111,12 @@ Usage:
     scan_page_prose.py README.md CONTRIBUTING.md docs/*.md docs/guides/*.md
     # Shipped non-.md surfaces:
     scan_page_prose.py site/public/llms.txt plugin.json
+    # The social card's text, as rasterized into og.png:
+    scan_page_prose.py site/.share-assets/og.svg
 
 The front end is chosen per file by name: .md/.markdown and llms.txt ->
-Markdown, .json -> manifest prose fields, every other extension -> HTML.
+Markdown, .json -> manifest prose fields, .svg -> the <text> lines of the
+social card, every other extension -> HTML.
 
 Exit 0 when clean, 1 when a finding is present, 2 on a usage error (including a
 .json file that does not parse). Stdlib only.
@@ -205,6 +211,10 @@ BUILD_INTERNALS_ALLOWLIST: tuple[tuple[str, str], ...] = (
 # inside them is noise. Stripped before body extraction.
 NON_PROSE_TAGS = ("script", "style", "noscript", "svg", "pre", "code", "template")
 
+# Meta name/property suffixes whose content= is copy a human reads: search
+# snippets, link-card titles and descriptions, and the card image's alt text.
+META_PROSE_SUFFIX = r"(?:description|title|image:alt)"
+
 # Block-level prose containers. <span> is deliberately EXCLUDED (spec-chip row).
 PROSE_BLOCKS = ("h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "blockquote",
                 "figcaption", "dd", "dt")
@@ -221,17 +231,20 @@ def extract_prose(page: str, fragments: bool = False) -> list[tuple[str, str]]:
     """
     out: list[tuple[str, str]] = []
 
-    # 1. Meta / OG / Twitter descriptions and titles. Invisible on screen, read
-    #    by humans in search results and social cards. THE class PR #111 missed.
+    # 1. Meta / OG / Twitter descriptions, titles, and image alt text.
+    #    Invisible on screen, read by humans in search results and on the
+    #    unfurled link card. THE class PR #111 missed. og:image:alt and
+    #    twitter:image:alt are the card's alt text; og:image, og:url, and
+    #    twitter:card are data (URLs, enums) and never match.
     for m in re.finditer(
-        r'<meta[^>]+(?:name|property)="([^"]*(?:description|title))"[^>]+content="([^"]+)"',
+        rf'<meta[^>]+(?:name|property)="([^"]*{META_PROSE_SUFFIX})"[^>]+content="([^"]+)"',
         page,
         re.I,
     ):
         out.append((f"meta[{m.group(1)}]", html.unescape(m.group(2))))
     # content= may precede name/property in attribute order; catch that too.
     for m in re.finditer(
-        r'<meta[^>]+content="([^"]+)"[^>]+(?:name|property)="([^"]*(?:description|title))"',
+        rf'<meta[^>]+content="([^"]+)"[^>]+(?:name|property)="([^"]*{META_PROSE_SUFFIX})"',
         page,
         re.I,
     ):
@@ -261,6 +274,25 @@ def extract_prose(page: str, fragments: bool = False) -> list[tuple[str, str]]:
     for attr in ("alt", "aria-label"):
         for m in re.finditer(rf'{attr}="([^"]{{16,}})"', body):
             out.append((attr, html.unescape(m.group(1))))
+    return out
+
+
+def extract_prose_svg(doc: str) -> list[tuple[str, str]]:
+    """Return ("svg:text", text) for every <text> element in an SVG.
+
+    The social card (og.png) is rasterized from an SVG that
+    generate-share-assets.mjs composes and also writes out for this gate. Its
+    <text> lines are the only words a reader sees in the image; attributes
+    (font stacks, coordinates) and XML comments are not rendered and are never
+    read. No length floor: every card line is display copy, however short.
+    """
+    doc = re.sub(r"<!--.*?-->", " ", doc, flags=re.S)
+    out: list[tuple[str, str]] = []
+    for m in re.finditer(r"<text\b[^>]*>(.*?)</text>", doc, re.S | re.I):
+        txt = html.unescape(re.sub(r"<[^>]+>", " ", m.group(1)))
+        txt = re.sub(r"\s+", " ", txt).strip()
+        if txt:
+            out.append(("svg:text", txt))
     return out
 
 
@@ -456,8 +488,11 @@ def extract_prose_json(doc: str) -> list[tuple[str, str]]:
 
 def extract_for_path(path: str, text: str, fragments: bool = False) -> list[tuple[str, str]]:
     """Pick the front end by file name: .md/.markdown/llms.txt -> Markdown,
-    .json -> manifest prose fields, every other extension -> HTML."""
+    .json -> manifest prose fields, .svg -> <text> lines, every other
+    extension -> HTML."""
     lower = path.lower()
+    if lower.endswith(".svg"):
+        return extract_prose_svg(text)
     if lower.endswith(MARKDOWN_SUFFIXES) or Path(lower).name in MARKDOWN_BASENAMES:
         return extract_prose_markdown(text, fragments=fragments)
     if lower.endswith(".json"):
