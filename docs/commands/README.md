@@ -63,7 +63,7 @@ Bundle lifecycle commands
 
 Summarize a bundle (node count, spec version)
 
-info prints a one-glance summary of a bundle: how many concept nodes it holds, how many reserved files (index.md/log.md, OKF §3.1) it carries, and its okf_version (§12). The version is read from the bundle-root index.md frontmatter (§8.1), falling back to the legacy .okf sidecar; a bundle that declares neither is reported as undeclared, with the version okfctl assumes for it. It's read-only and never mutates the bundle. It doesn't validate conformance — use `okfctl validate` for that.
+info prints a one-glance summary of a bundle: how many concept nodes it holds, how many reserved files (index.md/log.md, OKF §3.1) it carries, and its okf_version (§12). The version is read from the bundle-root index.md frontmatter (§8.1), falling back to the legacy .okf sidecar. A bundle that declares neither is reported as undeclared: per §12.1 it is read with the v0.2 fallbacks. It's read-only and never mutates the bundle. It doesn't validate conformance — use `okfctl validate` for that.
 
 ```
 okfctl bundle info [dir]
@@ -504,7 +504,7 @@ Example:
 
 Upgrade a bundle to OKF v0.3 from v0.1 or v0.2 (two-phase, consumer-agnostic)
 
-migrate is the supported upgrade path to OKF v0.3 for a bundle that declares v0.1, v0.2, or no version. It runs in two phases so it never acquires a model dependency. Phase 1 (default) is PURE READ: it computes every deterministic edit and enumerates every judgment item, writing only the plan file. The v0.1 renames (Appendix B): timestamp -> generated.at; body # Citations with a follow-able resource -> frontmatter sources. The v0.2 -> v0.3 edits (§13.1): a bare link or path field that resolves only from the bundle root (the §12.1 fallback) is rewritten with a leading / so it resolves the same way under v0.3 (§6); a §5 timestamp that carries an offset but is not RFC 3339 is respelled. Judgment items: a prose citation with no resource (§5.1), a timestamp rename with no actor (§7), and a date-time with no offset (§5, §13.2: it names no instant). Phase 2 (--apply) applies the deterministic edits, declares okf_version "0.3" on the bundle-root index.md (§8.1), and re-validates. --dry-run writes nothing and prints the unified diff the real apply would write. A bundle that declares v0.3, a later version, or one okfctl does not know is never refused and never rewritten toward an older version (§12). Judgment items are never guessed — they stay in the plan for its consumer (agent, colleague, shell loop, or a human) to resolve.
+migrate is the supported upgrade path to OKF v0.3 for a bundle that declares v0.1, v0.2, or no version. It runs in two phases so it never acquires a model dependency. Phase 1 (default) is PURE READ: it computes every deterministic edit and enumerates every judgment item, writing only the plan file. The v0.1 renames (Appendix B): timestamp -> generated.at; a body # Citations entry that names exactly one follow-able resource -> a frontmatter sources entry (resource, with the entry text as title). The v0.2 -> v0.3 edits (§13.1): a bare link or path field that resolves only from the bundle root (the §12.1 fallback) is rewritten with a leading / so it resolves the same way under v0.3 (§6); a §5 timestamp that carries an offset but is not RFC 3339 is respelled. Judgment items: a citation entry with no resource or with two different ones (§5.1), a timestamp rename with no actor (§7), and a date-time with no offset (§5, §13.2: it names no instant). Phase 2 (--apply) applies the deterministic edits, declares okf_version "0.3" on the bundle-root index.md (§8.1), and re-validates. While a prose-citation or missing-actor item remains, the declaration is held: those items are readable only through the v0.1 fallbacks, which §12.1 grants only to a bundle declaring 0.2 or earlier, or nothing. --force-declare overrides the hold. --dry-run writes nothing and prints the unified diff the real apply would write. A bundle that declares v0.3, a later version, or one okfctl does not know is never refused and never rewritten toward an older version (§12). Judgment items are never guessed — they stay in the plan for its consumer (agent, colleague, shell loop, or a human) to resolve.
 
 ```
 okfctl migrate <bundle> [flags]
@@ -528,6 +528,7 @@ Flags:
 ```
       --apply                 phase 2: read the plan and apply it (default is phase 1: plan only)
       --dry-run               with --apply: write nothing; print the diff the real apply would write
+      --force-declare         phase 1: declare v0.3 even while prose-citation or missing-actor items remain (they lose the §12.1 fallback)
       --generated-by string   actor (§7) recorded as generated.by for each timestamp rename
       --plan string           migration plan file (written in phase 1, read in phase 2) (default "migrate-plan.json")
 ```

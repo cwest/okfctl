@@ -64,7 +64,7 @@ func TestMigrate_PlanWritesPlanFileOnly(t *testing.T) {
 }
 
 // `migrate --apply` reads the plan back, applies it, and leaves a bundle that
-// validates clean AS v0.3; the unrecognized key survives (additive-only).
+// validates clean; the unrecognized key survives (additive-only).
 func TestMigrate_ApplyProducesValidV03(t *testing.T) {
 	dir := mkPromoteCLIBundle(t, migrateFixtureFiles())
 	planPath := filepath.Join(t.TempDir(), "migrate-plan.json")
@@ -93,10 +93,51 @@ func TestMigrate_ApplyProducesValidV03(t *testing.T) {
 	if !strings.Contains(node, "fpa-handbook") {
 		t.Errorf("a.md missing the migrated source:\n%s", node)
 	}
+	// §12.1: the fixture keeps a prose citation, so the declaration is held
+	// and the .okf sidecar still declares 0.1.
+	if okf := readFileStr(t, filepath.Join(dir, ".okf")); !strings.Contains(okf, "okf_version: 0.1") {
+		t.Errorf(".okf changed while the declaration was held:\n%s", okf)
+	}
+}
+
+// `migrate --force-declare` declares v0.3 even with the prose citation left,
+// and the plan summary says so.
+func TestMigrate_ForceDeclareBumpsMarkers_Section12_1(t *testing.T) {
+	dir := mkPromoteCLIBundle(t, migrateFixtureFiles())
+	planPath := filepath.Join(t.TempDir(), "migrate-plan.json")
+	out, err := runOKF(t, "migrate", dir, "--plan", planPath, "--generated-by", "human:casey", "--force-declare")
+	if err != nil {
+		t.Fatalf("plan: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "declare v0.3 (forced: 1 prose-citation/missing-actor item(s) lose the §12.1 fallback)") {
+		t.Fatalf("forced plan summary:\n%s", out)
+	}
+	if out, err := runOKF(t, "migrate", dir, "--apply", "--plan", planPath); err != nil {
+		t.Fatalf("apply: %v\n%s", err, out)
+	}
 	// .okf sidecar bumped to 0.3 (quoted, §4).
 	okf := readFileStr(t, filepath.Join(dir, ".okf"))
 	if !strings.Contains(okf, `okf_version: "0.3"`) {
 		t.Errorf(".okf not bumped to 0.3:\n%s", okf)
+	}
+}
+
+// Re-applying the same plan file after a real apply changes nothing (§12).
+func TestMigrate_ApplySamePlanTwiceIsNoop(t *testing.T) {
+	dir := mkPromoteCLIBundle(t, migrateFixtureFiles())
+	planPath := filepath.Join(t.TempDir(), "migrate-plan.json")
+	if out, err := runOKF(t, "migrate", dir, "--plan", planPath, "--generated-by", "human:casey"); err != nil {
+		t.Fatalf("plan: %v\n%s", err, out)
+	}
+	if out, err := runOKF(t, "migrate", dir, "--apply", "--plan", planPath); err != nil {
+		t.Fatalf("first apply: %v\n%s", err, out)
+	}
+	once := cliTreeHash(t, dir)
+	if out, err := runOKF(t, "migrate", dir, "--apply", "--plan", planPath); err != nil {
+		t.Fatalf("second apply: %v\n%s", err, out)
+	}
+	if cliTreeHash(t, dir) != once {
+		t.Fatalf("second apply of the same plan changed the tree:\n%s", readFileStr(t, filepath.Join(dir, "a.md")))
 	}
 }
 

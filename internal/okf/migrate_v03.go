@@ -50,6 +50,11 @@ const (
 	// VersionBump: the bundle declares 0.2 or earlier, or no version (§12.1).
 	// The plan's edits apply, and the version markers move to the target.
 	VersionBump = "bump"
+	// VersionHold: the bundle is legacy, but the plan leaves judgment items
+	// that a consumer reads only through a §12.1 fallback (Appendix B
+	// `# Citations` or `timestamp`). The edits apply; the declaration waits
+	// until those items are resolved, or until ForceDeclare overrides it.
+	VersionHold = "hold"
 	// VersionKeep: the bundle declares the target version, a later one, or one
 	// this build does not know. §12: such a bundle is consumed best-effort and
 	// never refused, so migrate plans nothing and writes nothing.

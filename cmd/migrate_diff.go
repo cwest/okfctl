@@ -66,6 +66,13 @@ func writeMigrateSummary(out io.Writer, plan okf.MigratePlan) {
 	}
 	action := "declare v" + plan.TargetVersion
 	switch {
+	case plan.VersionAction == okf.VersionHold:
+		action = fmt.Sprintf("hold (%d prose-citation/missing-actor item(s) still rely on the §12.1 fallback "+
+			"that declaring v%s turns off; resolve them and re-plan, or re-plan with --force-declare)",
+			plan.FallbackItems(), plan.TargetVersion)
+	case plan.VersionAction != okf.VersionKeep && plan.ForceDeclare:
+		action = fmt.Sprintf("declare v%s (forced: %d prose-citation/missing-actor item(s) lose the §12.1 fallback)",
+			plan.TargetVersion, plan.FallbackItems())
 	case plan.VersionAction != okf.VersionKeep:
 	case plan.DeclaredVersion == plan.TargetVersion:
 		action = "keep (already v" + plan.TargetVersion + ")"

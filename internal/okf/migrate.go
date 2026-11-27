@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -88,6 +87,9 @@ type GeneratedEdit struct {
 // bundle-relative path kept relative per §6).
 type SourceEdit struct {
 	Resource string `json:"resource"`
+	// Title is the optional §5.1 label: the citation entry's own text, so the
+	// claim the author wrote beside the resource is carried across.
+	Title string `json:"title,omitempty"`
 }
 
 // NodeMigration is the set of deterministic frontmatter edits planned for one
@@ -125,24 +127,47 @@ type MigratePlan struct {
 	// DeclaredVersion is the okf_version the bundle declared when planned, or
 	// "" when it declared none.
 	DeclaredVersion string `json:"declared_version"`
-	// VersionAction is VersionBump (the markers move to TargetVersion) or
-	// VersionKeep (the bundle is left at the version it declares, §12). A plan
-	// file without the field (written before it existed) is a bump.
-	VersionAction string          `json:"version_action,omitempty"`
-	Nodes         []NodeMigration `json:"nodes"`
-	Judgment      []JudgmentItem  `json:"judgment"`
+	// VersionAction is VersionBump (the markers move to TargetVersion),
+	// VersionHold (the edits apply but the declaration waits, because an item
+	// still depends on a §12.1 fallback), or VersionKeep (the bundle is left at
+	// the version it declares, §12). A plan file without the field (written
+	// before it existed) is a bump.
+	VersionAction string `json:"version_action,omitempty"`
+	// ForceDeclare records that the plan bumps even though fallback items
+	// remain (MigrateOptions.ForceDeclare).
+	ForceDeclare bool            `json:"force_declare,omitempty"`
+	Nodes        []NodeMigration `json:"nodes"`
+	Judgment     []JudgmentItem  `json:"judgment"`
 }
 
-// citationItemRe matches a single `# Citations` entry line and captures its text
-// after any bullet / bracket-key / ordered-list marker. It mirrors the entry
-// shapes analyze.go's citationEntryRe / citationOrderedRe recognize.
-var citationItemRe = regexp.MustCompile(`^\s*(?:[-*]\s*)?(?:(?:\*\*)?\[[A-Za-z0-9]+\](?:\*\*)?|\d+\.)?\s*(.*\S)\s*$`)
+// DeclaresTarget reports whether applying the plan declares TargetVersion.
+func (p MigratePlan) DeclaresTarget() bool {
+	return p.VersionAction == VersionBump || p.VersionAction == ""
+}
 
-// bareURLRe matches a leading bare URL in a citation item.
-var bareURLRe = regexp.MustCompile(`^<?(https?://[^\s>]+)>?`)
+// FallbackItems counts the judgment items a consumer can still read only
+// through a §12.1 fallback (Appendix B: a prose `# Citations` entry, or a
+// legacy `timestamp` with no `generated`). Declaring 0.3 switches those
+// fallbacks off, so while any remain the plan holds the declaration.
+func (p MigratePlan) FallbackItems() int {
+	n := 0
+	for _, j := range p.Judgment {
+		if j.Kind == JudgmentProseCitation || j.Kind == JudgmentMissingActor {
+			n++
+		}
+	}
+	return n
+}
 
-// mdLinkOnlyRe matches a markdown link and captures its target.
-var mdLinkTargetRe = regexp.MustCompile(`\[[^\]]*\]\(([^)\s]+)`)
+// MigrateOptions tunes PlanMigrationWith.
+type MigrateOptions struct {
+	// GeneratedBy is the actor (§7) recorded for every `timestamp` rename.
+	GeneratedBy string
+	// ForceDeclare declares the target version even while fallback items
+	// remain. Those items then lose the §12.1 fallback that still carries
+	// them; the plan records the choice.
+	ForceDeclare bool
+}
 
 // PlanMigration computes the migration plan to TargetOkfVersion for a loaded
 // bundle. It is PURE: it reads the bundle and writes nothing. generatedBy is
@@ -156,6 +181,30 @@ var mdLinkTargetRe = regexp.MustCompile(`\[[^\]]*\]\(([^)\s]+)`)
 // older version would be a downgrade. A bundle that already declares the
 // target gets content edits only; its markers stay.
 func PlanMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
+	return PlanMigrationWith(b, MigrateOptions{GeneratedBy: generatedBy})
+}
+
+// PlanMigrationWith is PlanMigration with options. A legacy bundle whose plan
+// leaves fallback items (MigratePlan.FallbackItems) gets VersionHold unless
+// opts.ForceDeclare is set: §12.1 grants the Appendix B fallbacks only to a
+// bundle that declares 0.2 or earlier, or nothing, so declaring 0.3 first
+// would make a consumer drop those items.
+func PlanMigrationWith(b *Bundle, opts MigrateOptions) (MigratePlan, error) {
+	plan, err := planMigration(b, opts.GeneratedBy)
+	if err != nil {
+		return plan, err
+	}
+	if plan.VersionAction == VersionBump && plan.FallbackItems() > 0 {
+		if opts.ForceDeclare {
+			plan.ForceDeclare = true
+		} else {
+			plan.VersionAction = VersionHold
+		}
+	}
+	return plan, nil
+}
+
+func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 	plan := MigratePlan{
 		TargetVersion:   TargetOkfVersion,
 		DeclaredVersion: b.DeclaredOkfVersion,
@@ -214,13 +263,15 @@ func PlanMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 			}
 		}
 
-		// §13.1: body # Citations -> frontmatter sources. Only items carrying a
-		// follow-able resource are deterministic; a prose finding is a judgment
-		// item (§5.1 requires resource; never fabricate one). Idempotence: skip
-		// a resource already present in the node's sources.
+		// Appendix B: body # Citations -> frontmatter sources. Only an entry
+		// that names exactly one follow-able resource is deterministic; a prose
+		// finding, or an entry with several resources, is a judgment item
+		// (§5.1 requires resource; never fabricate or pick one). Idempotence:
+		// skip a resource already present in the node's sources.
 		existing := existingSourceResources(n)
-		for _, item := range parseCitationItems(n.Body) {
-			res, ok := citationResource(item)
+		for _, item := range citationEntries(n.Body) {
+			src, ok := citationSource(item)
+			res := src.Resource
 			if !ok {
 				plan.Judgment = append(plan.Judgment, JudgmentItem{
 					Path: rel, Kind: JudgmentProseCitation, Context: item,
@@ -236,7 +287,7 @@ func PlanMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 			if existing[res] {
 				continue // already migrated (idempotent)
 			}
-			nm.Sources = append(nm.Sources, SourceEdit{Resource: res})
+			nm.Sources = append(nm.Sources, SourceEdit{Resource: res, Title: src.Title})
 			existing[res] = true
 		}
 	}
@@ -369,7 +420,9 @@ func migrateTimeString(v any) string {
 // version markers (bundle-root index.md, §8.1; and the legacy .okf sidecar
 // when present) unless the plan is VersionKeep. b's declared version decides
 // which values still resolve through the §12.1 fallback. It never touches a
-// judgment item — those stay for the plan's consumer.
+// judgment item — those stay for the plan's consumer. Every edit re-checks the
+// current bytes, so applying the same plan to a tree it already migrated
+// changes nothing. A VersionHold plan applies its edits and declares nothing.
 func MigrateApply(root string, b *Bundle, plan MigratePlan) error {
 	for _, nm := range plan.Nodes {
 		raw, out, err := RenderMigration(root, b, nm)
@@ -384,7 +437,7 @@ func MigrateApply(root string, b *Bundle, plan MigratePlan) error {
 			return fmt.Errorf("write %s: %w", nm.Path, err)
 		}
 	}
-	if plan.VersionAction == VersionKeep {
+	if !plan.DeclaresTarget() {
 		return nil
 	}
 	return bumpVersionMarkers(root, plan.TargetVersion)
@@ -417,7 +470,7 @@ func RenderMigration(root string, b *Bundle, nm NodeMigration) ([]byte, []byte, 
 // path. It writes nothing.
 func RenderVersionMarkers(root string, plan MigratePlan) (map[string][2][]byte, error) {
 	out := map[string][2][]byte{}
-	if plan.VersionAction == VersionKeep {
+	if !plan.DeclaresTarget() {
 		return out, nil
 	}
 	before, after, err := renderOkfSidecar(root, plan.TargetVersion)
@@ -440,7 +493,11 @@ func RenderVersionMarkers(root string, plan MigratePlan) (map[string][2][]byte, 
 // renderMigratedNode returns the node file bytes with the planned deterministic
 // edits applied to its frontmatter, order-preserving and additive: the only
 // keys that change are `timestamp` (removed) and `generated` / `sources`
-// (added, appended after the existing keys). The edit is a splice (OKF v0.3
+// (added, appended after the existing keys). Each edit re-checks the current
+// frontmatter first: the rename is skipped once `generated` exists or
+// `timestamp` is gone, and a source whose resource is already listed is not
+// added again, so a stale plan re-applied to a migrated file is a no-op.
+// The edit is a splice (OKF v0.3
 // §4): every untouched entry keeps its bytes, and the body is preserved
 // verbatim. It
 // is PURE — the single writer both --apply and its --dry-run render through, so
@@ -451,13 +508,34 @@ func renderMigratedNode(raw []byte, nm NodeMigration) ([]byte, error) {
 		// body-citation edit that touches frontmatter; nothing to do.
 		return raw, nil
 	}
+	m := parsedFrontmatterMapping(raw)
+	if m == nil {
+		return raw, nil
+	}
+	rename := nm.Generated != nil && mappingValue(m, "generated") == nil && mappingValue(m, "timestamp") != nil
+	have := map[string]bool{}
+	for _, s := range itemsOf(mappingValue(m, "sources")) {
+		if r := mappingValue(s, "resource"); r != nil && r.Kind == yaml.ScalarNode {
+			have[r.Value] = true
+		}
+	}
+	var add []SourceEdit
+	for _, s := range nm.Sources {
+		if !have[s.Resource] {
+			have[s.Resource] = true
+			add = append(add, s)
+		}
+	}
+	if !rename && len(add) == 0 {
+		return raw, nil
+	}
 	return editFrontmatter(raw, func(root *yaml.Node) {
-		if nm.Generated != nil {
+		if rename {
 			removeKey(root, "timestamp")
 			setMapping(root, "generated", []kv{{"by", nm.Generated.By}, {"at", nm.Generated.At}})
 		}
-		if len(nm.Sources) > 0 {
-			appendSources(root, nm.Sources)
+		if len(add) > 0 {
+			appendSources(root, add)
 		}
 	})
 }
@@ -501,6 +579,12 @@ func appendSources(mapping *yaml.Node, sources []SourceEdit) {
 			&yaml.Node{Kind: yaml.ScalarNode, Value: "resource"},
 			scalarValue(s.Resource),
 		)
+		if s.Title != "" {
+			entry.Content = append(entry.Content,
+				&yaml.Node{Kind: yaml.ScalarNode, Value: "title"},
+				scalarValue(s.Title),
+			)
+		}
 		seq.Content = append(seq.Content, entry)
 	}
 }
@@ -567,55 +651,6 @@ func existingSourceResources(n *Node) map[string]bool {
 		out[s.Resource] = true
 	}
 	return out
-}
-
-// citationBulletRe matches a plain bullet entry (`- ...` / `* ...`) that the
-// analyze.go entry regexes (which require a bracket key or ordered marker) do
-// not — the spec's own v0.1 worked example lists citations as bare bullets.
-var citationBulletRe = regexp.MustCompile(`^\s*[-*]\s+\S`)
-
-// parseCitationItems returns the verbatim entry lines under a `# Citations`
-// heading (legend lines excluded), in body order. It recognizes the bracket-key
-// and ordered-list shapes analyze.go's citationCount uses, plus plain bullets
-// (the spec's v0.1 example lists sources as bare `-` bullets). A blank line ends
-// the section so trailing prose is not swept in.
-func parseCitationItems(body string) []string {
-	loc := citationsHeadRe.FindStringIndex(body)
-	if loc == nil {
-		return nil
-	}
-	var out []string
-	for _, line := range strings.Split(body[loc[1]:], "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "#") {
-			break // next heading ends the Citations section
-		}
-		if citationLegendRe.MatchString(line) {
-			continue
-		}
-		if citationEntryRe.MatchString(line) || citationOrderedRe.MatchString(line) || citationBulletRe.MatchString(line) {
-			out = append(out, strings.TrimRight(line, " 	"))
-		}
-	}
-	return out
-}
-
-// citationResource extracts the follow-able resource from a citation item: a
-// markdown-link target (kept in the author's form per §6), or a leading bare
-// URL. It returns ok=false for a prose finding with no resource — §5.1 requires
-// a resource, so such an item is a judgment call, never a fabricated source.
-func citationResource(item string) (string, bool) {
-	m := citationItemRe.FindStringSubmatch(item)
-	text := item
-	if m != nil {
-		text = strings.TrimSpace(m[1])
-	}
-	if link := mdLinkTargetRe.FindStringSubmatch(text); link != nil {
-		return strings.TrimSpace(link[1]), true
-	}
-	if url := bareURLRe.FindStringSubmatch(text); url != nil {
-		return url[1], true
-	}
-	return "", false
 }
 
 // bumpVersionMarkers declares target in the bundle-root index.md (§8.1, §12)
