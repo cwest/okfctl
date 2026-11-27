@@ -76,7 +76,10 @@ func TestConformance_MigrateTitleShorten_Section5_1_FullCitationTitleBecomesName
 			t.Fatalf("§5.1/§4.1: missing %q in\n%s", want, out)
 		}
 	}
-	if strings.Count(out, "Acme Press 2024") != 2 { // the footnote and the untouched # Citations entry
+	// The text is now only in the footnote: the title holds the name, and
+	// the `# Citations` list, fully held by sources and footnotes, is
+	// removed (§4.2).
+	if strings.Count(out, "Acme Press 2024") != 1 || strings.Contains(out, "# Citations") {
 		t.Fatalf("§5.1: the entry text must leave the title, got\n%s", out)
 	}
 	nb := loadMigrate(t, dir)

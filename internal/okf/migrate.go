@@ -142,11 +142,15 @@ type NodeMigration struct {
 	// RefKeys maps each body citation key to the id it is rewritten to; the
 	// renderer finds the planned Refs with it.
 	RefKeys map[string]string `json:"ref_keys,omitempty"`
+	// RemoveCitations removes the node's v0.1 `# Citations` section
+	// (§4.2, Appendix B) once every entry in it is recoverable from
+	// `sources` and footnote definitions (citationListLoss).
+	RemoveCitations bool `json:"remove_citations,omitempty"`
 }
 
 func (nm NodeMigration) hasEdits() bool {
 	return nm.Generated != nil || len(nm.Sources) > 0 || len(nm.Titles) > 0 || len(nm.Paths) > 0 || len(nm.Timestamps) > 0 ||
-		len(nm.IDs) > 0 || len(nm.Footnotes) > 0 || len(nm.Refs) > 0 || len(nm.Retitles) > 0
+		len(nm.IDs) > 0 || len(nm.Footnotes) > 0 || len(nm.Refs) > 0 || len(nm.Retitles) > 0 || nm.RemoveCitations
 }
 
 // EditCount is the number of deterministic edits planned for the node.
@@ -156,6 +160,9 @@ func (nm NodeMigration) EditCount() int {
 		n += r.Count
 	}
 	if nm.Generated != nil {
+		n++
+	}
+	if nm.RemoveCitations {
 		n++
 	}
 	return n
@@ -440,6 +447,18 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 		nm.Paths, nm.Timestamps = paths, stamps
 	}
 
+	// §4.2, Appendix B: a node's `# Citations` list goes once its rendered
+	// bytes hold everything in it; otherwise it stays, reported. Decided last,
+	// on every edit planned above.
+	for _, rel := range sortedNodePaths(b) {
+		if n := b.Nodes[rel]; n.Frontmatter == nil || !citationsHeadRe.MatchString(n.Body) {
+			continue
+		}
+		if err := planCitationRemoval(&plan, b, rel, nodeFor(rel)); err != nil {
+			return MigratePlan{}, err
+		}
+	}
+
 	order := make([]string, 0, len(byPath))
 	for rel := range byPath {
 		order = append(order, rel)
@@ -581,6 +600,9 @@ func RenderMigration(root string, b *Bundle, nm NodeMigration) ([]byte, []byte, 
 		if out, err = renderV03Node(b, nm.Path, out, nm); err != nil {
 			return nil, nil, fmt.Errorf("migrate %s: %w", nm.Path, err)
 		}
+	}
+	if nm.RemoveCitations {
+		out = removeCitationSection(b, nm.Path, out)
 	}
 	return raw, out, nil
 }

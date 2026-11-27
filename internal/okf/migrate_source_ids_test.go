@@ -98,16 +98,14 @@ func TestConformance_MigrateSourceIDs_Section4_2_FootnoteDefinitionsAndReference
 	out := readRel(t, dir, "a.md")
 	wantBody := "The schema is sharded daily [^ga4-schema], and pricing is per token [^2].\n\n" +
 		"[^ga4-schema]: VERIFIED — GA4 BigQuery Export schema, https://developers.google.com/analytics/bigquery/export-schema\n" +
-		"[^2]: VERIFIED — pricing page https://claude.com/pricing\n\n" +
-		"# Citations\n\n" +
-		"- [ga4-schema] VERIFIED — GA4 BigQuery Export schema,\n"
-	if !strings.Contains(out, wantBody) {
+		"[^2]: VERIFIED — pricing page https://claude.com/pricing\n"
+	if !strings.HasSuffix(out, wantBody) {
 		t.Fatalf("§4.2/§5.1: body not rewritten as expected\n--- got\n%s\n--- want substring\n%s", out, wantBody)
 	}
-	// The body list is untouched (its removal is a separate step), so the
-	// parser still sees exactly the same entries.
-	if got := citationEntries(loadMigrate(t, dir).Nodes["a.md"].Body); len(got) != 2 {
-		t.Fatalf("footnote definitions must sit outside # Citations; entries now %q", got)
+	// Every entry is now a footnote of its source, so the body list is
+	// removed (§4.2).
+	if got := citationEntries(loadMigrate(t, dir).Nodes["a.md"].Body); len(got) != 0 {
+		t.Fatalf("§4.2: the recoverable list must be removed; entries now %q", got)
 	}
 }
 

@@ -428,3 +428,28 @@ func TestMigrate_PlanSummaryCountsTitleShortening_Section5_1(t *testing.T) {
 		t.Errorf("summary missing %q:\n%s", want, out)
 	}
 }
+
+// §4.2: the summary counts the `# Citations` lists the plan removes and the
+// ones it keeps (citations-kept), so the eligible count is readable without
+// opening the plan file. One node is fully recoverable; the other keeps its
+// list because an entry names no resource.
+func TestMigrate_PlanSummaryCountsCitationLists_Section4_2(t *testing.T) {
+	dir := mkPromoteCLIBundle(t, map[string]string{
+		"index.md": "# KB\n",
+		"log.md":   "# Log\n",
+		"a.md": "---\ntype: Concept\n---\n\n# Def\n\nA claim [1].\n\n# Citations\n" +
+			"- [1] Acme, *The FP&A Handbook*, 2024. https://wiki.acme/fpa\n",
+		"b.md": "---\ntype: Concept\n---\n\n# Def\n\nA claim [1].\n\n# Citations\n" +
+			"- [1] on-box probe, no URL.\n",
+	})
+	planPath := filepath.Join(t.TempDir(), "migrate-plan.json")
+	out, err := runOKF(t, "migrate", dir, "--plan", planPath)
+	if err != nil {
+		t.Fatalf("migrate --plan: err=%v out=%q", err, out)
+	}
+	for _, want := range []string{"citation lists: removed 1, kept 1", "citations-kept 1"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("summary missing %q:\n%s", want, out)
+		}
+	}
+}

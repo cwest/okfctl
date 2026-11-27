@@ -127,6 +127,20 @@ func writeMigrateSummary(out io.Writer, plan okf.MigratePlan) {
 	if shortened+removed > 0 {
 		fmt.Fprintf(out, "titles: full-citation titles->name %d, removed (no name) %d\n", shortened, removed)
 	}
+	listsRemoved, listsKept := 0, 0
+	for _, nm := range plan.Nodes {
+		if nm.RemoveCitations {
+			listsRemoved++
+		}
+	}
+	for _, j := range plan.Judgment {
+		if j.Kind == okf.JudgmentCitationsKept {
+			listsKept++
+		}
+	}
+	if listsRemoved+listsKept > 0 {
+		fmt.Fprintf(out, "citation lists: removed %d, kept %d\n", listsRemoved, listsKept)
+	}
 	byKind := map[okf.JudgmentKind]int{}
 	for _, j := range plan.Judgment {
 		byKind[j.Kind]++

@@ -70,7 +70,8 @@ func TestConformance_MigrateSplit_Section5_1_TwoURLEntrySplitsWithIDs(t *testing
 // Rule R4 for a split entry: every body `[12]` (cited twice here) becomes a
 // footnote per part, the first part's definition is the full entry text, and
 // the later part's definition is its resource (it has no name). The migrated
-// bundle validates and the `# Citations` list is left in place.
+// bundle validates, and the `# Citations` list, now held by sources and
+// footnotes, is removed (§4.2).
 func TestConformance_MigrateSplit_Section4_2_MarkerCitedTwicePointsAtEveryPart(t *testing.T) {
 	dir, _ := migrateOnce(t, kb(splitTwoNode))
 	out := readRel(t, dir, "a.md")
@@ -80,11 +81,13 @@ func TestConformance_MigrateSplit_Section4_2_MarkerCitedTwicePointsAtEveryPart(t
 		"[^12-2]: https://b.example/mirror\n",
 		"  - id: \"12\"\n    resource: \"https://a.example/schema\"\n    title: Export Schema\n",
 		"  - id: 12-2\n    resource: \"https://b.example/mirror\"\n",
-		"# Citations\n\n- [12] VERIFIED — *Export Schema*, https://a.example/schema; mirror\n",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("§4.2/§5.1: missing %q in\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "# Citations") {
+		t.Errorf("§4.2: a recoverable list must be removed:\n%s", out)
 	}
 	if fs := Validate(loadMigrate(t, dir)); len(fs) != 0 {
 		t.Fatalf("migrated bundle must validate: %+v", fs)
