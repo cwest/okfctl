@@ -300,7 +300,7 @@ const goInstallCmd = version.tag
             <a href="https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md" rel="noopener">open-knowledge-format/open-knowledge-format</a>,
             and where the spec defines a behavior, okfctl does what it says. <code class="mono" style="color:var(--fg)">validate</code> fails
             only on what the spec calls nonconformant (OKF §11.1). Any <code class="mono" style="color:var(--fg)">type</code> it has never seen
-            still passes, and so does a frontmatter key from a later version (§11.2). Stricter team rules run only when you pass{" "}
+            still passes, and so does a frontmatter key from a later version (§11.2). Your team's type templates get checked only when you pass{" "}
             <code class="mono" style="color:var(--fg)">--templates</code>.
           </p>
         </div>
@@ -518,7 +518,7 @@ const goInstallCmd = version.tag
             <article class="why-item">
               <div><span class="n">01 install</span><h3>Install it and it runs.</h3></div>
               <div>
-                <p>okfctl is pure Go. The release archive holds <code class="mono" style="color:var(--fg)">okfctl</code> and the <code class="mono" style="color:var(--fg)">okfctl-search</code> plugin, and either one runs as soon as it's on your <code class="mono" style="color:var(--fg)">PATH</code>. Nothing else goes in the CI image, and every command except <code class="mono" style="color:var(--fg)">connect</code> runs offline.</p>
+                <p>okfctl is pure Go. The release archive holds <code class="mono" style="color:var(--fg)">okfctl</code> and the <code class="mono" style="color:var(--fg)">okfctl-search</code> plugin, and either one runs as soon as it's on your <code class="mono" style="color:var(--fg)">PATH</code>. Nothing else goes in the CI image. Only <code class="mono" style="color:var(--fg)">connect</code> needs the network.</p>
                 <p class="ev">Semantic search runs in-process on a <b>Model2Vec</b> model that you download and point it at with <code class="mono">okfctl config set model_path</code>. The <a href="/guides/search/">search guide</a> has the steps.</p>
               </div>
             </article>
@@ -534,8 +534,8 @@ const goInstallCmd = version.tag
             <article class="why-item">
               <div><span class="n">03 conformance</span><h3>You choose which checks fail the build.</h3></div>
               <div>
-                <p>Some things fail <code class="mono" style="color:var(--fg)">validate</code> no matter what. They break the spec: frontmatter that won't parse, and an <code class="mono" style="color:var(--fg)">index.md</code> or <code class="mono" style="color:var(--fg)">log.md</code> that ignores §8 or §9. Everything past that is your call. Say a node's last commit is newer than its <code class="mono" style="color:var(--fg)">modified</code> date. okfctl warns you and exits 0. Template drift and anything <code class="mono" style="color:var(--fg)">lint</code> catches get the same treatment. <code class="mono" style="color:var(--fg)">--strict</code> turns all three into exit 1.</p>
-                <p class="ev">Give a fresh bundle a <code class="mono">log.md</code> with no title and <b>okfctl validate</b> exits 1: <code class="mono">FAIL log.md: log.md must begin with a `# ` title heading (§9)</code></p>
+                <p>Some things fail <code class="mono" style="color:var(--fg)">validate</code> no matter what. They break the spec: frontmatter that won't parse, and an <code class="mono" style="color:var(--fg)">index.md</code> or <code class="mono" style="color:var(--fg)">log.md</code> that ignores §8 or §9. The rest is up to you. Say a node's last commit is newer than its <code class="mono" style="color:var(--fg)">modified</code> date. okfctl warns and exits 0. Template drift and anything <code class="mono" style="color:var(--fg)">lint</code> catches get the same treatment. <code class="mono" style="color:var(--fg)">--strict</code> turns all three into exit 1.</p>
+                <p class="ev">Give a fresh bundle a <code class="mono">log.md</code> with no title and <b>okfctl validate</b> exits 1: <code class="mono">FAIL log.md: log.md must begin with a `# ` title heading (§9); a frontmatter block is not permitted</code></p>
               </div>
             </article>
 
