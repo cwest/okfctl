@@ -502,9 +502,15 @@ Example:
 
 ## okfctl migrate
 
-Upgrade a bundle to OKF v0.3 from v0.1 or v0.2 (two-phase, consumer-agnostic)
+Upgrade a v0.1 or v0.2 bundle to OKF v0.3: plan, preview, apply
 
-migrate is the supported upgrade path to OKF v0.3 for a bundle that declares v0.1, v0.2, or no version. It runs in two phases so it never acquires a model dependency. Phase 1 (default) is PURE READ: it computes every deterministic edit and enumerates every judgment item, writing only the plan file. The v0.1 renames (Appendix B): timestamp -> generated.at; a body # Citations entry that names exactly one follow-able resource -> a frontmatter sources entry (resource, with the entry text as title). The v0.2 -> v0.3 edits (§13.1): a bare link or path field that resolves only from the bundle root (the §12.1 fallback) is rewritten with a leading / so it resolves the same way under v0.3 (§6); a §5 timestamp that carries an offset but is not RFC 3339 is respelled. Judgment items: a citation entry with no resource or with two different ones (§5.1), a timestamp rename with no actor (§7), and a date-time with no offset (§5, §13.2: it names no instant). Phase 2 (--apply) applies the deterministic edits, declares okf_version "0.3" on the bundle-root index.md (§8.1), and re-validates. While a prose-citation or missing-actor item remains, the declaration is held: those items are readable only through the v0.1 fallbacks, which §12.1 grants only to a bundle declaring 0.2 or earlier, or nothing. --force-declare overrides the hold. --dry-run writes nothing and prints the unified diff the real apply would write. A bundle that declares v0.3, a later version, or one okfctl does not know is never refused and never rewritten toward an older version (§12). Judgment items are never guessed — they stay in the plan for its consumer (agent, colleague, shell loop, or a human) to resolve.
+migrate moves a bundle that declares OKF v0.1 or v0.2 (or no version at all) to v0.3 in place. Run it twice. The first run writes a plan file and changes nothing else. The next one, with --apply, makes those edits and declares okf_version "0.3" in the bundle-root index.md (§8.1). Then it validates the result. Add --dry-run to print that diff and write nothing.
+
+A rule makes each edit. For a v0.1 bundle (Appendix B), timestamp turns into generated.at. Any body # Citations entry that names one follow-able resource is copied to the sources list, titled with the entry's text. The v0.2 changes (§13.1) give a leading / to any link or path field that resolves only from the bundle root (§12.1). It then points at the same file under v0.3 (§6). They also respell a §5 timestamp that has an offset but isn't in RFC 3339 form.
+
+Judgment items are the cases no rule can settle. There are three kinds. One is a citation with no resource or with two (§5.1). Another is a timestamp rename with no actor (§7). The last is a date-time with no offset (§5, §13.2). They stay in the plan for you to decide. While a prose-citation or missing-actor item is left, apply holds the version, since those items need the v0.1 fallbacks §12.1 grants only to bundles declaring 0.2 or older (or nothing). --force-declare at plan time overrides the hold.
+
+migrate never refuses a bundle on v0.3, on a later version, or on a version okfctl doesn't know, and never rewrites one to an older version (§12). No step needs a model.
 
 ```
 okfctl migrate <bundle> [flags]
@@ -513,14 +519,14 @@ okfctl migrate <bundle> [flags]
 Example:
 
 ```
-# Phase 1 (default): compute the plan (pure read), writing only the plan file
-  okfctl migrate ./bundles/knowledge --plan migrate-plan.json --generated-by "casey"
+# Write the plan; nothing in the bundle changes
+  okfctl migrate ./mykb --plan migrate-plan.json --generated-by human:casey
 
-  # Phase 2: preview the apply as a unified diff, writing nothing
-  okfctl migrate ./bundles/knowledge --apply --plan migrate-plan.json --dry-run
+  # See the diff the apply would write, without writing it
+  okfctl migrate ./mykb --apply --plan migrate-plan.json --dry-run
 
-  # Phase 2: apply the plan's deterministic edits, then re-validate
-  okfctl migrate ./bundles/knowledge --apply --plan migrate-plan.json
+  # Apply the plan, declare v0.3 if nothing is held, and validate
+  okfctl migrate ./mykb --apply --plan migrate-plan.json
 ```
 
 Flags:
