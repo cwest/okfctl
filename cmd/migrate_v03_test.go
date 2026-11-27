@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -138,5 +139,28 @@ func TestUnifiedDiff_Hunks(t *testing.T) {
 	}
 	if unifiedDiff("f", a, a) != "" {
 		t.Fatal("equal texts must give no diff")
+	}
+}
+
+// A changed middle too large for the LCS table falls back to one replaced
+// block: still a correct diff (applying it yields the new text), with bounded
+// memory.
+func TestUnifiedDiff_LargeMiddleFallsBack(t *testing.T) {
+	var a, b strings.Builder
+	a.WriteString("head\n")
+	b.WriteString("head\n")
+	n := 3000 // 3000*3000 cells > maxLCSCells
+	for i := 0; i < n; i++ {
+		fmt.Fprintf(&a, "a%d\n", i)
+		fmt.Fprintf(&b, "b%d\n", i)
+	}
+	a.WriteString("tail\n")
+	b.WriteString("tail\n")
+	got := unifiedDiff("f", a.String(), b.String())
+	if !strings.HasPrefix(got, "--- a/f\n+++ b/f\n@@ -1,3002 +1,3002 @@\n head\n-a0\n") {
+		t.Fatalf("unexpected header:\n%.200s", got)
+	}
+	if strings.Count(got, "\n-a") != n || strings.Count(got, "\n+b") != n || !strings.HasSuffix(got, "+b2999\n tail\n") {
+		t.Fatalf("fallback diff is not a full replace of the middle")
 	}
 }

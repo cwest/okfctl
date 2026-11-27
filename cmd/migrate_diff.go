@@ -105,50 +105,97 @@ func writeMigrateSummary(out io.Writer, plan okf.MigratePlan) {
 	fmt.Fprintf(out, "judgment: %d item(s); %s\n", len(plan.Judgment), strings.Join(kinds, ", "))
 }
 
+// maxLCSCells bounds the LCS table unifiedDiff builds for the changed middle
+// of a file. Past it, the middle is shown as one replaced block: still a
+// correct diff, only less minimal.
+const maxLCSCells = 4 << 20
+
+// diffOp is one line of a unified diff: ' ' kept, '-' removed, '+' added. ai
+// and bi are the 0-based line numbers in the old and new text.
+type diffOp struct {
+	kind   byte
+	text   string
+	ai, bi int
+}
+
 // unifiedDiff returns a unified diff (3 lines of context) between two texts,
-// or "" when they are equal. It is a plain LCS line diff: migrate's edits
-// touch few lines per file, and the files are small.
+// or "" when they are equal. The common prefix and suffix are matched first,
+// so the LCS table covers only the changed middle: migrate's edits touch a
+// few lines per file.
 func unifiedDiff(path, a, b string) string {
 	if a == b {
 		return ""
 	}
 	al, bl := splitLines(a), splitLines(b)
-	n, m := len(al), len(bl)
+	pre := 0
+	for pre < len(al) && pre < len(bl) && al[pre] == bl[pre] {
+		pre++
+	}
+	suf := 0
+	for suf < len(al)-pre && suf < len(bl)-pre && al[len(al)-1-suf] == bl[len(bl)-1-suf] {
+		suf++
+	}
+	var ops []diffOp
+	for k := 0; k < pre; k++ {
+		ops = append(ops, diffOp{' ', al[k], k, k})
+	}
+	ops = append(ops, middleOps(al[pre:len(al)-suf], bl[pre:len(bl)-suf], pre)...)
+	for k := 0; k < suf; k++ {
+		ai, bi := len(al)-suf+k, len(bl)-suf+k
+		ops = append(ops, diffOp{' ', al[ai], ai, bi})
+	}
+	return renderHunks(path, ops)
+}
+
+// middleOps diffs the changed middle of two texts that both start at line
+// offset off. It uses an LCS table when the table is small enough, otherwise
+// it reports the whole middle as removed then added.
+func middleOps(am, bm []string, off int) []diffOp {
+	n, m := len(am), len(bm)
+	var ops []diffOp
+	if n == 0 || m == 0 || n > maxLCSCells/m {
+		for k, s := range am {
+			ops = append(ops, diffOp{'-', s, off + k, off})
+		}
+		for k, s := range bm {
+			ops = append(ops, diffOp{'+', s, off + n, off + k})
+		}
+		return ops
+	}
 	lcs := make([][]int, n+1)
 	for i := range lcs {
 		lcs[i] = make([]int, m+1)
 	}
 	for i := n - 1; i >= 0; i-- {
 		for j := m - 1; j >= 0; j-- {
-			if al[i] == bl[j] {
+			if am[i] == bm[j] {
 				lcs[i][j] = lcs[i+1][j+1] + 1
 			} else {
 				lcs[i][j] = max(lcs[i+1][j], lcs[i][j+1])
 			}
 		}
 	}
-	type op struct {
-		kind byte // ' ', '-', '+'
-		text string
-		ai   int
-		bi   int
-	}
-	var ops []op
 	i, j := 0, 0
 	for i < n || j < m {
 		switch {
-		case i < n && j < m && al[i] == bl[j]:
-			ops = append(ops, op{' ', al[i], i, j})
+		case i < n && j < m && am[i] == bm[j]:
+			ops = append(ops, diffOp{' ', am[i], off + i, off + j})
 			i++
 			j++
 		case i < n && (j == m || lcs[i+1][j] >= lcs[i][j+1]):
-			ops = append(ops, op{'-', al[i], i, j})
+			ops = append(ops, diffOp{'-', am[i], off + i, off + j})
 			i++
 		default:
-			ops = append(ops, op{'+', bl[j], i, j})
+			ops = append(ops, diffOp{'+', bm[j], off + i, off + j})
 			j++
 		}
 	}
+	return ops
+}
+
+// renderHunks groups diff lines into unified-diff hunks with 3 lines of
+// context.
+func renderHunks(path string, ops []diffOp) string {
 	const ctx = 3
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "--- a/%s\n+++ b/%s\n", path, path)

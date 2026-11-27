@@ -357,8 +357,7 @@ func retargetBodyLinks(b *Bundle, rel string, raw []byte, links map[string]strin
 		return raw
 	}
 	buf.WriteString(body[pos:])
-	out := make([]byte, 0, start+buf.Len())
-	out = append(out, raw[:start]...)
+	out := append([]byte(nil), raw[:start]...)
 	return append(out, buf.String()...)
 }
 
@@ -394,8 +393,7 @@ func rewriteScalars(raw []byte, pick func(*yaml.Node) []scalarChange) ([]byte, e
 		return raw, nil
 	}
 	if spliced, ok := spliceScalarValues(block, m, changes); ok {
-		out := make([]byte, 0, len(head)+len(spliced)+len(tail))
-		out = append(out, head...)
+		out := append([]byte(nil), head...)
 		out = append(out, spliced...)
 		return append(out, tail...), nil
 	}
