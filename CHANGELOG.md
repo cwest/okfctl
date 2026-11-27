@@ -19,8 +19,9 @@ tagged release, goreleaser generates the release notes from the commit log
   without an offset, quoted or YAML-native. `verified-event` reports a
   `verified` event missing `by` or `at`. `superseded-by` reports a
   `superseded_by` that resolves to no concept, or that is set on a concept that
-  is not `deprecated`. None of them fails `validate`: v0.3 §11 keeps such a
-  bundle conformant.
+  is not `deprecated`. It resolves through the shared §6 resolver; a stale path
+  that `broken-link` already reports is not reported twice. None of them fails
+  `validate`: v0.3 §11 keeps such a bundle conformant.
 - `analyze` reports a §5.4 lifecycle section: the raw `status` distribution, and
   the concepts that a filter to current knowledge excludes (any status that is
   not stable, an unknown value included).

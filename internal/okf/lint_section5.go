@@ -16,9 +16,6 @@ package okf
 
 import (
 	"fmt"
-	"net/url"
-	"path"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -184,115 +181,27 @@ func lintVerifiedEvents(b *Bundle) []LintFinding {
 	return out
 }
 
-// uriScheme matches an RFC 3986 scheme prefix (§6 rule 1: a value with a URI
-// scheme is an absolute URL).
-var uriScheme = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.\-]*:`)
-
-// resolveConceptPath resolves a link target or path field value written in the
-// file at fromPath, per v0.3 §6. It returns:
-//   - external=true for an absolute URL (§6 rule 1) or a value that resolves
-//     outside the bundle root (§6: external; consumers MUST NOT read it);
-//   - otherwise the bundle-relative target and whether it is a concept node.
-//
-// Rule 2: a leading `/` resolves from the bundle root. Rule 3: any other value
-// resolves from the directory of the file. With rootFallback (§6.2 / §12.1: a
-// bundle that declares okf_version 0.2 or earlier, or no version), a bare value
-// that does not resolve from its file MAY resolve from the bundle root. A
-// `#fragment` is not part of the path (§6.1). Values are URI references, so a
-// percent-encoded value is decoded (§6). Paths are case-sensitive.
-func resolveConceptPath(b *Bundle, fromPath, value string, rootFallback bool) (target string, concept, external bool) {
-	v := strings.TrimSpace(value)
-	if uriScheme.MatchString(v) {
-		return "", false, true
-	}
-	if i := strings.IndexByte(v, '#'); i >= 0 {
-		v = v[:i]
-	}
-	if dec, err := url.PathUnescape(v); err == nil {
-		v = dec
-	}
-	inBundle := func(p string) (string, bool) {
-		c := path.Clean(p)
-		if c == ".." || strings.HasPrefix(c, "../") {
-			return "", false
-		}
-		return c, true
-	}
-	if strings.HasPrefix(v, "/") {
-		t, ok := inBundle(strings.TrimPrefix(v, "/"))
-		if !ok {
-			return "", false, true
-		}
-		return t, b.Nodes[t] != nil, false
-	}
-	t, ok := inBundle(path.Join(path.Dir(fromPath), v))
-	if !ok {
-		return "", false, true
-	}
-	if b.Nodes[t] != nil {
-		return t, true, false
-	}
-	if rootFallback {
-		if rt, ok := inBundle(v); ok && b.Nodes[rt] != nil {
-			return rt, true, false
-		}
-	}
-	return t, false, false
-}
-
-// bundleRootFallback reports whether the §6.2 / §12.1 v0.2 bundle-root
-// fallback applies: the bundle declares okf_version 0.2 or earlier, or declares
-// no version. The declaration is read from the bundle-root index.md
-// frontmatter (§8.1, §12), then from okfctl's .okf sidecar. A version okfctl
-// cannot parse gets best-effort treatment (§12): the fallback stays on, which
-// is the direction that produces fewer findings.
-func bundleRootFallback(b *Bundle) bool {
-	declared := ""
-	if idx, ok := b.Reserved["index.md"]; ok && idx.Frontmatter != nil {
-		if v, ok := idx.Frontmatter["okf_version"]; ok {
-			declared = strings.TrimSpace(scalarString(v))
-		}
-	}
-	if declared == "" && b.Root != "" {
-		declared = strings.Trim(strings.TrimSpace(readOkfSidecar(b.Root)["okf_version"]), `"'`)
-	}
-	if declared == "" {
-		return true // declares no version
-	}
-	major, minor, ok := parseOkfVersion(declared)
-	if !ok {
-		return true // unknown version: best-effort (§12)
-	}
-	return major == 0 && minor <= 2
-}
-
-// parseOkfVersion parses an OKF `<major>.<minor>` version (§12).
-func parseOkfVersion(s string) (major, minor int, ok bool) {
-	a, c, found := strings.Cut(s, ".")
-	if !found {
-		return 0, 0, false
-	}
-	ma, err1 := strconv.Atoi(a)
-	mi, err2 := strconv.Atoi(c)
-	if err1 != nil || err2 != nil {
-		return 0, 0, false
-	}
-	return ma, mi, true
-}
-
 // lintSupersededBy checks the v0.3 §5.4 `superseded_by` path field:
 //   - it has a meaning only with `status: deprecated`, so on any other status
 //     it is a curation slip;
 //   - it is "one path (§6.2) to the concept that replaces this concept", so a
-//     value that is not a string, or that resolves (§6) to no concept in the
-//     bundle, gives a consumer that follows it nowhere to go.
+//     value that is not a string, is not a path, or resolves to no concept in
+//     the bundle gives a consumer that follows it nowhere to go.
+//
+// Resolution is the shared §6 resolver (Bundle.ResolvePathField), so the §6.2 /
+// §12.1 bundle-root fallback follows the bundle's declared okf_version exactly
+// as it does for broken-link. An external target (a URL, or a path outside the
+// bundle root) is not checked: §6 forbids reading it from the local file
+// system. A null or empty value is absent (§11.2 rule 1).
+//
+// One defect, one finding: a dangling .md target whose basename names a node
+// elsewhere is the stale-path defect broken-link already reports for this path
+// field, so superseded-by stays silent on it.
 //
 // Advisory only: §6.1 and §11.2 say consumers MUST NOT reject a bundle for a
-// broken link. An external target (a URL, or a path outside the bundle root)
-// is not checked: §6 forbids reading it from the local file system. A null or
-// empty value is absent (§11.2 rule 1).
+// broken link.
 func lintSupersededBy(b *Bundle) []LintFinding {
-	fallback := bundleRootFallback(b)
+	byBase := nodesByBasename(b)
 	var out []LintFinding
 	for _, p := range sortedNodePaths(b) {
 		n := b.Nodes[p]
@@ -314,11 +223,21 @@ func lintSupersededBy(b *Bundle) []LintFinding {
 			add(fmt.Sprintf("superseded_by = %s is not a path; §5.4: it is one path (§6.2) to the replacing concept", renderValue(raw)))
 			continue
 		}
-		target, concept, external := resolveConceptPath(b, p, val, fallback)
-		if external || concept {
+		r := b.ResolvePathField(p, val)
+		switch r.Kind {
+		case RefURL, RefExternal, RefEmpty:
+			continue
+		case RefDescriptor, RefAnchor:
+			add(fmt.Sprintf("superseded_by = %q is not a path; §5.4: it is one path (§6.2) to the replacing concept", val))
 			continue
 		}
-		add(fmt.Sprintf("superseded_by = %q resolves to %s, which is not a concept in the bundle; §5.4: consumers that filter to current knowledge follow it to the replacing concept", val, target))
+		if r.IsConcept {
+			continue
+		}
+		if danglingRef(r) && brokenLinkHint(b, byBase, p, val) != "" {
+			continue // reported by broken-link
+		}
+		add(fmt.Sprintf("superseded_by = %q resolves to %s, which is not a concept in the bundle; §5.4: consumers that filter to current knowledge follow it to the replacing concept", val, r.Path))
 	}
 	return out
 }

@@ -143,8 +143,10 @@ func TestLint_SupersededBy_FlagsDanglingTarget_Section5_4(t *testing.T) {
 	for name, fm := range map[string]string{
 		"bare relative":    "status: deprecated\nsuperseded_by: nope.md\n",
 		"rooted":           "status: deprecated\nsuperseded_by: /nope.md\n",
-		"case differs":     "status: deprecated\nsuperseded_by: B.md\n",      // §6: paths are case-sensitive
-		"to a non-concept": "status: deprecated\nsuperseded_by: /index.md\n", // §3.1: index.md is not a concept
+		"case differs":     "status: deprecated\nsuperseded_by: B.md\n",            // §6: paths are case-sensitive
+		"to a non-concept": "status: deprecated\nsuperseded_by: /index.md\n",       // §3.1: index.md is not a concept
+		"not a URI":        "status: deprecated\nsuperseded_by: the new concept\n", // §6: whitespace is not a path
+		"anchor only":      "status: deprecated\nsuperseded_by: \"#definition\"\n",
 	} {
 		b := mkLintBundle(t, map[string]string{"index.md": lintIndex, "a.md": fmDoc(fm), "b.md": fmDoc("")})
 		fs := findingsFor(Lint(b, LintOptions{}), "superseded-by")
@@ -196,8 +198,41 @@ func TestLint_SupersededBy_DeclaredV03BundleHasNoRootFallback_Section6_2(t *test
 		"sub/old.md": fmDoc("status: deprecated\nsuperseded_by: sub/new.md\n"),
 	}
 	b := mkLintBundle(t, files)
-	if fs := findingsFor(Lint(b, LintOptions{}), "superseded-by"); len(fs) != 1 {
-		t.Fatalf("declared-0.3 bundle: bare root-relative superseded_by must not resolve, got %+v", fs)
+	fs := Lint(b, LintOptions{})
+	// The value resolves file-relative to sub/sub/new.md, which is missing; the
+	// basename names sub/new.md, so it is the stale-path defect broken-link
+	// reports. Exactly one finding for the value, never two.
+	bl, sb := findingsFor(fs, "broken-link"), findingsFor(fs, "superseded-by")
+	if len(bl) != 1 || !strings.Contains(bl[0].Message, "superseded_by") || len(sb) != 0 {
+		t.Fatalf("declared-0.3 bundle: bare root-relative superseded_by must not resolve and must be reported once (broken-link); broken-link=%+v superseded-by=%+v", bl, sb)
+	}
+	// Same declared-0.3 bundle, successor with no node anywhere: superseded-by
+	// owns the finding.
+	files["sub/old.md"] = fmDoc("status: deprecated\nsuperseded_by: sub/gone.md\n")
+	b = mkLintBundle(t, files)
+	if sb := findingsFor(Lint(b, LintOptions{}), "superseded-by"); len(sb) != 1 || !strings.Contains(sb[0].Message, "sub/sub/gone.md") {
+		t.Fatalf("declared-0.3 bundle: bare value resolves file-relative (sub/sub/gone.md); got %+v", sb)
+	}
+}
+
+func TestLint_SupersededBy_OneFindingPerDanglingValue_Section6_2(t *testing.T) {
+	// A dangling superseded_by whose basename names a node elsewhere is the
+	// stale-path defect broken-link reports (§6.2 path field, "did you mean").
+	// superseded-by must not report the same value a second time. Control: a
+	// successor with no node anywhere is reported once, by superseded-by.
+	b := mkLintBundle(t, map[string]string{
+		"index.md":      "# Index\n\n- [A](a.md)\n- [C](c.md)\n- [GM](metrics/gm.md)\n",
+		"metrics/gm.md": fmDoc(""),
+		"a.md":          fmDoc("status: deprecated\nsuperseded_by: gm.md\n"),
+		"c.md":          fmDoc("status: deprecated\nsuperseded_by: never-written.md\n"),
+	})
+	fs := Lint(b, LintOptions{})
+	bl, sb := findingsFor(fs, "broken-link"), findingsFor(fs, "superseded-by")
+	if len(bl) != 1 || bl[0].Path != "a.md" {
+		t.Fatalf("want one broken-link on a.md, got %+v", bl)
+	}
+	if len(sb) != 1 || sb[0].Path != "c.md" {
+		t.Fatalf("want one superseded-by on c.md only (a.md is already broken-link), got %+v", sb)
 	}
 }
 
