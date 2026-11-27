@@ -117,6 +117,10 @@ func writeAnalyzeHuman(w io.Writer, rep okf.AnalyzeReport) {
 	cg := rep.Coverage
 	section("Coverage gaps — dangling forward-links (research opportunities)", len(cg.DanglingLinks), func() {
 		for _, d := range cg.DanglingLinks {
+			if d.Field != "" {
+				fmt.Fprintf(w, "  - %s → missing: %s (path field %s)\n", d.From, d.Target, d.Field)
+				continue
+			}
 			fmt.Fprintf(w, "  - %s → missing: %s\n", d.From, d.Target)
 		}
 	})

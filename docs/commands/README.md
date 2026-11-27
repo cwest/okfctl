@@ -63,7 +63,7 @@ Bundle lifecycle commands
 
 Summarize a bundle (node count, spec version)
 
-info prints a one-glance summary of a bundle: how many concept nodes it holds, how many reserved files (index.md/log.md, OKF §3.1) it carries, and the okf_version it declares (§12, read from the bundle-root .okf sidecar). It's read-only and never mutates the bundle. It doesn't validate conformance — use `okfctl validate` for that.
+info prints a one-glance summary of a bundle: how many concept nodes it holds, how many reserved files (index.md/log.md, OKF §3.1) it carries, and its okf_version (§12). The version is read from the bundle-root index.md frontmatter (§8.1), falling back to the legacy .okf sidecar; a bundle that declares neither is reported as undeclared, with the version okfctl assumes for it. It's read-only and never mutates the bundle. It doesn't validate conformance — use `okfctl validate` for that.
 
 ```
 okfctl bundle info [dir]

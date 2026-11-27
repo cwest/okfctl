@@ -84,6 +84,17 @@ func newValidateCmd() *cobra.Command {
 				}
 			}
 
+			// §8.1/§12: okf_version is declared on the bundle-root index.md;
+			// the .okf sidecar is a legacy fallback. When both declare a
+			// version and disagree, the index wins and validate warns. This is
+			// advisory like the drift warnings below (fails only under
+			// --strict), never a spec-floor failure.
+			var versionWarnings int
+			if msg, ok := okf.VersionConflict(b); ok {
+				fmt.Fprintf(out, "warning index.md: %s\n", msg)
+				versionWarnings = 1
+			}
+
 			// Git drift: report when a node's frontmatter `modified` contradicts
 			// its git last-commit date. Read-only (never rewrites the file), and
 			// degrades to nothing outside a git repo. Advisory like template
@@ -97,8 +108,9 @@ func newValidateCmd() *cobra.Command {
 			if len(findings) > 0 {
 				return fmt.Errorf("%d conformance finding(s)", len(findings))
 			}
-			// Template drift and git drift are advisory unless --strict.
-			totalDrift := len(drift) + len(gitDrift)
+			// Template drift, git drift, and a version conflict are advisory
+			// unless --strict.
+			totalDrift := len(drift) + len(gitDrift) + versionWarnings
 			if totalDrift > 0 {
 				fmt.Fprintf(out, "%d drift warning(s)\n", totalDrift)
 				if strict {

@@ -113,19 +113,17 @@ func PromotePlan(b *Bundle, basename string) ([]PromoteChange, error) {
 	}
 
 	scan := func(srcPath, body string) {
-		srcDir := path.Dir(srcPath)
-		for _, dl := range scanDirLinks(body) {
-			targetDir, ok := resolvePromotedDir(srcDir, dl.url, newFor)
+		for _, dl := range scanRawLinks(body) {
+			targetDir, form, ok := b.resolvePromotedDir(srcPath, dl.url, newFor)
 			if !ok {
 				continue
 			}
 			ci := idxOf[targetDir]
 			newConcept := newFor[targetDir]
-			newURL := rewriteURLForm(srcDir, dl.url, targetDir, newConcept)
 			changes[ci].Rewrites = append(changes[ci].Rewrites, LinkRewrite{
 				NodePath: srcPath,
 				Old:      dl.rawTarget,
-				New:      newURL + dl.titleTail,
+				New:      dl.retarget(linkURLFor(srcPath, newConcept, form)),
 			})
 		}
 	}
@@ -149,132 +147,48 @@ func PromotePlan(b *Bundle, basename string) ([]PromoteChange, error) {
 	return changes, nil
 }
 
-// dirLink is one raw markdown link found in a body, without node resolution —
-// promote resolves against DIRECTORIES, not concept nodes, so it cannot use
-// scanNodeLinks (which only surfaces links that already resolve to a node).
-type dirLink struct {
-	rawTarget string // full capture incl. optional title, e.g. `foo/ "T"`
-	url       string // first whitespace field, e.g. `foo/`
-	titleTail string // remainder after url incl. leading space
-}
-
-// scanDirLinks returns every non-image, in-bundle markdown link in body (its
-// raw target, url, and title tail). External (http/https/#) links are excluded.
-// It intentionally does NOT resolve targets — the caller resolves each url
-// against the set of promoted directories.
-func scanDirLinks(body string) []dirLink {
-	var out []dirLink
-	for _, loc := range mdLinkRe.FindAllStringSubmatchIndex(body, -1) {
-		if loc[0] > 0 && body[loc[0]-1] == '!' {
-			continue // image, not a link
-		}
-		raw := body[loc[2]:loc[3]]
-		fields := strings.Fields(raw)
-		if len(fields) == 0 {
-			continue
-		}
-		url := fields[0]
-		if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "#") {
-			continue
-		}
-		out = append(out, dirLink{rawTarget: raw, url: url, titleTail: raw[len(url):]})
-	}
-	return out
-}
-
 // resolvePromotedDir reports the promoted directory a link url points at, if
-// any, in either the "dir/index.md" or "dir/" spelling. srcDir is the linking
-// file's directory ("" at the bundle root). Resolution mirrors the shared
-// edge-builder's three forms: "/"-absolute (bundle-root relative), root-relative
-// (from the bundle root), then dir-relative (from srcDir). Only a url that
-// resolves to a directory present in newFor (a directory being promoted) matches.
-func resolvePromotedDir(srcDir, url string, newFor map[string]string) (string, bool) {
-	// Strip a trailing "index.md" or normalise a trailing slash so both
-	// spellings collapse to the directory they name.
-	dirPart, ok := linkDirPart(url)
+// any, in either the "dir/index.md" or "dir/" spelling, and the §6 form the
+// link was written in. srcPath is the linking file. Resolution is the shared §6
+// resolver: a "/"-rooted url from the bundle root, a bare url from the linking
+// file's directory, with the §12.1 bundle-root fallback for bundles declaring
+// 0.2 or earlier, or no version. Only a url that resolves to a directory
+// present in newFor (a directory being promoted) matches.
+func (b *Bundle) resolvePromotedDir(srcPath, url string, newFor map[string]string) (string, RefForm, bool) {
+	dirURL, ok := linkDirPart(url)
 	if !ok {
-		return "", false
+		return "", FormNone, false
 	}
-	var candidate string
-	if strings.HasPrefix(dirPart, "/") {
-		candidate = filepath.ToSlash(filepath.Clean(strings.TrimPrefix(dirPart, "/")))
-	} else if c := filepath.ToSlash(filepath.Clean(dirPart)); newFor[c] != "" {
-		candidate = c
-	} else {
-		candidate = filepath.ToSlash(filepath.Clean(path.Join(srcDir, dirPart)))
+	r := b.ResolveLink(srcPath, dirURL)
+	if r.Kind != RefBundle {
+		return "", FormNone, false
 	}
-	if candidate == "." {
-		candidate = ""
+	if _, promoted := newFor[r.Path]; promoted {
+		return r.Path, r.Form, true
 	}
-	if newFor[candidate] != "" {
-		return candidate, true
-	}
-	return "", false
+	return "", FormNone, false
 }
 
-// linkDirPart reduces a link url to the directory it names when the url is a
-// directory-style reference to an index — either "<dir>/index.md" or "<dir>/"
-// (trailing slash). It returns the directory portion and true; for any other
-// url (a plain concept file, an anchor-only link, etc.) it returns false. A
-// bare "index.md" or "/index.md" reduces to the root directory ("" / "/").
+// linkDirPart reduces a link url to a url naming the directory, when the url
+// is a directory-style reference to an index: either "<dir>/index.md" or
+// "<dir>/" (trailing slash). Any #fragment or ?query is dropped. It returns
+// false for any other url (a plain concept file, an anchor-only link, etc.).
+// A bare "index.md" reduces to "." (the linking file's own directory) and
+// "/index.md" to "/" (the bundle root).
 func linkDirPart(url string) (string, bool) {
-	// Drop any anchor.
-	if i := strings.IndexByte(url, '#'); i >= 0 {
+	if i := strings.IndexAny(url, "#?"); i >= 0 {
 		url = url[:i]
 	}
 	switch {
+	case url == "index.md":
+		return ".", true
 	case strings.HasSuffix(url, "/index.md"):
 		return strings.TrimSuffix(url, "index.md"), true // keep trailing slash
-	case url == "index.md":
-		return "", true
-	case url == "/index.md":
-		return "/", true
 	case strings.HasSuffix(url, "/"):
 		return url, true
 	default:
 		return "", false
 	}
-}
-
-// rewriteURLForm renders the new link url pointing at the promoted concept file,
-// preserving the author's relative form: a "/"-absolute link stays absolute, a
-// root-relative link stays root-relative, and a dir-relative link is recomputed
-// relative to the linking file's directory. srcDir is the linking file's
-// directory; oldURL is the original link text; targetDir is the promoted
-// directory; newConcept is its new bundle-relative concept path.
-func rewriteURLForm(srcDir, oldURL, targetDir, newConcept string) string {
-	base := oldURL
-	if i := strings.IndexByte(base, '#'); i >= 0 {
-		base = base[:i]
-	}
-	switch {
-	case strings.HasPrefix(base, "/"):
-		return "/" + newConcept
-	case newConceptIsRootRel(base, targetDir):
-		return newConcept
-	default:
-		// dir-relative: recompute relative to the linking file's directory.
-		r, err := filepath.Rel(srcDir, filepath.FromSlash(newConcept))
-		if err != nil {
-			return newConcept
-		}
-		return filepath.ToSlash(r)
-	}
-}
-
-// newConceptIsRootRel reports whether a non-absolute link url was written
-// root-relative (its cleaned directory part equals the promoted directory from
-// the bundle root) rather than relative to the linking file's own directory.
-func newConceptIsRootRel(url, targetDir string) bool {
-	dirPart, ok := linkDirPart(url)
-	if !ok {
-		return false
-	}
-	c := filepath.ToSlash(filepath.Clean(dirPart))
-	if c == "." {
-		c = ""
-	}
-	return c == targetDir
 }
 
 // PromoteApply performs each planned promotion on disk: it applies the inbound
@@ -299,14 +213,13 @@ func PromoteApply(root string, b *Bundle, changes []PromoteChange) error {
 				content = string(raw)
 			}
 			replaced := false
-			for _, dl := range scanDirLinks(content) {
+			for _, dl := range scanRawLinks(content) {
 				if dl.rawTarget == rw.Old {
-					// Locate this exact raw target and replace the first match.
-					if idx := indexOfLink(content, dl.rawTarget); idx >= 0 {
-						content = content[:idx] + rw.New + content[idx+len(dl.rawTarget):]
-						replaced = true
-						break
-					}
+					// Splice by the scanner's own offsets: same coordinate
+					// space as the content being written back.
+					content = content[:dl.capStart] + rw.New + content[dl.capEnd:]
+					replaced = true
+					break
 				}
 			}
 			if !replaced {
@@ -348,16 +261,4 @@ func PromoteApply(root string, b *Bundle, changes []PromoteChange) error {
 		}
 	}
 	return nil
-}
-
-// indexOfLink returns the byte offset of the raw link target rawTarget as it
-// appears inside a markdown link "](<rawTarget>)". It anchors on the "](" +
-// rawTarget + ")" shape so a bare substring collision elsewhere in the body is
-// never mistaken for the link target.
-func indexOfLink(content, rawTarget string) int {
-	needle := "](" + rawTarget + ")"
-	if i := strings.Index(content, needle); i >= 0 {
-		return i + len("](")
-	}
-	return -1
 }
