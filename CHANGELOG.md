@@ -13,6 +13,17 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ### Added
 
+- `migrate` upgrades a v0.2 bundle (or one that declares no version) to OKF
+  v0.3. A bare link or path field that resolves only from the bundle root (the
+  §12.1 fallback) is rewritten with a leading `/` so it resolves to the same
+  file under v0.3 (§6). A §5 timestamp that carries an offset but is not
+  RFC 3339 (`2026-06-20 10:00:00Z`) is respelled with the offset kept. A
+  date-time with no offset names no instant, so it becomes a new
+  `timestamp-no-offset` judgment item and is never guessed. The v0.1 renames
+  still apply in the same run, and a second run plans nothing.
+- `migrate --apply --dry-run` prints the unified diff the real apply would
+  write, and both phases print a summary of edit and judgment counts by kind.
+
 - `lint` applies the OKF v0.3 §5 frontmatter semantics through three new
   advisory checks. `timestamp-form` reports a §5 timestamp key that is not an
   RFC 3339 date-time with an offset or a full-date. That includes a date-time
@@ -40,6 +51,21 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ### Changed
 
+- okfctl targets OKF v0.3 (`SpecVersion` is `0.3`). `bundle init` declares
+  `okf_version: "0.3"` in the bundle-root `index.md` frontmatter (§8.1) and no
+  longer writes a `.okf` sidecar. A bundle that declares no version is shown as
+  v0.3, but it keeps the §12.1 bundle-root fallback, which keys on the declared
+  version.
+- `migrate --apply` declares the target version on the bundle-root `index.md`
+  even when the index had no `okf_version` (§8.1: producers SHOULD put one in
+  each bundle); before, it only rewrote an existing marker. An existing block
+  keeps every other byte. A legacy `.okf` sidecar is bumped with the value
+  quoted (§4).
+- `migrate` never rewrites a bundle that declares a later version, or one
+  okfctl does not recognize: the plan carries `"version_action": "keep"` and
+  no edits (§12: consume best-effort, never refuse, never downgrade). The plan
+  file gains `declared_version` and `version_action`; a plan without
+  `version_action` is read as a bump.
 - The trust tier counts only *current* verification events: an event whose
   `at` is equal to or later than `generated.at`, or any event when `generated`
   is absent (OKF v0.3 §5.3, a breaking change from v0.2). A human sign-off made

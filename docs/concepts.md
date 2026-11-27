@@ -58,15 +58,28 @@ Templates are authored as ordinary OKF nodes (`type: Type Template`); nothing
 lives in tool config. Inspect them with `okfctl template list` / `okfctl template
 show`.
 
-## The v0.1 → v0.2 story
+## Versions: v0.1, v0.2, v0.3
 
-OKF is at **v0.2**. v0.2 is a minor bump with two deliberate breaking renames:
-`timestamp` → `generated.at`, and the body `# Citations` list → frontmatter
-`sources`. Consumers MAY fall back to the legacy forms, so **v0.1 bundles stay
-readable**—v0.2 is the new default, not a floor that ejects existing bundles.
+OKF is at **v0.3**, and okfctl targets it: `okfctl bundle init` declares
+`okf_version: "0.3"`, and `okfctl migrate` upgrades older bundles to it.
 
-A bundle declares its own target via `okf_version` in its `.okf` sidecar; the
-tool reads it rather than assuming. Per §12, a consumer that doesn't understand a
-declared version attempts best-effort consumption rather than refusing the bundle,
-so an unrecognized `okf_version` is never a hard failure. To convert a v0.1
-bundle to v0.2 in place, see [Migrating a v0.1 bundle](guides/migrating.md).
+A bundle declares its version with `okf_version` in the frontmatter of its
+bundle-root `index.md` (§8.1, §12). okfctl reads that declaration rather than
+assuming; a legacy `.okf` sidecar is read only when the root index declares
+nothing. A bundle that declares no version is shown as v0.3, but it keeps the
+older reading rules below, because those key on what the bundle *declares*.
+
+v0.3 has two breaking changes (§13.1). A link or path field without a leading `/`
+resolves from the directory of its file, and only *current* verification events
+count toward the trust tier. A bundle that declares v0.2 or earlier, or no
+version, MAY still resolve such a value from the bundle root (§12.1), so it keeps
+working unchanged.
+
+v0.2 (now v0.3 Appendix B) renamed `timestamp` → `generated.at` and the body
+`# Citations` list → frontmatter `sources`. Consumers MAY fall back to the legacy
+forms, so **v0.1 bundles stay readable**.
+
+Per §12, a consumer that doesn't understand a declared version attempts
+best-effort consumption rather than refusing the bundle, so an unrecognized
+`okf_version` is never a hard failure. To convert an older bundle in place, see
+[Migrating a bundle to OKF v0.3](guides/migrating.md).

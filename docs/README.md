@@ -11,13 +11,13 @@ Start here:
   cosign verification, and building from source.
 - **[Concepts](concepts.md)**—what a bundle is, what a node is, the reserved
   `index.md`/`log.md`, the link graph, the spec-floor-vs-overlay distinction, and
-  the v0.1→v0.2 story. Read this first; it makes every other page make sense.
+  the version story. Read this first; it makes every other page make sense.
 - **Task-oriented guides**—each one runnable start to finish:
   - [Starting and authoring a bundle](guides/authoring.md)
   - [Keeping `index.md` current and fixing freshness drift](guides/index-and-freshness.md)
   - [Curation health: `lint`, `analyze`, and `--strict` in CI](guides/curation-health.md)
   - [Search: core lexical/graph and the `okfctl-search` semantic plugin](guides/search.md)
-  - [Migrating a v0.1 bundle to v0.2](guides/migrating.md)
+  - [Migrating a bundle to OKF v0.3](guides/migrating.md)
   - [Remote sources: `registry` and `connect`](guides/remote-sources.md)
   - [Extending okfctl with plugins](guides/plugins.md)
 - **[Command reference](commands/README.md)**—one entry per command,
@@ -39,8 +39,8 @@ okfctl consumes the Open Knowledge Format; it doesn't author it. The
 authoritative source is the upstream
 [OKF v0.3 specification](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md).
 Confirm the version line (`**Version 0.3**`) before citing a section number—§-numbering shifted between v0.1 and v0.2, and v0.3 adds subsections.
-Upstream is v0.3 while okfctl still targets v0.2; the
+okfctl targets v0.3; the
 [v0.3 gap analysis](specs/2026-11-26-okf-v0.3-gap-analysis.md) maps each v0.3
-change to okfctl's current behavior. The former
+change to the okfctl behavior that implements it. The former
 `GoogleCloudPlatform/open-knowledge-format` repo is deprecated and frozen at
 v0.2; don't cite it.
