@@ -1,7 +1,8 @@
 # okfctl
 
 > A command-line tool for authoring and maintaining Open Knowledge Format (OKF)
-> bundles. Pure Go — no CGO, no Python, no model runtime. okfctl does not author
+> bundles. It is a single static binary written in pure Go and built with CGO
+> disabled, so it runs without Python or a model runtime. okfctl does not author
 > the OKF specification; it is a conformant consumer that enforces the spec floor
 > and keeps anything stricter behind an explicit opt-in overlay.
 
@@ -11,7 +12,7 @@ reports on its health and link graph.
 
 ## Docs
 
-- [Command reference](https://okfctl.dev/reference/commands/): Every command, its flags, and a runnable example — generated from and kept in sync with the binary.
+- [Command reference](https://okfctl.dev/reference/commands/): Every command, its flags, and a runnable example—generated from and kept in sync with the binary.
 - [Concepts](https://okfctl.dev/concepts/): Bundles, nodes, the link graph, and the reserved files.
 - [Authoring a bundle](https://okfctl.dev/guides/authoring/): From an empty directory to a validated bundle.
 - [Curation health](https://okfctl.dev/guides/curation-health/): Using `lint`, `analyze`, and `--strict` in CI.
