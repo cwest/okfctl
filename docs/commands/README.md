@@ -105,7 +105,9 @@ Example:
 
 Generate a shell completion script
 
-completion writes a shell completion script for okfctl to stdout. Source it (or install it where your shell loads completions) to get tab-completion of commands and flags. Supported shells: bash, zsh, fish. It prints the script only — it doesn't install anything itself.
+completion prints a bash, zsh, or fish script to stdout. Load it in your shell (or save it where your shell looks for completions) and Tab will fill in okfctl's commands and flags.
+
+Give it one of those three shell names. Anything else exits 1. completion only prints the script. Where you save it is up to you.
 
 ```
 okfctl completion [bash|zsh|fish]
@@ -127,14 +129,16 @@ Example:
 
 ## okfctl config
 
-Get and set okfctl configuration
+Read and write okfctl's own settings
+
+config reads and writes config.json, okfctl's settings file. Set $OKFCTL_CONFIG_HOME to choose its directory; without it okfctl uses the okfctl directory under your OS's user config directory. Plugins read the file too (okfctl-search looks up model_path there). Names you save with `okfctl registry` go in it as keys that start with `registry.`. No bundle content lands in it.
 
 
 ### okfctl config get
 
 Get a config value
 
-get prints the value stored for a single config key, or exits non-zero if the key is unset. It's read-only. Use `okfctl config list` to see every key at once.
+get prints the value saved under one key. If the key isn't set, get exits 1. For all of them, run `okfctl config list`.
 
 ```
 okfctl config get <key>
@@ -144,7 +148,7 @@ Example:
 
 ```
 # Print one config value
-  okfctl config get default.remote
+  okfctl config get model_path
 ```
 
 
@@ -152,7 +156,7 @@ Example:
 
 List all config values
 
-list prints every stored config key and its value, sorted by key. It's read-only. Registered remote sources appear here too, under the registry. key prefix (see `okfctl registry list` for a focused view of those).
+list prints each saved key as key = value, sorted by key. Keys that start with `registry.` show up here too. `okfctl registry list` shows just those.
 
 ```
 okfctl config list
@@ -170,7 +174,7 @@ Example:
 
 Set a config value
 
-set writes a key/value pair into the single okfctl config store (a flat file under $OKFCTL_CONFIG_HOME or the OS user-config dir). An existing key is overwritten. This is okfctl's own tool configuration, not bundle content — it never touches a bundle.
+set saves a value under a key and prints nothing. Setting a key again replaces its value. okfctl doesn't check key names. Misspell one and you've made a new key.
 
 ```
 okfctl config set <key> <value>
@@ -179,19 +183,20 @@ okfctl config set <key> <value>
 Example:
 
 ```
-# Pin a default remote registry URL prefix
-  okfctl config set default.remote https://github.com/acme
+# Point okfctl-search at a local model2vec model
+  okfctl config set model_path ~/models/potion-base-8M
 ```
 
 
 ## okfctl connect
 
-Clone or update a remote bundle source into a local directory
+Clone a remote bundle, or fast-forward the copy you have
 
-Materialize a remote OKF bundle source into a local directory over git.
-The first argument is a remote name registered with `okfctl registry`, or an ad-hoc git URL. The optional second argument is the destination directory (default: a directory named after the source).
+connect gets you a local copy of a remote bundle over git. Name the source with a name you saved through `okfctl registry add`, or give it a git URL (a local path counts). With no directory argument it uses the last part of the URL minus .git, the name `git clone` would pick.
 
-A fresh destination is cloned; an existing checkout of the same source is fast-forwarded (never a history-rewriting merge). A non-empty directory that isn't that git checkout is left untouched.
+A missing or empty directory gets a fresh clone. A checkout of the same source gets `git pull --ff-only`. If your copy and the remote have both gained commits, that pull fails and connect exits 1 with git's message. Nothing gets merged or rebased.
+
+connect won't touch any other directory with files in it. It exits 1 there. It also exits 1 on a word that's neither a saved name nor a URL, and tells you how to register it.
 
 ```
 okfctl connect <name|git-url> [dir]
@@ -781,14 +786,18 @@ Flags:
 
 ## okfctl plugin
 
-Discover and manage okfctl plugins (okfctl-<name> on PATH)
+Find and install okfctl-<name> plugins
+
+A plugin is any executable named okfctl-<name> on your PATH. When okfctl has no command called <name>, `okfctl <name>` runs okfctl-<name> with the rest of your arguments and exits with its status. git and kubectl do the same. okfctl's own commands always beat a plugin with the same name.
 
 
 ### okfctl plugin install
 
-Install an okfctl-<name> plugin executable into the managed plugins dir
+Copy an okfctl-<name> executable into okfctl's plugins directory
 
-Install copies the okfctl-<name> executable at <source> into the okfctl plugins dir (default $OKFCTL_CONFIG_HOME/plugins or <user config dir>/okfctl/plugins, override with --dir). Put that dir on your PATH so `okfctl plugin list` and subcommand dispatch discover the installed plugin.
+plugin install copies an executable named okfctl-<name> into okfctl's plugins directory: $OKFCTL_CONFIG_HOME/plugins if that's set, otherwise okfctl/plugins under your OS's user config directory. --dir picks another directory. The copy gets mode 755 and replaces any plugin with the same name there.
+
+A source that isn't named okfctl-<name> exits 1. install doesn't touch your PATH. If the directory isn't on it, install prints a note. Add the directory yourself so `okfctl <name>` and `okfctl plugin list` can find the plugin.
 
 ```
 okfctl plugin install <source> [flags]
@@ -815,7 +824,9 @@ Flags:
 
 List okfctl-<name> plugin executables found on PATH
 
-plugin list discovers okfctl-<name> executables on your PATH and prints each plugin's name and resolved path. These are the subcommands okfctl will dispatch to git/kubectl-style when you run `okfctl <name>`. Read-only. Scan a specific PATH with --path; the default is $PATH.
+plugin list prints each okfctl-<name> executable it finds on your PATH, with its path. When two directories hold the same name, the first one on PATH is the one `okfctl <name>` runs. --path scans a different list of directories.
+
+list only reads. When it finds no plugins it says so on stderr and exits 0.
 
 ```
 okfctl plugin list [flags]
@@ -842,15 +853,16 @@ Flags:
 
 Manage named remote bundle sources (git URLs)
 
-Manage a local, named directory of remote OKF bundle sources.
-Each source is a plain git URL — this is `git remote` for bundles, not a hosted registry, account system, or schema registry.
+registry names your remote bundle sources. Each one is a plain git URL. The name lets you type `okfctl connect knowledge` in place of the URL. It works like `git remote`. There's no hosted service or account behind it. The names live in okfctl's config file.
 
 
 ### okfctl registry add
 
-Register (or re-point) a named remote bundle source
+Save a name for a remote bundle's git URL
 
-add registers a named remote bundle source (a plain git URL) in okfctl's config store, or re-points an existing name at a new URL. The name must be a safe identifier (letters, digits, and -_. ). This only records the mapping — it doesn't clone anything; use `okfctl connect <name>` to materialize it.
+add saves a name for a git URL in okfctl's config. Saving a name that exists points it at the new URL. add then prints Updated in place of Added. Names use letters, digits, hyphens, underscores, and dots. Anything else exits 1.
+
+add clones nothing. Run `okfctl connect <name>` to get a local copy.
 
 ```
 okfctl registry add <name> <git-url>
@@ -866,9 +878,9 @@ Example:
 
 ### okfctl registry list
 
-List registered remote bundle sources
+List saved remote names and their git URLs
 
-list prints every registered remote bundle source and its git URL, sorted by name. Read-only. A registry with no sources prints a notice and exits zero.
+list prints each saved name and its git URL, one per line, sorted by name. With none saved it prints a notice and exits 0. It only reads.
 
 ```
 okfctl registry list
@@ -884,9 +896,9 @@ Example:
 
 ### okfctl registry remove
 
-Unregister a remote bundle source
+Forget a saved remote name
 
-remove deletes a registered remote source from okfctl's config, or exits non-zero if the name isn't registered. It only forgets the mapping — it never touches any local checkout you already cloned with `okfctl connect`.
+remove (or rm) deletes a saved name from okfctl's config. If the name isn't saved, remove exits 1. It forgets the name and nothing more. Any copy you made with `okfctl connect` stays where it is.
 
 ```
 okfctl registry remove <name>
@@ -904,7 +916,7 @@ Example:
 
 Print a remote source's git URL
 
-show prints the git URL registered for a single remote name, or exits non-zero if the name isn't registered. Read-only.
+show prints the git URL saved under one name. If nothing is saved under it, show exits 1. It only reads.
 
 ```
 okfctl registry show <name>
@@ -991,14 +1003,20 @@ Flags:
 
 ## okfctl template
 
-Read the type-template bundle (templates are authored as ordinary OKF nodes)
+Inspect the type templates a bundle uses
+
+A type template is a node, typed `Type Template`, that says which fields and body sections a node of some type should have. Only two other commands read templates. `okfctl node new --type` builds the new node from the one for that type, and `okfctl validate --templates` warns when a node drifts. Try `okfctl template list` first to see what your bundle has.
 
 
 ### okfctl template list
 
-List the type templates a bundle declares (target type, required fields, body sections)
+List each type template's target type, field and section counts, and source
 
-template list shows the type templates a bundle declares. Templates are okfctl's opt-in team overlay (PRD §9): they're authored as ordinary OKF nodes whose type is `Type Template`, NOT a spec concept, and they never affect the spec floor. A bundle may REFERENCE a separate type-template bundle via its .okf `templates: <path>` key (or --templates-from, which overrides it); referenced templates are folded in and local `Type Template` nodes overlay them (local wins per target type). Each row names a target type, how many required fields and body sections its template defines, and the source node it came from; a local entry that shadows a referenced one is flagged. Read-only. A bundle with no templates prints a notice and exits zero.
+template list prints one line for each type template the bundle uses: the type it governs, how many fields and body sections it asks for, and its source file. With no templates it prints a notice and exits 0.
+
+A template can sit in the bundle itself or in a separate template bundle named by `templates: <path>` in the bundle's .okf file. --templates-from points at a different one for this run. If the bundle and the referenced one both define a type, the local template wins and its line ends with [shadows referenced template].
+
+list only reads. Templates are okfctl's own convention (PRD §9) and not part of the OKF spec. They never change what plain validate accepts. If the referenced template bundle can't be read, list exits 1 and names the path.
 
 ```
 okfctl template list [bundle-dir] [flags]
@@ -1026,9 +1044,11 @@ Flags:
 
 ### okfctl template show
 
-Show a single type template's required/recommended fields and body sections
+Print one type template's fields and body sections
 
-template show prints one type template in full: its target type, source node, and its required fields, recommended fields, and body sections. Templates are okfctl's opt-in team overlay (PRD §9), authored as ordinary OKF nodes — this command only reads them and never mutates the bundle. The governing template may come from a referenced bundle (the .okf `templates:` key, or --templates-from which overrides it) or from a local `Type Template` node, with local winning per target type; `source` names where it resolved from. It errors if no template governs the given type. See what `okfctl validate --templates` will enforce and what `node new` will scaffold.
+template show prints the template that governs one type: its source file, its required and recommended fields, and its body sections. `okfctl node new --type` scaffolds new nodes from it. `okfctl validate --templates` warns if a node drifts from it.
+
+It finds templates the way template list does, so your own `Type Template` node beats one from the bundle named by the .okf `templates:` key or by --templates-from. If no template governs the type, show exits 1. It never changes the bundle.
 
 ```
 okfctl template show <target-type> [bundle-dir] [flags]
@@ -1094,7 +1114,7 @@ Flags:
 
 Print the okfctl version
 
-version prints the okfctl build metadata: the release version, git commit, and build date. On a plain `go build` with no release ldflags these degrade to "dev". It's equivalent to `okfctl --version`.
+version prints the okfctl version, the git commit it came from, and the build date: the same line as `okfctl --version`. Release builds fill in all three. If you built from source or used `go install`, you'll see the module version Go recorded (dev when there isn't one) with commit none and built unknown.
 
 ```
 okfctl version

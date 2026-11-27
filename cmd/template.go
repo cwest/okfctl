@@ -26,22 +26,28 @@ import (
 func newTemplateCmd() *cobra.Command {
 	templateCmd := &cobra.Command{
 		Use:   "template",
-		Short: "Read the type-template bundle (templates are authored as ordinary OKF nodes)",
+		Short: "Inspect the type templates a bundle uses",
+		Long: "A type template is a node, typed `Type Template`, that says which fields and " +
+			"body sections a node of some type should have. Only two other commands read " +
+			"templates. `okfctl node new --type` builds the new node from the one for that type, " +
+			"and `okfctl validate --templates` warns when a node drifts. Try `okfctl template " +
+			"list` first to see what your bundle has.",
 	}
 
 	var listFrom string
 	listC := &cobra.Command{
 		Use:   "list [bundle-dir]",
-		Short: "List the type templates a bundle declares (target type, required fields, body sections)",
-		Long: "template list shows the type templates a bundle declares. Templates are okfctl's " +
-			"opt-in team overlay (PRD §9): they're authored as ordinary OKF nodes whose type is " +
-			"`Type Template`, NOT a spec concept, and they never affect the spec floor. A bundle " +
-			"may REFERENCE a separate type-template bundle via its .okf `templates: <path>` key " +
-			"(or --templates-from, which overrides it); referenced templates are folded in and " +
-			"local `Type Template` nodes overlay them (local wins per target type). Each row names " +
-			"a target type, how many required fields and body sections its template defines, and " +
-			"the source node it came from; a local entry that shadows a referenced one is flagged. " +
-			"Read-only. A bundle with no templates prints a notice and exits zero.",
+		Short: "List each type template's target type, field and section counts, and source",
+		Long: "template list prints one line for each type template the bundle uses: the type it " +
+			"governs, how many fields and body sections it asks for, and its source file. With " +
+			"no templates it prints a notice and exits 0.\n\n" +
+			"A template can sit in the bundle itself or in a separate template bundle named by " +
+			"`templates: <path>` in the bundle's .okf file. --templates-from points at a different " +
+			"one for this run. If the bundle and the referenced one both define a type, the local " +
+			"template wins and its line ends with [shadows referenced template].\n\n" +
+			"list only reads. Templates are okfctl's own convention (PRD §9) and not part of " +
+			"the OKF spec. They never change what plain validate accepts. If the referenced " +
+			"template bundle can't be read, list exits 1 and names the path.",
 		Example: "  # List templates declared by the current bundle\n" +
 			"  okfctl template list\n\n" +
 			"  # List templates in a bundle elsewhere\n" +
@@ -85,15 +91,14 @@ func newTemplateCmd() *cobra.Command {
 	var showFrom string
 	showC := &cobra.Command{
 		Use:   "show <target-type> [bundle-dir]",
-		Short: "Show a single type template's required/recommended fields and body sections",
-		Long: "template show prints one type template in full: its target type, source node, and " +
-			"its required fields, recommended fields, and body sections. Templates are okfctl's " +
-			"opt-in team overlay (PRD §9), authored as ordinary OKF nodes — this command only " +
-			"reads them and never mutates the bundle. The governing template may come from a " +
-			"referenced bundle (the .okf `templates:` key, or --templates-from which overrides it) " +
-			"or from a local `Type Template` node, with local winning per target type; `source` " +
-			"names where it resolved from. It errors if no template governs the given type. See " +
-			"what `okfctl validate --templates` will enforce and what `node new` will scaffold.",
+		Short: "Print one type template's fields and body sections",
+		Long: "template show prints the template that governs one type: its source file, " +
+			"its required and recommended fields, and its body sections. `okfctl " +
+			"node new --type` scaffolds new nodes from it. `okfctl validate --templates` warns " +
+			"if a node drifts from it.\n\n" +
+			"It finds templates the way template list does, so your own `Type Template` node beats " +
+			"one from the bundle named by the .okf `templates:` key or by --templates-from. If " +
+			"no template governs the type, show exits 1. It never changes the bundle.",
 		Example: "  # Show the template that governs the \"Runbook\" type\n" +
 			"  okfctl template show Runbook\n\n" +
 			"  # Show a template in a bundle elsewhere\n" +
