@@ -74,7 +74,7 @@ CLEAN_PAGE = """<!doctype html><html><head>
 <title>okfctl</title></head><body>
 <h1>okfctl</h1>
 <p>A knowledge base decays at the moment a path changes. okfctl keeps links honest.</p>
-<span>pure Go</span><span>no CGO</span><span>no Python</span><span>no model runtime</span>
+<span>pure Go</span><span>no server</span><span>no daemon</span><span>no account</span>
 </body></html>"""
 
 
@@ -219,7 +219,7 @@ class SpecChipExemption(unittest.TestCase):
         chips_page = CLEAN_PAGE  # facts as chips -> clean
         prose_page = CLEAN_PAGE.replace(
             "<p>A knowledge base decays at the moment a path changes. okfctl keeps links honest.</p>",
-            "<p>It is pure Go, no CGO, no Python, no model runtime.</p>",
+            "<p>It is pure Go, no server, no daemon, no account.</p>",
         )
         self.assertEqual(run(chips_page).returncode, 0)
         self.assertEqual(run(prose_page).returncode, 1)
@@ -257,12 +257,12 @@ A knowledge base decays the moment a path changes. okfctl keeps links honest.
 It's a single static Go binary that runs anywhere without a toolchain, an
 interpreter, or a model download.
 
-Build guarantees:
+Run guarantees:
 
 - pure Go
-- no CGO
-- no Python
-- no model runtime
+- no server
+- no daemon
+- no account
 """
 
 
@@ -344,7 +344,7 @@ class MarkdownLegitimateLookAlikesPass(unittest.TestCase):
         prose = CLEAN_MD.replace(
             "It's a single static Go binary that runs anywhere without a toolchain, an\n"
             "interpreter, or a model download.",
-            "It's pure Go, no CGO, no Python, no model runtime.",
+            "It's pure Go, no server, no daemon, no account.",
         )
         self.assertEqual(run_md(CLEAN_MD).returncode, 0)
         self.assertEqual(run_md(prose).returncode, 1)
@@ -540,8 +540,8 @@ class EmDashSpacingLegitimateFormsPass(unittest.TestCase):
         # <span> is excluded from prose extraction (the spec-chip row); a spaced
         # dash there is not prose typography and must not trip.
         page = CLEAN_PAGE.replace(
-            "<span>no model runtime</span>",
-            "<span>no model \u2014 runtime</span>",
+            "<span>no account</span>",
+            "<span>no \u2014 account</span>",
         )
         r = run(page)
         self.assertEqual(r.returncode, 0, f"span chip must be exempt:\n{r.stdout}")
@@ -724,6 +724,161 @@ class PluginJsonDescriptionIsScanned(unittest.TestCase):
     def test_malformed_json_is_usage_error(self):
         r = run_named("plugin.json", "{ not json")
         self.assertEqual(r.returncode, 2, f"malformed JSON must not pass silently:\n{r.stdout}")
+
+
+# The homepage spec strip exactly as it shipped before build internals were
+# dropped from selling copy.
+SPEC_STRIP_AS_SHIPPED = (
+    '<div class="specstrip">\n'
+    "  <span>pure Go</span><span>no CGO</span><span>no Python</span>"
+    "<span>no model runtime</span><span>CGO_ENABLED=0 static build</span>\n"
+    "</div>"
+)
+
+
+class BuildInternalsInShippedCopyFail(unittest.TestCase):
+    """Shipped copy must say what okfctl IS, not list build internals as selling
+    points: users don't care about 'no CGO' or 'no model runtime'. Flagged,
+    case-insensitively: 'no CGO', 'CGO_ENABLED' outside code, 'no model
+    runtime', 'no Python'."""
+
+    def test_homepage_spec_strip_fails(self):
+        # Positive control: the chip row is exempt from the negative-listing
+        # class, but NOT from this one; chips are copy a reader reads.
+        page = CLEAN_PAGE.replace("</body>", SPEC_STRIP_AS_SHIPPED + "</body>")
+        r = run(page)
+        self.assertEqual(r.returncode, 1, f"spec strip must fail:\n{r.stdout}")
+        self.assertIn("BUILD-INTERNALS in <span>: [no CGO]", r.stdout)
+        self.assertIn("[CGO_ENABLED]", r.stdout)
+        self.assertIn("[no model runtime]", r.stdout)
+        self.assertIn("[no Python]", r.stdout)
+
+    def test_llms_txt_line_4_as_shipped_fails(self):
+        # Positive control: llms.txt as it shipped on main.
+        doc = (
+            "# okfctl\n\n"
+            "> A command-line tool for authoring and maintaining Open Knowledge Format (OKF)\n"
+            "> bundles. Pure Go \u2014 no CGO, no Python, no model runtime. okfctl does not author\n"
+        )
+        r = run_named("llms.txt", doc)
+        self.assertEqual(r.returncode, 1, f"llms.txt line 4 must fail:\n{r.stdout}")
+        self.assertIn("BUILD-INTERNALS", r.stdout)
+
+    def test_single_mention_is_enough_and_case_insensitive(self):
+        # Unlike negative-listing, ONE mention is a finding; case does not matter.
+        r = run_md("# Notes\n\nIt is a static binary with No cgo at all.\n")
+        self.assertEqual(r.returncode, 1, f"'No cgo' must fail:\n{r.stdout}")
+        self.assertIn("BUILD-INTERNALS", r.stdout)
+
+    def test_cgo_enabled_in_running_prose_fails(self):
+        r = run_md("# Notes\n\nThe release is built with CGO_ENABLED=0 for portability.\n")
+        self.assertEqual(r.returncode, 1, f"bare CGO_ENABLED must fail:\n{r.stdout}")
+
+    def test_bulleted_build_internals_fail(self):
+        # The discrete-list exemption is for the negative-listing RHYTHM; a
+        # build-internal listed as a bullet is still a selling point.
+        r = run_md("# Why\n\n- no Python\n- fast\n")
+        self.assertEqual(r.returncode, 1, f"bullet must fail:\n{r.stdout}")
+
+    def test_plugin_description_build_internals_fail(self):
+        doc = PLUGIN_CLEAN.replace("scaffold and validate nodes.", "runs with no Python.")
+        r = run_named("plugin.json", doc)
+        self.assertEqual(r.returncode, 1, f"description must fail:\n{r.stdout}")
+        self.assertIn("BUILD-INTERNALS in json:description", r.stdout)
+
+    def test_html_paragraph_build_internals_fail(self):
+        page = CLEAN_PAGE.replace(
+            "okfctl keeps links honest.", "okfctl is static, no cgo, and keeps links honest."
+        )
+        r = run(page)
+        self.assertEqual(r.returncode, 1, f"<p> must fail:\n{r.stdout}")
+
+
+INSTALL_MD = (
+    "# Install\n\n"
+    "## Prebuilt binaries\n\n"
+    "Download the archive for your platform.\n\n"
+    "## Building from source\n\n"
+    "```sh\n"
+    "CGO_ENABLED=0 go build -o okfctl .      # static, no cgo\n"
+    "```\n\n"
+    "The source build sets CGO_ENABLED=0 so the binary is static.\n"
+)
+
+
+class BuildInternalsLegitimateUsesPass(unittest.TestCase):
+    """Build instructions and the technical explanation of how a feature is
+    built are where these words belong. Code is always exempt; two prose
+    sections are exempt through an explicit allowlist."""
+
+    def test_install_md_build_line_passes(self):
+        # Negative control: install.md's CGO_ENABLED=0 build line (in a fence).
+        doc = "# Install\n\n```sh\nCGO_ENABLED=0 go build -o okfctl .      # static, no cgo\n```\n"
+        r = run_named("install.md", doc)
+        self.assertEqual(r.returncode, 0, f"fenced build line must pass:\n{r.stdout}")
+
+    def test_inline_code_cgo_enabled_passes(self):
+        r = run_md("# Style\n\nThe build must pass with `CGO_ENABLED=0 go build ./...`.\n")
+        self.assertEqual(r.returncode, 0, f"inline code must pass:\n{r.stdout}")
+
+    def test_html_code_cgo_enabled_passes(self):
+        page = CLEAN_PAGE.replace(
+            "okfctl keeps links honest.", "Build it: <code>CGO_ENABLED=0 go build</code>."
+        )
+        r = run(page)
+        self.assertEqual(r.returncode, 0, f"<code> must pass:\n{r.stdout}")
+
+    def test_allowlisted_install_section_prose_passes(self):
+        d = tempfile.mkdtemp()
+        p = Path(d) / "docs" / "install.md"
+        p.parent.mkdir(parents=True)
+        p.write_text(INSTALL_MD)
+        r = subprocess.run([sys.executable, str(SCANNER), str(p)], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, f"allowlisted section must pass:\n{r.stdout}")
+
+    def test_same_prose_outside_allowlisted_section_fails(self):
+        # The allowlist is scoped to the section, not the whole file.
+        d = tempfile.mkdtemp()
+        p = Path(d) / "docs" / "install.md"
+        p.parent.mkdir(parents=True)
+        p.write_text(INSTALL_MD.replace(
+            "Download the archive for your platform.",
+            "Download the archive; it has no Python inside.",
+        ))
+        r = subprocess.run([sys.executable, str(SCANNER), str(p)], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 1, f"outside the section must fail:\n{r.stdout}")
+        self.assertIn("[no Python]", r.stdout)
+
+    def test_allowlist_does_not_cover_other_files(self):
+        # The same heading in a file NOT on the allowlist is not exempt.
+        r = run_md(INSTALL_MD)
+        self.assertEqual(r.returncode, 1, f"non-allowlisted file must fail:\n{r.stdout}")
+
+    def test_allowlisted_search_section_passes_in_markdown_and_html(self):
+        md = (
+            "# Search\n\n"
+            "## Core\n\nLexical search.\n\n"
+            "### Real semantic search with `--embedder model2vec`\n\n"
+            "The tokenizer is ported to Go, so it compiles with CGO_ENABLED=0 and no model runtime.\n"
+        )
+        d = tempfile.mkdtemp()
+        p = Path(d) / "docs" / "guides" / "search.md"
+        p.parent.mkdir(parents=True)
+        p.write_text(md)
+        html_page = (
+            "<html><head><title>Search</title></head><body>"
+            "<h2>Core</h2><p>Lexical search across the bundle.</p>"
+            '<h3 id="x">Real semantic search with <code>--embedder model2vec</code></h3>'
+            "<p>The tokenizer is ported to Go, so it compiles with CGO_ENABLED=0 and no model runtime.</p>"
+            "</body></html>"
+        )
+        h = Path(d) / "guides" / "search" / "index.html"
+        h.parent.mkdir(parents=True)
+        h.write_text(html_page)
+        r = subprocess.run(
+            [sys.executable, str(SCANNER), str(p), str(h)], capture_output=True, text=True
+        )
+        self.assertEqual(r.returncode, 0, f"allowlisted search section must pass:\n{r.stdout}")
 
 
 if __name__ == "__main__":
