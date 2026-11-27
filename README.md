@@ -57,11 +57,11 @@ and logged each node in `log.md` as it went, which is why
 
 ![okfctl quickstart: bundle init through validate and bundle info](docs/assets/quickstart.gif)
 
-okfctl is written in pure Go and runs offline. The one command that reaches
-the network is `connect`, and it uses git to clone a remote bundle. Try
+okfctl is written in pure Go and runs offline. Only `connect` reaches the
+network, when it calls git to clone a remote bundle. Try
 `okfctl search "tannin" mykb` to find nodes by text and `okfctl graph export mykb`
 to dump the link graph as JSON. `okfctl analyze mykb` shows where the bundle is
-thin. Each `okfctl <cmd> --help` ends with an example you can paste.
+thin. Each subcommand's `--help` includes an example you can paste.
 
 ## Install
 
@@ -115,13 +115,13 @@ okfctl: --type is required (OKF §4.1 / §11: every node needs a non-empty type)
 keys it doesn't know (OKF §11.2). `node new` refused the cork node with exit
 code 1 since the spec also says each concept has a non-empty `type` (§4.1).
 
-okfctl holds each bundle to that floor and no higher. If your team wants a
-stricter rule, like a `servings` field on each Recipe, put it in a type
+`validate` holds each bundle to that floor and no higher. If your team wants
+a stricter rule, like a `servings` field on each Recipe, put it in a type
 template. Templates run only when you call `okfctl validate --templates`.
 
 ## Commands
 
-Run `okfctl <cmd> --help` for the flags and an example. The
+Run `okfctl <cmd> --help` for the flags. The
 [command reference](docs/commands/README.md) has the same text in one place.
 
 To build and edit a bundle:
@@ -168,23 +168,25 @@ Out of the box it matches words. To search by meaning, download a
 [Model2Vec](https://github.com/MinishLab/model2vec) model like
 [`minishlab/potion-base-8M`](https://huggingface.co/minishlab/potion-base-8M)
 and tell okfctl where it is. The plugin loads the model itself. okfctl won't
-download one for you. The command is `okfctl-search --semantic "query"`, and
-the [search guide](docs/guides/search.md) has the setup steps.
+download one for you. Run `okfctl-search index build` first to embed your
+nodes, then `okfctl-search --semantic "query"`. Skip the build and
+`--semantic` exits 1 with a note to run it. The
+[search guide](docs/guides/search.md) walks you through each step.
 
 ## Use as an agent plugin
 
 This repo is also an [Agent Plugins 1.0.0](https://agent-plugins.org) package.
-The root [`plugin.json`](plugin.json) lists four okfctl skills
+Any agent client that reads the format can install its four okfctl skills
 (`okf-authoring`, `okf-curation-health`, `okf-migrate-plan`, and
-`okf-semantic-search`) for any agent client that reads the format to install
-in one step. Clients that read repo instructions pick up the same advice
+`okf-semantic-search`) in one step from the root [`plugin.json`](plugin.json).
+Clients that read repo instructions pick up the same advice
 from [`AGENTS.md`](AGENTS.md).
 
 Don't mix this up with `okfctl plugin`. It looks for executables named
 `okfctl-<name>` on your `PATH`, like `okfctl-search`. This section is about
-giving okfctl's skills to an AI agent, and it follows a different spec.
+giving okfctl's skills to an AI agent under a different spec.
 
-The skills run the `okfctl` binary, and the plugin client won't install it for
+The skills call the `okfctl` binary. The plugin client won't install it for
 you. [Install okfctl](#install) first:
 
 ```sh
@@ -196,22 +198,17 @@ The manifest has no version field. The release tag is the version, and
 
 ## Learn more
 
-Start with the [concepts](docs/concepts.md) page, then pick a guide:
+Start with the [concepts](docs/concepts.md) page. The
+[docs index](docs/README.md) then lists a guide for each job, from authoring a
+bundle to pulling in remote ones. If CI flags drift after a bulk reformat, the
+[freshness guide](docs/guides/index-and-freshness.md) shows how
+`.okf-drift-ignore-revs` tells okfctl to skip that commit.
 
-- [Start and author a bundle](docs/guides/authoring.md)
-- [Update `index.md` and fix freshness drift](docs/guides/index-and-freshness.md) (this is where `.okf-drift-ignore-revs` is explained)
-- [Check curation health with `lint` and `analyze`, and fail CI on findings](docs/guides/curation-health.md)
-- [Search by text, by graph, and by meaning with `okfctl-search`](docs/guides/search.md)
-- [Migrate a bundle to OKF v0.3](docs/guides/migrating.md)
-- [Pull in remote bundles with `registry` and `connect`](docs/guides/remote-sources.md)
-- [Extend okfctl with plugins](docs/guides/plugins.md)
-
-`okfctl <cmd> --help` always matches the binary you've got. The
-[docs index](docs/README.md) lists everything else under `docs/`.
+`okfctl <cmd> --help` always matches the binary you've got.
 
 okfctl targets OKF v0.3. The
 [v0.3 specification](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md)
-lives upstream, and [this record](docs/specs/2026-11-26-okf-v0.3-gap-analysis.md)
+lives upstream. [This record](docs/specs/2026-11-26-okf-v0.3-gap-analysis.md)
 lists how each v0.3 change landed here.
 
 To work on okfctl itself, read [`docs/PRD.md`](docs/PRD.md), the

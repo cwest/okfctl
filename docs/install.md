@@ -23,11 +23,11 @@ against the release's `checksums.txt`. Then it copied the two programs into
 `/usr/local/bin` and ran `okfctl version` to print the last line you see.
 `okfctl plugin list` shows that okfctl found the search plugin next to it.
 
-The script works on macOS and Linux. If it can't write to `/usr/local/bin` it
-uses `sudo`. With no `sudo`, it falls back to `~/.local/bin`. Set
-`OKFCTL_BIN_DIR` to pick the directory yourself. To install a release other
-than the latest, set `OKFCTL_VERSION=v0.5.0`. On a checksum mismatch the script
-quits and installs nothing.
+The script runs on macOS and Linux. When it can't write to `/usr/local/bin`,
+it tries `sudo`, and with no `sudo` it falls back to `~/.local/bin`. Set
+`OKFCTL_BIN_DIR` to pick the directory yourself, or `OKFCTL_VERSION=v0.5.0` to
+pin a release other than the latest. On a checksum mismatch the script quits
+and installs nothing.
 
 ## Homebrew
 
@@ -118,9 +118,10 @@ go build -o okfctl-search ./cmd/okfctl-search
 
 Build from a checkout and `okfctl version` reports a Go pseudo-version like
 `v0.5.1-0.20261127154954-6759558a79d1`. It reports `dev` if Go can't read any
-version control information. Release builds set `CGO_ENABLED=0`. Do the same
-if you want a matching static binary:
+version control information. Release builds set `CGO_ENABLED=0` for each
+binary. Do the same to get static binaries like the release ones:
 
 ```sh
 CGO_ENABLED=0 go build -o okfctl .
+CGO_ENABLED=0 go build -o okfctl-search ./cmd/okfctl-search
 ```
