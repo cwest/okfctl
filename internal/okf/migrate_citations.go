@@ -46,11 +46,21 @@ var (
 
 // citationEntries returns the entries under a `# Citations` heading in body
 // order, each as one line: an entry line plus the wrapped lines that follow it
-// are joined with single spaces. An entry starts at a bracket-key, ordered, or
-// bullet line; it ends at a blank line, a legend line, the next entry, or the
-// next heading. An unbulleted line that opens with a markdown link is wrapped
-// text, never an entry start. Lines outside any entry (a status-key paragraph)
-// are skipped.
+// are joined with single spaces. An entry starts at a bracket-key or bullet
+// line; it ends at a blank line, a legend line, the next entry, or the next
+// heading. An unbulleted line that opens with a markdown link is wrapped text,
+// never an entry start. Lines outside any entry (a status-key paragraph) are
+// skipped.
+//
+// An entry-marker line starts an entry only at the open entry's indent or
+// shallower; a marker indented deeper is wrapped text inside that entry. An
+// ordered `n.` line starts an entry only where a list item can start: when no
+// entry is open (it begins a list block), or as the next sibling of an open
+// ordered entry. Inside a bracket-key or bullet entry, a hard-wrapped line
+// that merely begins with digits and a period (`2025. https://...`) is
+// continuation text. CommonMark reads it the same way: an ordered list may
+// interrupt a paragraph only when it starts at 1. Splitting there would turn
+// one citation into an untitled source and a judgment item.
 func citationEntries(body string) []string {
 	loc := citationsHeadRe.FindStringIndex(body)
 	if loc == nil {
@@ -58,11 +68,20 @@ func citationEntries(body string) []string {
 	}
 	var out []string
 	var cur []string
+	curOrdered := false // the open entry is an ordered-list item
+	curIndent := 0      // indent of the open ordered entry's marker
 	flush := func() {
 		if len(cur) > 0 {
 			out = append(out, strings.Join(cur, " "))
 			cur = nil
 		}
+		curOrdered = false
+	}
+	start := func(line string, ordered bool) {
+		flush()
+		cur = []string{strings.TrimRight(line, " \t\r")}
+		curOrdered = ordered
+		curIndent = len(line) - len(strings.TrimLeft(line, " \t"))
 	}
 	for _, line := range strings.Split(body[loc[1]:], "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -79,15 +98,33 @@ func citationEntries(body string) []string {
 			if cur != nil {
 				cur = append(cur, trimmed)
 			}
-		case citationEntryRe.MatchString(line) || citationOrderedRe.MatchString(line) || citationBulletRe.MatchString(line):
-			flush()
-			cur = []string{strings.TrimRight(line, " \t\r")}
+		case (citationEntryRe.MatchString(line) || citationBulletRe.MatchString(line)) && markerStarts(line, cur != nil, true, curOrdered, curIndent):
+			start(line, false)
+		case citationOrderedRe.MatchString(line) && markerStarts(line, cur != nil, false, curOrdered, curIndent):
+			start(line, true)
 		case cur != nil:
 			cur = append(cur, trimmed)
 		}
 	}
 	flush()
 	return out
+}
+
+// markerStarts reports whether an entry-marker line begins a new entry. With no
+// entry open, any marker does. With an entry open, a marker indented deeper
+// than the open entry's marker is wrapped text inside that entry. At the same
+// or a shallower indent, a bracket-key or bullet marker (unordered) starts the
+// next entry, and an ordered marker does only when the open entry is itself an
+// ordered item (its next sibling); after a bracket-key or bullet entry, a line
+// that merely begins with digits and a period is wrapped text.
+func markerStarts(line string, open, unordered, curOrdered bool, curIndent int) bool {
+	if !open {
+		return true
+	}
+	if len(line)-len(strings.TrimLeft(line, " \t")) > curIndent {
+		return false
+	}
+	return unordered || curOrdered
 }
 
 // citationSource converts one citation entry to a §5.1 source when it names

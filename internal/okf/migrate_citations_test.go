@@ -126,6 +126,89 @@ func TestConformance_MigrateCitationEntries_Section5_1_ProseLinkLineIsNotAnEntry
 	}
 }
 
+// TestConformance_MigrateCitationEntries_Section5_1_YearContinuationStaysInEntry
+// is the positive control for hard-wrapped entries: a wrapped line inside a
+// bracket-key or bullet entry that merely begins with digits and a period (a
+// year: `2025. https://...`) continues that entry. Splitting it would turn one
+// Appendix B citation into an untitled §5.1 source plus a bogus judgment item.
+func TestConformance_MigrateCitationEntries_Section5_1_YearContinuationStaysInEntry(t *testing.T) {
+	dir := mkMigrateBundle(t, map[string]string{
+		"index.md": "# KB\n",
+		"log.md":   "# Log\n",
+		"a.md": "---\ntype: Paper\n---\n\n# Def\n\n# Citations\n\n" +
+			"[1] VERIFIED — Laban et al., \"LLMs Get Lost In Multi-Turn Conversation,\" arXiv:2505.06120,\n" +
+			"2025. https://arxiv.org/abs/2505.06120\n\n" +
+			"- Ordóñez & Roggen, *DeepConvLSTM*, *Sensors*\n" +
+			"2016. <https://doi.org/10.3390/s16010115>\n",
+	})
+	_, plan := planFor(t, dir, "human:casey", false)
+	if len(plan.Judgment) != 0 {
+		t.Fatalf("§5.1: a wrapped year line split an entry into judgment items: %+v", plan.Judgment)
+	}
+	nm := planNodeMigration(plan, "a.md")
+	if nm == nil {
+		t.Fatalf("no migration planned for a.md")
+	}
+	want := []SourceEdit{
+		{Resource: "https://arxiv.org/abs/2505.06120",
+			Title: "[1] VERIFIED — Laban et al., \"LLMs Get Lost In Multi-Turn Conversation,\" arXiv:2505.06120, 2025. https://arxiv.org/abs/2505.06120"},
+		{Resource: "https://doi.org/10.3390/s16010115",
+			Title: "Ordóñez & Roggen, *DeepConvLSTM*, *Sensors* 2016. <https://doi.org/10.3390/s16010115>"},
+	}
+	if len(nm.Sources) != len(want) {
+		t.Fatalf("§5.1: want %d sources (one per entry), got %+v", len(want), nm.Sources)
+	}
+	for i := range want {
+		if nm.Sources[i] != want[i] {
+			t.Errorf("§5.1: source %d = %+v\nwant %+v", i, nm.Sources[i], want[i])
+		}
+	}
+}
+
+// TestConformance_MigrateCitationEntries_Section5_1_NumberedListStillSplits is
+// the negative control: a real ordered list, whether it opens the section or
+// follows a blank line, still yields one entry per item, and sibling bullets
+// stay separate entries. Text indented under an entry (a wrapped status tag)
+// joins that entry rather than starting a new one.
+func TestConformance_MigrateCitationEntries_Section5_1_NumberedListStillSplits(t *testing.T) {
+	for name, tc := range map[string]struct {
+		body string
+		want []string
+	}{
+		"tight list": {
+			"# Citations\n1. First source https://a\n2. Second https://b\n",
+			[]string{"1. First source https://a", "2. Second https://b"},
+		},
+		"list after legend and blank": {
+			"# Citations\n\nStatus key: [V] = verified.\n\n1. First source https://a\n   wrapped tail\n2. Second https://b\n\n10. Tenth https://c\n",
+			[]string{"1. First source https://a wrapped tail", "2. Second https://b", "10. Tenth https://c"},
+		},
+		"bracket entry then list after blank": {
+			"# Citations\n[1] VERIFIED — x https://x\n\n2. Second https://b\n",
+			[]string{"[1] VERIFIED — x https://x", "2. Second https://b"},
+		},
+		"indented bracket text inside an ordered item": {
+			"# Citations\n4. **[Yegge]** Revenge, relevant to the\n   **[NUANCED]** note. <https://s.example/r>.\n5. **[1% rule]** context, no URL.\n",
+			[]string{"4. **[Yegge]** Revenge, relevant to the **[NUANCED]** note. <https://s.example/r>.", "5. **[1% rule]** context, no URL."},
+		},
+		"indented status tag inside a bullet entry": {
+			"# Citations\n- https://a.example/doc\n  — the claim. **[PRIMARY — §1]**\n  [PEER-REVIEWED.]\n- https://b.example/doc\n",
+			[]string{"- https://a.example/doc — the claim. **[PRIMARY — §1]** [PEER-REVIEWED.]", "- https://b.example/doc"},
+		},
+	} {
+		got := citationEntries(tc.body)
+		if len(got) != len(tc.want) {
+			t.Errorf("%s: entries = %q, want %q", name, got, tc.want)
+			continue
+		}
+		for i := range tc.want {
+			if got[i] != tc.want[i] {
+				t.Errorf("%s: entry %d = %q, want %q", name, i, got[i], tc.want[i])
+			}
+		}
+	}
+}
+
 // fallbackBundle is undeclared and carries a single-URL citation, a prose
 // citation, and (when withTimestamp) a legacy timestamp.
 func fallbackBundle(t *testing.T, prose, withTimestamp bool) string {
