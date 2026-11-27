@@ -61,7 +61,7 @@ items that lose the fallback.
 ## Phase 1—compute the plan (pure read)
 
 ```sh
-okfctl migrate ./mykb --plan migrate-plan.json --generated-by "casey"
+okfctl migrate ./mykb --plan migrate-plan.json --generated-by "human:casey"
 ```
 
 This is read-only. It computes every deterministic edit and enumerates every

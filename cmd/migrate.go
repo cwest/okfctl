@@ -70,7 +70,7 @@ func newMigrateCmd() *cobra.Command {
 			"an older version (§12). Judgment items are never guessed — they stay in the plan " +
 			"for its consumer (agent, colleague, shell loop, or a human) to resolve.",
 		Example: "  # Phase 1 (default): compute the plan (pure read), writing only the plan file\n" +
-			"  okfctl migrate ./bundles/knowledge --plan migrate-plan.json --generated-by \"casey\"\n\n" +
+			"  okfctl migrate ./bundles/knowledge --plan migrate-plan.json --generated-by \"human:casey\"\n\n" +
 			"  # Phase 2: preview the apply as a unified diff, writing nothing\n" +
 			"  okfctl migrate ./bundles/knowledge --apply --plan migrate-plan.json --dry-run\n\n" +
 			"  # Phase 2: apply the plan's deterministic edits, then re-validate\n" +

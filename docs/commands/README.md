@@ -514,7 +514,7 @@ Example:
 
 ```
 # Phase 1 (default): compute the plan (pure read), writing only the plan file
-  okfctl migrate ./bundles/knowledge --plan migrate-plan.json --generated-by "casey"
+  okfctl migrate ./bundles/knowledge --plan migrate-plan.json --generated-by "human:casey"
 
   # Phase 2: preview the apply as a unified diff, writing nothing
   okfctl migrate ./bundles/knowledge --apply --plan migrate-plan.json --dry-run
