@@ -11,6 +11,14 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-27
+
+`migrate` now splits a `# Citations` entry that names several resources into
+one source per resource, and cuts a source title that holds its whole entry
+down to the work's name. This release also fixes a v0.6.0 bug: a source title
+could be a quoted excerpt instead of the work's name. To clean a bundle
+migrated with 0.6.0, see Fixed.
+
 ### Added
 
 - `migrate` splits a `# Citations` entry that names two or more resources
@@ -22,7 +30,7 @@ tagged release, goreleaser generates the release notes from the commit log
   `[k]` that cites the entry becomes `[^id][^id-2]…`. A URL inside a code span
   is not a resource. An entry with a resource that another entry of the node
   also names stays a `prose-citation` item. `analyze` no longer counts a split
-  entry on top of the sources it became.
+  entry on top of the sources it became. (#259)
 - `migrate` cuts a source `title` that holds its whole `# Citations` entry
   (as an earlier run wrote it) to the work's name, once the footnote
   definition `[^id]` holds the entry's text (§5.1: title is a label for
@@ -30,7 +38,27 @@ tagged release, goreleaser generates the release notes from the commit log
   (`source-title-unnamed`). A title whose text no footnote holds is kept and
   reported (`source-title-unpreserved`), so the text is never lost. A title
   that is already a name, and the source's other keys, are left alone. The
-  plan summary gains a `titles:` line.
+  plan summary gains a `titles:` line. (#258)
+
+### Fixed
+
+- `migrate` no longer takes a quoted excerpt as a source's name. In 0.6.0 the
+  name picker could title a source with the text after `Description:`,
+  `Verbatim:`, or a backticked ref and `: "`, or with a quoted sentence, for
+  example `Reauthentication failed. cannot prompt during non-interactive
+  execution`. Such a source now has no `title` and is reported as
+  `source-title-unnamed`. The fix also covers the parts of a split entry.
+  (#258)
+
+  If you migrated a bundle with 0.6.0, run 0.7.0's plan and apply on it. A
+  title that holds its whole entry is cut to the work's name or removed, which
+  clears most excerpt titles. If no footnote holds a title's text, the title
+  is kept and reported as `source-title-unpreserved`. A re-run leaves alone a
+  title that is the excerpt by itself. Reverting the 0.6.0 migration commit
+  and migrating fresh gives the cleanest result. If you re-run instead, check
+  any `title` that reads like a description, an error message, or a sentence.
+- The okfctl.dev link-preview image URL now changes when the card changes, so
+  a stale cached card is no longer shown. (#256)
 
 ## [0.6.0] - 2026-11-27
 
@@ -557,7 +585,8 @@ Open Knowledge Format (OKF) bundles, targeting OKF v0.1.
   (`okf-authoring`, `okf-curation-health`, `okf-semantic-search`), and a
   spec-conformance suite proving okfctl's output validates clean.
 
-[Unreleased]: https://github.com/cwest/okfctl/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/cwest/okfctl/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/cwest/okfctl/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/cwest/okfctl/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/cwest/okfctl/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/cwest/okfctl/releases/tag/v0.4.0
