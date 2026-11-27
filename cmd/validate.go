@@ -29,16 +29,16 @@ func newValidateCmd() *cobra.Command {
 		Use:   "validate [bundle-dir]",
 		Short: "Check a bundle against the OKF spec floor, and optionally your team's type templates",
 		Long: "validate checks a bundle against the floor every OKF bundle has to meet (§11.1). " +
-			"Every frontmatter block has to parse as YAML. Each reserved index.md and log.md has " +
-			"to follow §8 and §9. A floor failure prints FAIL and always exits 1.\n\n" +
+			"Every frontmatter block has to parse as a YAML mapping. Each reserved index.md and " +
+			"log.md has to follow §8 and §9. A floor failure prints FAIL and always exits 1.\n\n" +
 			"It never edits a file. A .md file with no frontmatter or no type isn't a concept " +
 			"(OKF v0.3 §3.2). validate warns about it and the run still passes. It also warns " +
-			"about drift. One kind is a node whose modified date disagrees with its last git " +
-			"commit (outside a git repo it's silent). The other is an okf_version in the legacy " +
-			".okf sidecar that disagrees with the one in index.md (§8.1, §12).\n\n" +
-			"Drift is advice. The run exits 0 unless you pass --strict.\n\n" +
-			"--templates also checks each node against your team's type template (PRD §9.4) and " +
-			"reports where a node strays from it as more drift. The templates can live in another " +
+			"about drift: a node whose modified date disagrees with its last git commit (outside " +
+			"a git repo it's silent), or an okf_version in the legacy .okf sidecar that disagrees " +
+			"with the one in index.md (§8.1, §12).\n\n" +
+			"Drift is advice: the run exits 0 unless you pass --strict.\n\n" +
+			"--templates checks each node against your team's type template (PRD §9.4) and " +
+			"reports where a node strays as more drift. The templates can live in another " +
 			"bundle, named by the .okf templates: key or by --templates-from (PRD §9.2). An " +
 			"unknown type or an extra key never fails the floor (§11.2).",
 		Example: "  # Check the bundle in the current directory\n" +

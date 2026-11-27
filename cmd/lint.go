@@ -73,10 +73,10 @@ func newLintCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "lint [bundle-dir]",
 		Short: "Report what a curator should look at: orphans, unlinked mentions, broken links, hygiene",
-		Long: "lint reports what a careful curator would want a second look at. Your bundle can " +
-			"pass validate with a node no other node links to. It can have a node that names " +
-			"another and has no link to it. lint prints one line per finding, then a count. It " +
-			"exits 0 by default. With --strict it exits 1 on any finding. Put that line in CI.\n\n" +
+		Long: "lint reports what a careful curator would want a second look at. You can pass " +
+			"validate with a node no other node links to, or with a node that names another and " +
+			"doesn't link it. lint prints one line per finding, then a count. It exits 0 by " +
+			"default. Run lint --strict in CI and it exits 1 on any finding.\n\n" +
 			"It never edits a file. None of its findings makes a bundle non-conformant under " +
 			"§11.1. These are its checks:\n\n" +
 			"    orphan                   nothing links to the node, not index.md or log.md either\n" +
@@ -105,9 +105,10 @@ func newLintCmd() *cobra.Command {
 			"(§5.5).\n\n" +
 			"--semantic adds two checks that read the index okfctl-search index build writes. " +
 			"similar-unlinked flags two nodes that read alike with no link between them. " +
-			"no-semantic-neighbors flags a node with nothing close to it. lint loads no model to " +
-			"do this. It reads the index. With no index on disk, lint exits 1 and says to build " +
-			"one.",
+			"no-semantic-neighbors flags a node with nothing close to it. Nodes added since the " +
+			"last build aren't in the index. lint can't check them and names them in one " +
+			"stale-index finding. lint loads no model to do this. It reads the index. With no " +
+			"index on disk, lint exits 1 and says to build one.",
 		Example: "  # Report findings for the bundle in the current directory (exits 0)\n" +
 			"  okfctl lint\n\n" +
 			"  # Fail CI on any finding\n" +

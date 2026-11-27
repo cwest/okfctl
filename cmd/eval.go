@@ -130,16 +130,16 @@ func newEvalSampleCmd() *cobra.Command {
 		Use:   "sample [bundle-dir]",
 		Short: "Write a worksheet for the checks okfctl can't run: accuracy, alignment, calibration",
 		Long: "sample picks a few nodes and writes a worksheet for the three checks okfctl can't " +
-			"run itself. Accuracy: do the cited sources back the claims? Alignment: does the " +
-			"node answer the question in its title and description? Calibration: does its grade " +
-			"still hold on a second look?\n\n" +
-			"okfctl fills in what it can read from each node (title, grades, trust tier, " +
-			"sources, candidate claims). You fill in the judgment slots, by hand or with a " +
-			"model. okfctl leaves them empty and offers no verdict.\n\n" +
-			"--changed-since <ref> picks the nodes that changed since a git ref, for a " +
-			"pull-request check. Otherwise --sample N picks N nodes at random. The same --seed " +
-			"picks the same nodes each time. With neither flag it picks nothing. --format md " +
-			"writes the worksheet for a person. JSON is the default.",
+			"do by itself. Accuracy: do the cited sources back the claims? Alignment: does the " +
+			"node answer the question its title and description set up? Calibration: " +
+			"does its grade survive a second look?\n\n" +
+			"okfctl copies in everything it can read from each node (title, grades, trust tier, " +
+			"sources, candidate claims) and leaves the answer slots empty. You fill them in by " +
+			"hand or with a model.\n\n" +
+			"On a pull request, use --changed-since <ref> to take the nodes changed since that " +
+			"git ref. Otherwise --sample N takes N at random. Run it again with the same --seed " +
+			"to get the same nodes back. With neither flag you get nothing. JSON is the default. " +
+			"Use --format md for a worksheet people will read.",
 		Example: "  # A worksheet for 5 random nodes\n" +
 			"  okfctl eval sample --sample 5 --format md ./mykb\n\n" +
 			"  # JSON for the nodes changed on this branch\n" +

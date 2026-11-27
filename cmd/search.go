@@ -44,10 +44,10 @@ func newSearchCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "search [query] [bundle-dir]",
 		Short: "Find nodes by text or by link distance, with no model or index",
-		Long: "search needs neither a model nor an index. It looks for your query in each " +
-			"node's title, tags, type, or body, ignoring case, and prints a line per match with " +
-			"its path and type and the fields that matched. --field limits the match to one of " +
-			"those. No match prints nothing and exits 0.\n\n" +
+		Long: "search finds the nodes that contain your query in one of four fields (title, " +
+			"tags, type, body) and prints each with its path, type, and matching fields. Case " +
+			"doesn't matter. It needs no model or index. --field narrows it to one of those " +
+			"fields. No match prints nothing and exits 0.\n\n" +
 			"--neighbors <node-path> asks a different question: which nodes sit within --depth " +
 			"links of that node, following links either way.\n\n" +
 			"It never edits a file. To search by meaning, install the okfctl-search plugin and " +

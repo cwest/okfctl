@@ -233,11 +233,11 @@ eval sample is for the other three. It picks nodes and writes a worksheet with w
 
 Write a worksheet for the checks okfctl can't run: accuracy, alignment, calibration
 
-sample picks a few nodes and writes a worksheet for the three checks okfctl can't run itself. Accuracy: do the cited sources back the claims? Alignment: does the node answer the question in its title and description? Calibration: does its grade still hold on a second look?
+sample picks a few nodes and writes a worksheet for the three checks okfctl can't do by itself. Accuracy: do the cited sources back the claims? Alignment: does the node answer the question its title and description set up? Calibration: does its grade survive a second look?
 
-okfctl fills in what it can read from each node (title, grades, trust tier, sources, candidate claims). You fill in the judgment slots, by hand or with a model. okfctl leaves them empty and offers no verdict.
+okfctl copies in everything it can read from each node (title, grades, trust tier, sources, candidate claims) and leaves the answer slots empty. You fill them in by hand or with a model.
 
---changed-since <ref> picks the nodes that changed since a git ref, for a pull-request check. Otherwise --sample N picks N nodes at random. The same --seed picks the same nodes each time. With neither flag it picks nothing. --format md writes the worksheet for a person. JSON is the default.
+On a pull request, use --changed-since <ref> to take the nodes changed since that git ref. Otherwise --sample N takes N at random. Run it again with the same --seed to get the same nodes back. With neither flag you get nothing. JSON is the default. Use --format md for a worksheet people will read.
 
 ```
 okfctl eval sample [bundle-dir] [flags]
@@ -422,7 +422,7 @@ Flags:
 
 Report what a curator should look at: orphans, unlinked mentions, broken links, hygiene
 
-lint reports what a careful curator would want a second look at. Your bundle can pass validate with a node no other node links to. It can have a node that names another and has no link to it. lint prints one line per finding, then a count. It exits 0 by default. With --strict it exits 1 on any finding. Put that line in CI.
+lint reports what a careful curator would want a second look at. You can pass validate with a node no other node links to, or with a node that names another and doesn't link it. lint prints one line per finding, then a count. It exits 0 by default. Run lint --strict in CI and it exits 1 on any finding.
 
 It never edits a file. None of its findings makes a bundle non-conformant under §11.1. These are its checks:
 
@@ -447,7 +447,7 @@ It never edits a file. None of its findings makes a bundle non-conformant under 
 
 A link to a file that exists nowhere isn't a finding. The spec treats it as knowledge no one has written (§6.1). analyze lists it under coverage. The two hygiene checks group spellings that look alike, but two tags can look alike and still mean different things. Read the finding first and rename later. An unparseable stale_after gets a timestamp-form finding and never counts as fresh (§5.5).
 
---semantic adds two checks that read the index okfctl-search index build writes. similar-unlinked flags two nodes that read alike with no link between them. no-semantic-neighbors flags a node with nothing close to it. lint loads no model to do this. It reads the index. With no index on disk, lint exits 1 and says to build one.
+--semantic adds two checks that read the index okfctl-search index build writes. similar-unlinked flags two nodes that read alike with no link between them. no-semantic-neighbors flags a node with nothing close to it. Nodes added since the last build aren't in the index. lint can't check them and names them in one stale-index finding. lint loads no model to do this. It reads the index. With no index on disk, lint exits 1 and says to build one.
 
 ```
 okfctl lint [bundle-dir] [flags]
@@ -964,7 +964,7 @@ Example:
 
 Find nodes by text or by link distance, with no model or index
 
-search needs neither a model nor an index. It looks for your query in each node's title, tags, type, or body, ignoring case, and prints a line per match with its path and type and the fields that matched. --field limits the match to one of those. No match prints nothing and exits 0.
+search finds the nodes that contain your query in one of four fields (title, tags, type, body) and prints each with its path, type, and matching fields. Case doesn't matter. It needs no model or index. --field narrows it to one of those fields. No match prints nothing and exits 0.
 
 --neighbors <node-path> asks a different question: which nodes sit within --depth links of that node, following links either way.
 
@@ -1104,13 +1104,13 @@ Flags:
 
 Check a bundle against the OKF spec floor, and optionally your team's type templates
 
-validate checks a bundle against the floor every OKF bundle has to meet (§11.1). Every frontmatter block has to parse as YAML. Each reserved index.md and log.md has to follow §8 and §9. A floor failure prints FAIL and always exits 1.
+validate checks a bundle against the floor every OKF bundle has to meet (§11.1). Every frontmatter block has to parse as a YAML mapping. Each reserved index.md and log.md has to follow §8 and §9. A floor failure prints FAIL and always exits 1.
 
-It never edits a file. A .md file with no frontmatter or no type isn't a concept (OKF v0.3 §3.2). validate warns about it and the run still passes. It also warns about drift. One kind is a node whose modified date disagrees with its last git commit (outside a git repo it's silent). The other is an okf_version in the legacy .okf sidecar that disagrees with the one in index.md (§8.1, §12).
+It never edits a file. A .md file with no frontmatter or no type isn't a concept (OKF v0.3 §3.2). validate warns about it and the run still passes. It also warns about drift: a node whose modified date disagrees with its last git commit (outside a git repo it's silent), or an okf_version in the legacy .okf sidecar that disagrees with the one in index.md (§8.1, §12).
 
-Drift is advice. The run exits 0 unless you pass --strict.
+Drift is advice: the run exits 0 unless you pass --strict.
 
---templates also checks each node against your team's type template (PRD §9.4) and reports where a node strays from it as more drift. The templates can live in another bundle, named by the .okf templates: key or by --templates-from (PRD §9.2). An unknown type or an extra key never fails the floor (§11.2).
+--templates checks each node against your team's type template (PRD §9.4) and reports where a node strays as more drift. The templates can live in another bundle, named by the .okf templates: key or by --templates-from (PRD §9.2). An unknown type or an extra key never fails the floor (§11.2).
 
 ```
 okfctl validate [bundle-dir] [flags]
