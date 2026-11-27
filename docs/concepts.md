@@ -1,11 +1,11 @@
 # Concepts
 
-New to okfctl or to the Open Knowledge Format? Start here. Every idea on this
+New to okfctl or to the Open Knowledge Format? Start here. Each idea on this
 page comes with a command that proves it. Run the blocks in order in an empty
-directory and you'll grow one wine bundle as you read. The output is what
-okfctl printed when I ran it. CI replays each block against the current binary,
-and the day okfctl prints something different, the build fails and this page
-gets fixed.
+directory and you'll grow one wine bundle as you read. The output below is
+what okfctl prints. CI replays each block against the current binary, and the
+day okfctl prints something different, the build fails and this page gets
+fixed.
 
 ## A Bundle Is a Directory of Markdown Files
 
@@ -63,12 +63,12 @@ $ okfctl validate kb
 OK: bundle conforms to the OKF spec floor
 ```
 
-`Barrel Note` is a type I just invented, and it passes. OKF leaves `type` values
-open, and a consumer has to accept a type it's never seen (§4.1, §11.2). okfctl doesn't
-invent a list of approved types the spec never wrote.
+`Barrel Note` appears nowhere in the spec, and it passes. OKF leaves `type` values
+open, and a consumer has to accept a type it's never seen (§4.1, §11.2). okfctl
+doesn't invent a list of approved types the spec never wrote.
 
 A Markdown file with no frontmatter (or with frontmatter but no `type`) isn't
-a node at all. OKF says to skip it (§3.2), so `validate` warns and passes.
+a node at all. OKF says to skip it (§3.2), and `validate` warns and passes.
 Frontmatter that won't parse as YAML is another matter. It breaks conformance
 (§11.1), and `validate` exits 1:
 
@@ -107,7 +107,7 @@ $ okfctl log show kb
 * created wine/tannin.md
 ```
 
-OKF reserves two filenames at every level of a bundle, and neither one is ever
+OKF reserves two filenames at each level of a bundle, and neither one is ever
 a concept (§3.1). `index.md` lists what a directory holds (§8). `log.md` is the
 change history, newest date first (§9). You didn't write `wine/index.md` or
 either log entry. `node new` did.
@@ -162,7 +162,7 @@ so a node that links to you counts as your neighbor the same as one you link to.
 same graph in a browser.
 
 A node's path is its identity, and renaming one changes the graph. `node mv`
-rewrites every link that points at the old path:
+rewrites each link that points at the old path:
 
 ```text
 $ okfctl node mv wine/tannin wine/tannins --bundle kb
@@ -204,16 +204,16 @@ owner: TODO
 ## Steps
 ```
 
-`validate` always checks the **spec floor**, the minimum every conformant
-bundle meets. Say your team wants an `owner` on every playbook and a `## Steps`
-section in each one. You'd write a **type template** for that. It's an ordinary
-node whose `type` is `Type Template`, so it lives in the bundle with everything
-else, never in some tool config file. `node new` scaffolds from it, as you just
-saw. `template list` and `template show` print the fields and sections a
-bundle's templates want. Templates belong to okfctl. OKF doesn't define them.
+`validate` always checks the **spec floor**, the minimum any conformant bundle
+meets. Say your team wants an `owner` on each playbook and a `## Steps`
+section in it. You'd write a **type template** for that. It's an ordinary node
+whose `type` is `Type Template`, and it lives in the bundle with your other
+nodes, never in a tool config file. `node new` scaffolds from it, as you just
+saw. `template list` and `template show` print what a bundle's templates want.
+Templates are okfctl's idea. OKF doesn't define them.
 
-The next playbook is written by hand. It has no `owner` and no `## Steps`, and
-it carries an `x-` key OKF has never heard of:
+The next playbook skips the template. It has no `owner`, no `## Steps`, and
+an `x-` key OKF has never heard of:
 
 <!-- transcript: setup
 $ printf -- '---\ntype: Playbook\ntitle: Rollback\nx-acme-reviewed: no\n---\n\n# Rollback\n' > kb/runbooks/rollback.md
@@ -242,12 +242,10 @@ okfctl: 2 drift warning(s)
 ```
 
 Plain `validate` passes. OKF forbids a consumer from rejecting keys it doesn't
-know (§4.1, §11.2), and the floor never looks at templates, so neither the unknown
-key nor the missing `owner` counts against you. `--templates` turns the
-template checks on as warnings, and `--strict` makes those warnings exit 1 for
-CI. Nothing from a template ever leaks into the floor. If okfctl rejected an
-unknown key or an unknown `type`, it would break the spec by being too picky,
-and that's still breaking it.
+know (§4.1, §11.2). The floor never reads templates either. Neither the unknown
+key nor the missing `owner` counts against you. Add `--templates` and the
+template checks report as warnings. Add `--strict` as well and those warnings
+exit 1, the setting you'd use in CI. Templates can't leak into the floor.
 
 ## The Version a Bundle Declares Decides How okfctl Reads It
 
@@ -302,17 +300,18 @@ missing-xref: wine/tannin.md mentions "Acidity" but does not link to wine/acidit
 3 lint finding(s)
 ```
 
-With no version declared, okfctl falls back to the bundle root, as the spec
-allows (§6.2, §12.1), and the link works. Declare v0.3 and the same link points
-at `wine/wine/acidity.md`. There's no such file. The fallback depends on what
-the bundle declares, so an old bundle goes on working until you move it on
+With no version declared, okfctl falls back to the bundle root and the link
+works. OKF grants that fallback to path fields such as `resource` (§6.2,
+§12.1), and okfctl extends it to body links. Declare v0.3 and the same link points
+at `wine/wine/acidity.md`. There's no such file. With the fallback tied to
+what the bundle declares, an old bundle goes on working until you move it on
 purpose. [Migrating a bundle to OKF v0.3](guides/migrating.md) makes that move
 for you.
 
 The second breaking change is about trust. Only *current* verification events
 count for a node's trust tier (§5.3), and an event is current when its `at` is
 on or after `generated.at`. Here a human signed off on November 2. The content
-dates from November 1, and the sign-off came after it, so it's current:
+dates from November 1, and the sign-off came after it. It's current:
 
 <!-- transcript: setup
 $ mkdir -p trust/wine
