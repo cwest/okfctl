@@ -187,6 +187,11 @@ func (b *Bundle) exists(rel string) bool {
 	if _, ok := b.Nodes[rel]; ok {
 		return true
 	}
+	// A §3.2 rule 2 non-concept .md is a real file: a link or path field that
+	// names it resolves (§6.1, §6.2), it just does not refer to a concept.
+	if _, ok := b.NonConcepts[rel]; ok {
+		return true
+	}
 	if _, ok := b.Reserved[rel]; ok {
 		return true
 	}

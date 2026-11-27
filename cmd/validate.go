@@ -28,7 +28,10 @@ func newValidateCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "validate [bundle-dir]",
 		Short: "Check a bundle for OKF spec-floor conformance (optionally overlay team type-templates)",
-		Long: "validate enforces the OKF spec floor (type present + non-empty, §7). " +
+		Long: "validate enforces the OKF spec floor: every concept's frontmatter parses and carries a " +
+			"non-empty type, and reserved index.md/log.md files follow §8/§9. A .md file with no " +
+			"frontmatter or no type is not a concept (OKF v0.3 §3.2): it is reported as a warning and " +
+			"never fails the run. " +
 			"It also reports git drift: a node whose frontmatter `modified` contradicts " +
 			"its git last-commit date (read-only — it never rewrites the file, and " +
 			"degrades to nothing outside a git repo). With --templates it runs the opt-in " +
@@ -66,6 +69,13 @@ func newValidateCmd() *cobra.Command {
 			// the exit code.
 			for _, p := range b.EscapedSymlinks {
 				fmt.Fprintf(out, "warning %s: %s\n", p, okf.EscapedSymlinkMessage)
+			}
+			// OKF v0.3 §3.2 rule 2: a .md with no frontmatter or no `type` is
+			// not a concept. Validators SHOULD warn; it never affects
+			// conformance, so it never fails the run (not even under --strict,
+			// which governs drift).
+			for _, w := range okf.ValidateWarnings(b) {
+				fmt.Fprintf(out, "warning %s: %s\n", w.Path, w.Message)
 			}
 
 			var drift []okf.DriftFinding

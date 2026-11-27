@@ -48,7 +48,7 @@ Flags:
       --cluster-min int                 min nodes sharing a tag to flag a synthesis cluster (default 3)
       --coverage-threshold int          min distinct nodes mentioning a term to report a coverage gap (default 3)
       --json                            emit machine-readable JSON instead of the human report
-      --no-ignore                       walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --no-ignore                       walk EVERY directory, including vendored/derived ones (node_modules, venv, dist, ...) that are skipped by default; dot directories are never part of the bundle (OKF v0.3 §3.2)
       --thin-lines int                  body line count below which a node is thin (default 15)
       --time-sensitive-fraction float   flag a time-sensitive node once its age >= fraction*aging-days (default 0.5); undated marked nodes are always flagged
 ```
@@ -249,7 +249,7 @@ Flags:
 ```
       --changed-since string   sample only nodes changed since this git ref (e.g. origin/main)
       --format string          output format: json (machine eval-set) or md (human worksheet) (default "json")
-      --no-ignore              walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --no-ignore              walk EVERY directory, including vendored/derived ones (node_modules, venv, dist, ...) that are skipped by default; dot directories are never part of the bundle (OKF v0.3 §3.2)
       --sample int             size of a deterministic random sample (ignored when --changed-since is set)
       --seed int               seed for reproducible --sample selection (default: a fixed seed)
 ```
@@ -290,7 +290,7 @@ Flags:
 ```
       --grade-vocabulary-floor int   min nodes carrying a grade value for it to count as corpus vocabulary (default 2)
       --json                         emit findings as a machine-readable JSON array (sorted path, then check)
-      --no-ignore                    walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --no-ignore                    walk EVERY directory, including vendored/derived ones (node_modules, venv, dist, ...) that are skipped by default; dot directories are never part of the bundle (OKF v0.3 §3.2)
       --strict                       exit non-zero if there are any findings (default: advisory, exit 0)
 ```
 
@@ -327,7 +327,7 @@ Flags:
 
 ```
       --format string   output format: json or dot (default "json")
-      --no-ignore       walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --no-ignore       walk EVERY directory, including vendored/derived ones (node_modules, venv, dist, ...) that are skipped by default; dot directories are never part of the bundle (OKF v0.3 §3.2)
 ```
 
 
@@ -361,7 +361,7 @@ Example:
 Flags:
 
 ```
-      --no-ignore           walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --no-ignore           walk EVERY directory, including vendored/derived ones (node_modules, venv, dist, ...) that are skipped by default; dot directories are never part of the bundle (OKF v0.3 §3.2)
       --no-shape            omit the subdirectory shape suffix (concept count, types, shared tags, subtree total)
       --shape-tag-max int   cap the shared-tag list at this many tags (most-shared-first, ellipsis on truncation) (default 12)
       --shape-tag-min int   a shared tag prints only when at least this many of a directory's own concepts carry it (default 2)
@@ -393,7 +393,7 @@ Example:
 Flags:
 
 ```
-      --no-ignore           walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --no-ignore           walk EVERY directory, including vendored/derived ones (node_modules, venv, dist, ...) that are skipped by default; dot directories are never part of the bundle (OKF v0.3 §3.2)
       --no-shape            omit the subdirectory shape suffix (concept count, types, shared tags, subtree total)
       --shape-tag-max int   cap the shared-tag list at this many tags (most-shared-first, ellipsis on truncation) (default 12)
       --shape-tag-min int   a shared tag prints only when at least this many of a directory's own concepts carry it (default 2)
@@ -438,7 +438,7 @@ Flags:
       --coverage-threshold int       min distinct nodes that must mention a term to report a coverage gap (default 3)
       --isolation-floor float        score a node's best neighbor must reach to count as connected (default 0.20)
       --json                         emit findings as a machine-readable JSON array (sorted path, then check) instead of the human report
-      --no-ignore                    walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --no-ignore                    walk EVERY directory, including vendored/derived ones (node_modules, venv, dist, ...) that are skipped by default; dot directories are never part of the bundle (OKF v0.3 §3.2)
       --semantic                     also run similarity checks against the index built by 'okfctl-search index build'
       --similarity-threshold float   cosine score at/above which two unlinked nodes are reported (default 0.80; implies --semantic data)
       --strict                       exit non-zero if there are any findings (default: advisory, exit 0)
@@ -949,7 +949,7 @@ Flags:
       --field string       lexical match fields: any|title|tag|type|body (default "any")
       --json               emit results as JSON
       --neighbors string   graph mode: node path to traverse from
-      --no-ignore          walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --no-ignore          walk EVERY directory, including vendored/derived ones (node_modules, venv, dist, ...) that are skipped by default; dot directories are never part of the bundle (OKF v0.3 §3.2)
 ```
 
 
@@ -1049,7 +1049,7 @@ Flags:
 
 Check a bundle for OKF spec-floor conformance (optionally overlay team type-templates)
 
-validate enforces the OKF spec floor (type present + non-empty, §7). It also reports git drift: a node whose frontmatter `modified` contradicts its git last-commit date (read-only — it never rewrites the file, and degrades to nothing outside a git repo). With --templates it runs the opt-in team overlay (§9.4) as well, reporting template drift; templates may be referenced from a separate bundle via the .okf `templates:` key or --templates-from (§9.2). All drift is advisory by default (exit 0); pass --strict to exit non-zero on any drift. Floor violations always fail regardless of --strict.
+validate enforces the OKF spec floor: every concept's frontmatter parses and carries a non-empty type, and reserved index.md/log.md files follow §8/§9. A .md file with no frontmatter or no type is not a concept (OKF v0.3 §3.2): it is reported as a warning and never fails the run. It also reports git drift: a node whose frontmatter `modified` contradicts its git last-commit date (read-only — it never rewrites the file, and degrades to nothing outside a git repo). With --templates it runs the opt-in team overlay (§9.4) as well, reporting template drift; templates may be referenced from a separate bundle via the .okf `templates:` key or --templates-from (§9.2). All drift is advisory by default (exit 0); pass --strict to exit non-zero on any drift. Floor violations always fail regardless of --strict.
 
 ```
 okfctl validate [bundle-dir] [flags]
@@ -1074,7 +1074,7 @@ Example:
 Flags:
 
 ```
-      --no-ignore               walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default
+      --no-ignore               walk EVERY directory, including vendored/derived ones (node_modules, venv, dist, ...) that are skipped by default; dot directories are never part of the bundle (OKF v0.3 §3.2)
       --strict                  exit non-zero on any drift (git drift and, with --templates, template drift); default: advisory, exit 0
       --templates               also run the opt-in type-template overlay (§9.4), reporting drift as warnings
       --templates-from string   resolve type templates from this bundle directory, overriding the .okf templates key (PRD §9.2)

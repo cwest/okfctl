@@ -24,7 +24,7 @@ import (
 
 // noIgnoreFlagUsage is the shared help text for the --no-ignore escape hatch, so
 // every walking command documents it identically.
-const noIgnoreFlagUsage = "walk EVERY directory, including vendored/derived ones (.venv, node_modules, dist, ...) that are skipped by default"
+const noIgnoreFlagUsage = "walk EVERY directory, including vendored/derived ones (node_modules, venv, dist, ...) that are skipped by default; dot directories are never part of the bundle (OKF v0.3 §3.2)"
 
 // addNoIgnoreFlag registers the shared --no-ignore flag on a command and returns
 // the bound *bool. Every command that walks a bundle wires this the same way so

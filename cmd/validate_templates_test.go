@@ -1,3 +1,17 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package cmd
 
 import (
@@ -65,16 +79,18 @@ func TestValidate_FloorUnchangedWithoutFlag(t *testing.T) {
 }
 
 func TestValidateTemplates_FloorStillFails(t *testing.T) {
-	// A node with an empty type fails the floor with OR without --templates.
+	// A node whose frontmatter does not parse fails the floor (OKF v0.3 §11.1
+	// rule 1) with OR without --templates. (An empty `type` is no longer a
+	// floor failure: §3.2 makes that file a non-concept.)
 	dir := t.TempDir()
 	p := filepath.Join(dir, "bad.md")
-	if err := os.WriteFile(p, []byte("---\ntype: \"\"\n---\n\n# Bad\n"), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte("---\ntype: [\n---\n\n# Bad\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	if _, err := runOKF(t, "validate", dir); err == nil {
-		t.Fatal("empty-type node must fail plain validate")
+		t.Fatal("unparseable frontmatter must fail plain validate")
 	}
 	if _, err := runOKF(t, "validate", dir, "--templates"); err == nil {
-		t.Fatal("empty-type node must fail validate --templates (floor is non-negotiable)")
+		t.Fatal("unparseable frontmatter must fail validate --templates (floor is non-negotiable)")
 	}
 }

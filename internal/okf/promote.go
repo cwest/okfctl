@@ -87,7 +87,7 @@ func PromotePlan(b *Bundle, basename string) ([]PromoteChange, error) {
 			base = path.Base(dir)
 		}
 		newPath := path.Join(dir, base+".md")
-		if b.Nodes[newPath] != nil {
+		if b.hasMarkdown(newPath) {
 			return nil, fmt.Errorf("cannot promote %s: destination %s already exists as a node", idx, newPath)
 		}
 		promos = append(promos, promo{oldPath: idx, dir: dir, newPath: newPath})
@@ -127,7 +127,7 @@ func PromotePlan(b *Bundle, basename string) ([]PromoteChange, error) {
 			})
 		}
 	}
-	for srcPath, n := range b.Nodes {
+	for srcPath, n := range b.linkSources() {
 		scan(srcPath, n.Body)
 	}
 	for srcPath, n := range b.Reserved {

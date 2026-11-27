@@ -40,15 +40,21 @@ func PlanMove(b *Bundle, old, new string) ([]LinkRewrite, error) {
 	if IsReservedPath(old) || IsReservedPath(new) {
 		return nil, fmt.Errorf("cannot move reserved file (%s -> %s)", old, new)
 	}
+	if IsDotPath(new) {
+		return nil, dotPathMoveErr(new)
+	}
 	if b.Nodes[old] == nil {
 		return nil, fmt.Errorf("node not found: %s", old)
 	}
-	if b.Nodes[new] != nil {
+	if b.hasMarkdown(new) {
 		return nil, fmt.Errorf("destination already exists: %s", new)
 	}
 
+	// Inbound links come from concepts AND from non-concept .md files (OKF
+	// v0.3 §3.2 rule 2): a README.md that links the moved concept is not a
+	// concept, but its link must keep resolving.
 	var rewrites []LinkRewrite
-	for path, n := range b.Nodes {
+	for path, n := range b.linkSources() {
 		if path == old {
 			continue // the moved node's own outbound links travel with it
 		}
@@ -81,6 +87,9 @@ func ApplyMove(root string, b *Bundle, old, new string, rewrites []LinkRewrite) 
 	if IsReservedPath(old) || IsReservedPath(new) {
 		return fmt.Errorf("cannot move reserved file (%s -> %s)", old, new)
 	}
+	if IsDotPath(new) {
+		return dotPathMoveErr(new)
+	}
 	oldAbs := filepath.Join(root, filepath.FromSlash(old))
 	newAbs := filepath.Join(root, filepath.FromSlash(new))
 	if _, err := os.Stat(newAbs); err == nil {
@@ -97,7 +106,7 @@ func ApplyMove(root string, b *Bundle, old, new string, rewrites []LinkRewrite) 
 	// scanning the whole file cannot introduce a spurious match.)
 	edited := map[string]string{}
 	for _, rw := range rewrites {
-		if b.Nodes[rw.NodePath] == nil {
+		if !b.hasMarkdown(rw.NodePath) {
 			return fmt.Errorf("rewrite target not found: %s", rw.NodePath)
 		}
 		content, ok := edited[rw.NodePath]
@@ -136,6 +145,13 @@ func ApplyMove(root string, b *Bundle, old, new string, rewrites []LinkRewrite) 
 		return fmt.Errorf("move %s -> %s: %w", old, new, err)
 	}
 	return nil
+}
+
+// dotPathMoveErr refuses a move destination that is not part of the bundle: a
+// path with a segment starting with "." (OKF v0.3 §3.2 rule 4). The moved
+// concept would silently drop out of every consumer's view.
+func dotPathMoveErr(dst string) error {
+	return fmt.Errorf("destination is not part of the bundle: %s (a file or directory name starting with \".\" is excluded, OKF v0.3 §3.2)", dst)
 }
 
 // PlanRemoveOrphans returns the bundle-relative nodes that become orphaned

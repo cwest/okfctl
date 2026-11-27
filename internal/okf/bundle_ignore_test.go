@@ -20,8 +20,11 @@ import (
 )
 
 // vendoredBundle writes a 2-node bundle plus a fake vendored tree
-// (tool/.venv/.../site-packages) and a derived output dir (dist). It returns the
-// bundle root.
+// (tool/venv/.../site-packages) and a derived output dir (dist). It returns the
+// bundle root. The vendored files carry a `type` so that, when --no-ignore walks
+// them, they load as concepts (OKF v0.3 §3.2 rule 1) and the controls can count
+// them. (A dot directory such as .venv is not part of the bundle at all under
+// §3.2 rule 4; classify_conformance_test.go covers that.)
 func vendoredBundle(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -30,10 +33,10 @@ func vendoredBundle(t *testing.T) string {
 	writeFile(t, dir, "wine/tannin.md", "---\ntype: Reference\ntitle: Tannin\n---\n# Tannin\n\nSee [acidity](acidity.md).\n")
 	writeFile(t, dir, "wine/acidity.md", "---\ntype: Reference\ntitle: Acidity\n---\n# Acidity\n")
 	// Fake Python virtualenv sitting next to the bundle.
-	writeFile(t, dir, "tool/.venv/lib/python3.12/site-packages/somepkg/README.md", "# somepkg\nvendored doc, nobody authored this\n")
-	writeFile(t, dir, "tool/.venv/lib/python3.12/site-packages/somepkg/CHANGES.md", "# Changelog\n")
+	writeFile(t, dir, "tool/venv/lib/python3.12/site-packages/somepkg/README.md", "---\ntype: Readme\n---\n# somepkg\nvendored doc, nobody authored this\n")
+	writeFile(t, dir, "tool/venv/lib/python3.12/site-packages/somepkg/CHANGES.md", "---\ntype: Changelog\n---\n# Changelog\n")
 	// A derived build-output directory.
-	writeFile(t, dir, "dist/generated.md", "# generated\nderived output\n")
+	writeFile(t, dir, "dist/generated.md", "---\ntype: Generated\n---\n# generated\nderived output\n")
 	return dir
 }
 
@@ -46,7 +49,7 @@ func TestLoad_SkipsVendoredDirsByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	// Only the two real wine nodes; nothing from .venv/site-packages/dist.
+	// Only the two real wine nodes; nothing from venv/site-packages/dist.
 	if got := len(b.Nodes); got != 2 {
 		t.Fatalf("concept nodes = %d, want 2 (%v)", got, keys(b.Nodes))
 	}
@@ -68,7 +71,7 @@ func TestLoad_RecordsSkippedDirs(t *testing.T) {
 	}
 	got := append([]string(nil), b.SkippedDirs...)
 	sort.Strings(got)
-	want := []string{"dist", "tool/.venv"}
+	want := []string{"dist", "tool/venv"}
 	if len(got) != len(want) {
 		t.Fatalf("SkippedDirs = %v, want %v", b.SkippedDirs, want)
 	}
@@ -94,7 +97,7 @@ func TestLoad_NoIgnoreRestoresFullWalk(t *testing.T) {
 	if got := len(b.Nodes); got != 5 {
 		t.Fatalf("concept nodes with --no-ignore = %d, want 5 (%v)", got, keys(b.Nodes))
 	}
-	if _, ok := b.Nodes["tool/.venv/lib/python3.12/site-packages/somepkg/README.md"]; !ok {
+	if _, ok := b.Nodes["tool/venv/lib/python3.12/site-packages/somepkg/README.md"]; !ok {
 		t.Errorf("--no-ignore must recover vendored README; have %v", keys(b.Nodes))
 	}
 	// With --no-ignore nothing was skipped, so there is nothing to announce.
