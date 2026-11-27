@@ -357,11 +357,10 @@ func analyzeCoverage(b *Bundle, opts AnalyzeOptions) CoverageReport {
 		if bl := bodyLineCount(n.Body); bl < opts.ThinLines {
 			out.ThinNodes = append(out.ThinNodes, ThinNode{Path: p, BodyLines: bl})
 		}
-		// Citation strength. SourceCitations() reads v0.2 §5.1 `sources`
-		// frontmatter first and falls back to the legacy body `# Citations`
-		// list for v0.1 documents (§13.1), so the uncited / single-citation
-		// signals reflect the v0.2 evidence layout, not just the body list.
-		switch n.SourceCitations() {
+		// Citation strength: distinct §5.1 `sources`, plus the legacy body
+		// `# Citations` entries they do not already cover when the bundle's
+		// declared version allows the §12.1 fallback.
+		switch b.SourceCitations(p) {
 		case 0:
 			out.Uncited = append(out.Uncited, AnalyzeNodeRef{Path: p})
 		case 1:
