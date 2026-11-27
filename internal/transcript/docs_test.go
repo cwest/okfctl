@@ -122,3 +122,32 @@ func TestDocTranscripts(t *testing.T) {
 		t.Fatal("found no replayable transcripts in README.md or docs/")
 	}
 }
+
+// homepage is the okfctl.dev landing page. Its terminal panels are
+// <pre data-transcript> elements, read by ParseHTML.
+const homepage = "site/src/pages/index.astro"
+
+// TestHomepageTranscripts replays the okfctl.dev homepage's terminal panels
+// the same way TestDocTranscripts replays the Markdown docs. The homepage is
+// the first page most readers see, so its runs are held to the same rule.
+func TestHomepageTranscripts(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds and runs the okfctl binary")
+	}
+	src, err := os.ReadFile(filepath.Join(repoRoot, homepage))
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocks, err := ParseHTML(homepage, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Zero blocks means the panels lost their data-transcript marker and
+	// nothing is being checked, not that the page is clean.
+	if len(blocks) == 0 {
+		t.Fatalf("%s has no <pre data-transcript> panels", homepage)
+	}
+	for _, f := range Replay(blocks, t.TempDir(), buildOkfctl(t)) {
+		t.Error(f)
+	}
+}

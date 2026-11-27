@@ -58,10 +58,11 @@ jobs:
       - name: test
         run: go test ./... -race
       - name: doc transcripts
-        # Replays every `$ okfctl` block in README.md and docs/ against the
-        # binary built from this tree; shown output that drifts fails here.
+        # Replays every `$ okfctl` block in README.md and docs/, and every
+        # terminal panel on the okfctl.dev homepage, against the binary built
+        # from this tree; shown output that drifts fails here.
         # Also covered by the step above, named so the failure reads plainly.
-        run: go test ./internal/transcript/ -run TestDocTranscripts -count=1 -v
+        run: go test ./internal/transcript/ -run 'TestDocTranscripts|TestHomepageTranscripts' -count=1 -v
       - name: govulncheck
         # Fails the build on a known CVE in the module graph or the toolchain.
         run: |

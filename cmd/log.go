@@ -22,21 +22,32 @@ import (
 )
 
 func newLogCmd() *cobra.Command {
-	logCmd := &cobra.Command{Use: "log", Short: "Manage the reserved log.md change history"}
+	logCmd := &cobra.Command{Use: "log", Short: "Add to or print the bundle's log.md change history"}
 
 	var msg string
 	appendC := &cobra.Command{
 		Use:   "append [dir]",
-		Short: "Append a timestamped change entry to log.md",
-		Long: "log append adds one timestamped entry to the reserved log.md change history (OKF §9: " +
-			"the log file is a reserved, append-only record of what changed in the bundle and when). " +
-			"The entry text is required via --message. It only appends — it never rewrites or " +
-			"reorders existing history. The node verbs append to log.md for you; use this for " +
-			"changes you made outside okfctl.",
-		Example: "  # Record a manual change\n" +
-			"  okfctl log append --message \"reworded the revenue concept\"\n\n" +
-			"  # Record against a bundle elsewhere\n" +
-			"  okfctl log append --message \"imported Q3 sources\" ./bundles/knowledge",
+		Short: "Add a line to today's entry in log.md",
+		Long: "append adds --message as one line under today's date in the log.md at the root of " +
+			"dir (the current directory by default), and writes today's date heading first if " +
+			"the log doesn't have one, because dates run newest first (OKF §9). No log.md? append " +
+			"creates it. The example prints <DATE> where your run prints today's date.\n\n" +
+			"You need it only for changes made outside okfctl. Six node commands (new, mv, rm, " +
+			"edit, refresh, promote) write their own line.\n\n" +
+			"Whatever sits above the first date heading, your title included, is left alone. " +
+			"The placeholder line `okfctl bundle init` wrote " +
+			"goes away, and older okfctl bullets with their date inline move under a date " +
+			"heading of their own. Only the first line of a message gets in. Leave off --message " +
+			"and append exits 1.",
+		Example: "  $ okfctl bundle init journal\n" +
+			"  Initialized OKF bundle in journal\n" +
+			"  $ okfctl log append --message 'split the oak node into barrel and cask' journal\n" +
+			"  Appended log entry\n" +
+			"  $ okfctl log show journal\n" +
+			"  # Change Log\n" +
+			"\n" +
+			"  ## <DATE>\n" +
+			"  * split the oak node into barrel and cask",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if msg == "" {
@@ -55,14 +66,28 @@ func newLogCmd() *cobra.Command {
 
 	logCmd.AddCommand(&cobra.Command{
 		Use:   "show [dir]",
-		Short: "Print the change history",
-		Long: "log show prints the reserved log.md change history (OKF §9) verbatim to stdout. It's " +
-			"read-only and doesn't mutate the bundle. Use it to review what changed and when, " +
-			"or to pipe the history into another tool.",
-		Example: "  # Print the change history for the current bundle\n" +
-			"  okfctl log show\n\n" +
-			"  # Print the history for a bundle elsewhere\n" +
-			"  okfctl log show ./bundles/knowledge",
+		Short: "Print log.md as it is on disk",
+		Long: "show prints the root log.md of dir (the current directory by default) byte for " +
+			"byte, to read or to pipe into another tool. In the example two nodes get created and " +
+			"one gets moved. All three land under one date heading, newest first (OKF §9).\n\n" +
+			"show never writes. It won't reformat the file or check it against §9; `okfctl " +
+			"validate` does that. A log.md in a subdirectory is ignored. With no log.md at all, " +
+			"show prints nothing and exits 0.",
+		Example: "  $ okfctl bundle init diary\n" +
+			"  Initialized OKF bundle in diary\n" +
+			"  $ okfctl node new wine/tannin --type Concept --bundle diary\n" +
+			"  Created diary/wine/tannin.md\n" +
+			"  $ okfctl node new wine/oak --type Concept --bundle diary\n" +
+			"  Created diary/wine/oak.md\n" +
+			"  $ okfctl node mv wine/oak barrel/oak --bundle diary\n" +
+			"  Moved wine/oak.md -> barrel/oak.md (0 inbound link(s) rewritten)\n" +
+			"  $ okfctl log show diary\n" +
+			"  # Change Log\n" +
+			"\n" +
+			"  ## <DATE>\n" +
+			"  * moved wine/oak.md -> barrel/oak.md\n" +
+			"  * created wine/oak.md\n" +
+			"  * created wine/tannin.md",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := bundleDirArg(args)

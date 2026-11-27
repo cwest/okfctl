@@ -338,6 +338,13 @@ html[data-theme-choice="dark"] .theme-icon-dark{ display:block }
 .term .ok{ color:var(--t-ok); font-weight:500 }
 .term .bad{ color:var(--t-fail); font-weight:500 }
 .term .cm{ color:var(--t-cm); font-style:italic }
+/* The plain-words line under each run: what just happened. */
+.term-note{
+  margin:var(--s-4) 0 0; max-width:var(--measure); font-family:var(--font-ui); font-size:var(--f--1);
+  line-height:1.55; color:hsl(var(--h-ink) 14% 76%);
+}
+.term-note code{ color:var(--term-fg) }
+.term-note a{ color:var(--t-accent); border-bottom:1px solid currentColor }
 .term-ft{
   display:flex; align-items:center; gap:var(--s-3); padding:var(--s-3) var(--s-5);
   border-top:var(--rule) solid hsl(var(--h-ink) 16% 14%); background:var(--term-chrome);
