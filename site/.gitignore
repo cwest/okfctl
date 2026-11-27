@@ -21,3 +21,6 @@ src/content/docs/_generated/
 public/og.png
 public/apple-touch-icon.png
 public/favicon.png
+# The social card's SVG source, written beside og.png so the prose gate can read
+# the card text. Not deployed, not committed.
+.share-assets/

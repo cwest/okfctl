@@ -881,5 +881,127 @@ class BuildInternalsLegitimateUsesPass(unittest.TestCase):
         self.assertEqual(r.returncode, 0, f"allowlisted search section must pass:\n{r.stdout}")
 
 
+# The link-preview card a chat app or social site shows is assembled from the
+# og:/twitter: meta values AND the og.png image. Both are reader-facing copy, so
+# both ride the same three detectors as the page body.
+SHARE_META_PAGE = (
+    "<!doctype html><html><head>"
+    '<meta property="og:title" content="okfctl: a CLI for authoring Open Knowledge Format bundles">'
+    '<meta property="og:image:alt" content="okfctl: author and maintain Open Knowledge Format bundles.">'
+    '<meta name="twitter:image:alt" content="okfctl: author and maintain Open Knowledge Format bundles.">'
+    "<title>okfctl</title></head><body><p>A plain paragraph of clean prose.</p></body></html>"
+)
+
+
+class ShareCardMetaIsScanned(unittest.TestCase):
+    """og:image:alt and twitter:image:alt are read by humans (screen readers on
+    the unfurled card), so they get the same rules as description/title."""
+
+    def test_clean_share_meta_passes(self):
+        r = run(SHARE_META_PAGE)
+        self.assertEqual(r.returncode, 0, f"clean share meta must pass:\n{r.stdout}")
+
+    def test_spaced_em_dash_in_og_image_alt_fails(self):
+        page = SHARE_META_PAGE.replace(
+            'property="og:image:alt" content="okfctl: author',
+            'property="og:image:alt" content="okfctl \u2014 author',
+        )
+        r = run(page)
+        self.assertEqual(r.returncode, 1, f"spaced em dash in og:image:alt must fail:\n{r.stdout}")
+        self.assertIn("SPACED-EM-DASH in meta[og:image:alt]", r.stdout)
+
+    def test_spaced_em_dash_in_twitter_image_alt_fails(self):
+        page = SHARE_META_PAGE.replace(
+            'name="twitter:image:alt" content="okfctl: author',
+            'name="twitter:image:alt" content="okfctl \u2014 author',
+        )
+        r = run(page)
+        self.assertEqual(r.returncode, 1, f"spaced em dash in twitter:image:alt must fail:\n{r.stdout}")
+        self.assertIn("SPACED-EM-DASH in meta[twitter:image:alt]", r.stdout)
+
+    def test_build_internals_in_og_image_alt_fails(self):
+        page = SHARE_META_PAGE.replace(
+            "author and maintain Open Knowledge Format bundles.\">"
+            '<meta name="twitter',
+            "pure Go with no CGO.\">"
+            '<meta name="twitter',
+        )
+        r = run(page)
+        self.assertEqual(r.returncode, 1, f"build internals in og:image:alt must fail:\n{r.stdout}")
+        self.assertIn("BUILD-INTERNALS in meta[og:image:alt]", r.stdout)
+
+    def test_non_prose_meta_values_are_not_scanned(self):
+        # Negative control: og:image / og:url / twitter:card are data (URLs,
+        # enums), not copy. A spaced em dash can't appear in them meaningfully,
+        # but the point is they never become prose strings at all.
+        page = SHARE_META_PAGE.replace(
+            "<title>",
+            '<meta property="og:image" content="https://okfctl.dev/og.png">'
+            '<meta name="twitter:card" content="summary_large_image">'
+            "<title>",
+        )
+        r = run(page)
+        self.assertEqual(r.returncode, 0, f"data meta values must pass:\n{r.stdout}")
+        self.assertNotIn("og:image]", r.stdout)
+
+
+def card_svg(second_line: str) -> str:
+    """An SVG in the shape generate-share-assets.mjs renders into og.png."""
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630">'
+        '<rect width="1200" height="630" fill="url(#bg)"/>'
+        "<!-- Mark: the CLI prompt glyph \u2014 matching the favicon. -->"
+        '<text x="248" y="245" font-family="ui-monospace, SFMono-Regular, Menlo" '
+        'font-size="132">okfctl</text>'
+        '<text x="98" y="360" font-family="system-ui, -apple-system, Segoe UI">'
+        "Author and maintain Open Knowledge Format bundles.</text>"
+        f'<text x="98" y="418" font-family="system-ui">{second_line}</text>'
+        '<text x="98" y="560">okfctl.dev</text>'
+        '<text x="1102" y="560" text-anchor="end">A conformant consumer of the OKF spec</text>'
+        "</svg>"
+    )
+
+
+class ShareCardImageTextIsScanned(unittest.TestCase):
+    """og.png is rasterized from an SVG; the build writes that SVG beside it so
+    the gate can read the card's <text> lines. The old second line shipped
+    'Pure Go \u2014 no CGO, no model runtime.' because no check ever read the image."""
+
+    def test_card_as_shipped_fails(self):
+        # Positive control: the line that was live on okfctl.dev/og.png.
+        r = run_named("og.svg", card_svg("Pure Go \u2014 no CGO, no model runtime."))
+        self.assertEqual(r.returncode, 1, f"old card line must fail:\n{r.stdout}")
+        self.assertIn("BUILD-INTERNALS in svg:text", r.stdout)
+        self.assertIn("[no CGO]", r.stdout)
+        self.assertIn("[no model runtime]", r.stdout)
+        self.assertIn("SPACED-EM-DASH in svg:text", r.stdout)
+
+    def test_new_card_text_passes(self):
+        # Negative control: the replacement line.
+        r = run_named("og.svg", card_svg("Pure Go. Runs offline."))
+        self.assertEqual(r.returncode, 0, f"new card line must pass:\n{r.stdout}")
+        self.assertIn("5 prose strings scanned", r.stdout)
+
+    def test_short_card_text_still_gets_build_internals(self):
+        # A two-word card line is under the prose floor but still copy.
+        r = run_named("og.svg", card_svg("No Python."))
+        self.assertEqual(r.returncode, 1, f"short build-internals line must fail:\n{r.stdout}")
+        self.assertIn("BUILD-INTERNALS in svg:text", r.stdout)
+
+    def test_svg_attributes_and_comments_are_not_prose(self):
+        # Negative control: font stacks, coordinates, and XML comments are not
+        # rendered text; only <text> content reaches the reader.
+        r = run_named("og.svg", card_svg("Pure Go. Runs offline."))
+        self.assertNotIn("Segoe", r.stdout)
+        self.assertNotIn("SPACED-EM-DASH", r.stdout)
+
+    def test_svg_entities_are_decoded(self):
+        # The generator XML-escapes interpolated text; the gate must read the
+        # decoded string, so an escaped build internal is still caught.
+        r = run_named("og.svg", card_svg("Fast &amp; no CGO."))
+        self.assertEqual(r.returncode, 1, f"escaped text must be decoded:\n{r.stdout}")
+        self.assertIn("(Fast & no CGO.)", r.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
