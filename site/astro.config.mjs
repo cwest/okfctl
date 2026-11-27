@@ -179,7 +179,10 @@ export default defineConfig({
       sidebar: [
         {
           label: "Start here",
-          items: [{ label: "Concepts", slug: "concepts" }],
+          items: [
+            { label: "Install", slug: "install" },
+            { label: "Concepts", slug: "concepts" },
+          ],
         },
         {
           label: "Guides",
