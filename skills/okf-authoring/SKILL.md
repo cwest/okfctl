@@ -236,8 +236,11 @@ commands log their own changes. Use `log append` for edits you made by hand.
 
 ## Common Pitfalls
 
-1. The next `index build` overwrites `index.md`. Hand edits there vanish.
-   Put content in concept nodes.
+1. Don't hand-edit `index.md`. okfctl keeps a file that holds anything it
+   doesn't write (an intro, notes, your own heading): `index build` names it
+   and exits 1, `index check` fails on it, and the node verbs warn on every
+   run. Put content in concept nodes. `index build --overwrite-hand-written`
+   takes the file back.
 2. `index.md` and `log.md` are reserved files. Nothing links to `log.md`
    (lint never calls it an orphan).
 3. Plain `mv` or `git mv` leaves inbound links pointing at the old path.

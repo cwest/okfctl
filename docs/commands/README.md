@@ -385,7 +385,9 @@ Six node commands (new, mv, rm, edit, refresh, promote) rebuild the index when t
 
 Each subdirectory's link ends with a short summary (concept count, types, the tags common to most of its nodes, a subtree total for deeper trees) that tells you what a branch holds. --shape-tag-min and --shape-tag-max tune the tag list. --no-shape drops the summary.
 
-Only the root index.md's frontmatter survives a rebuild (that frontmatter is where the bundle's okf_version, title, and description live, §8.1). Everything below it in each index.md is rewritten from scratch. An index.md in a directory with no nodes is deleted. Subdirectory index.md files with frontmatter go too: each is a concept stored where §8 puts an index (validate fails it). Run `okfctl node promote` on such a file first or build throws away what you wrote there.
+Only the root index.md's frontmatter survives a rebuild (that frontmatter is where the bundle's okf_version, title, and description live, §8.1). Everything below it in each index.md okfctl wrote is rewritten from scratch, and an index.md okfctl wrote in a directory with no nodes left is deleted.
+
+An index.md with anything okfctl doesn't write (an intro paragraph, notes, your own heading, frontmatter on a subdirectory index) is left alone: build names it on stderr and exits 1. Move the prose into a node, or rerun with --overwrite-hand-written to replace the file (the root frontmatter and H1 still survive). A subdirectory index.md with frontmatter is a concept stored where §8 puts an index (validate fails it); `okfctl node promote` moves it out of the way first.
 
 ```
 okfctl index build [dir] [flags]
@@ -420,10 +422,11 @@ okf_version: "0.3"
 Flags:
 
 ```
-      --no-ignore           walk EVERY directory, including vendored/derived ones (node_modules, venv, dist, ...) that are skipped by default; dot directories are never part of the bundle (OKF v0.3 §3.2)
-      --no-shape            omit the subdirectory shape suffix (concept count, types, shared tags, subtree total)
-      --shape-tag-max int   cap the shared-tag list at this many tags (most-shared-first, ellipsis on truncation) (default 12)
-      --shape-tag-min int   a shared tag prints only when at least this many of a directory's own concepts carry it (default 2)
+      --no-ignore                walk EVERY directory, including vendored/derived ones (node_modules, venv, dist, ...) that are skipped by default; dot directories are never part of the bundle (OKF v0.3 §3.2)
+      --no-shape                 omit the subdirectory shape suffix (concept count, types, shared tags, subtree total)
+      --overwrite-hand-written   also rewrite (or remove) index.md files okfctl did not generate; the bundle-root frontmatter and H1 are still kept
+      --shape-tag-max int        cap the shared-tag list at this many tags (most-shared-first, ellipsis on truncation) (default 12)
+      --shape-tag-min int        a shared tag prints only when at least this many of a directory's own concepts carry it (default 2)
 ```
 
 
@@ -437,7 +440,7 @@ Put check in CI. lint --strict won't flag a stale index.
 
 Pass the --shape-tag-min, --shape-tag-max, and --no-shape flags you built with. Build with --no-shape and check with the default flags: any index that links a subdirectory reads as stale.
 
-check doesn't fix anything. build does.
+check doesn't fix anything. build does. When the file at fault is one okfctl didn't write, the report says so: build leaves that file alone, so fix it by hand or rebuild with --overwrite-hand-written.
 
 ```
 okfctl index check [dir] [flags]
