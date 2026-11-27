@@ -33,17 +33,16 @@ import (
 func newEvalCmd() *cobra.Command {
 	eval := &cobra.Command{
 		Use:   "eval",
-		Short: "Measure KB-node trustworthiness (TACA): a Transparency gate + a spot-check sampler",
-		Long: "eval decomposes node trust along the four TACA dimensions — Transparency, " +
-			"Accuracy, Calibration, Alignment — as far as a pure-Go, offline, no-model tool " +
-			"can.\n\n" +
-			"'eval transparency' is the deterministic gate: it checks that provenance is present " +
-			"(a grade + citations) and that internal citations resolve. It's the first machine " +
-			"gate that touches trust rather than format.\n\n" +
-			"'eval sample' scaffolds the three dimensions okfctl can't automate (Accuracy, " +
-			"Alignment, Calibration) into an eval-set for a human or an out-of-band LLM judge to " +
-			"complete. okfctl never computes a truth verdict itself — checking a claim against a " +
-			"source needs a model or the network, which core deliberately doesn't do.",
+		Short: "Check how far you can trust a bundle's nodes",
+		Long: "eval checks how far you can trust a bundle's nodes, using the four TACA dimensions " +
+			"(Transparency, Accuracy, Calibration, Alignment). okfctl can check only the first " +
+			"one by itself.\n\n" +
+			"eval transparency is the gate. It looks for a grade and citations on each node and " +
+			"makes sure citations to other nodes in the bundle resolve. Put it in CI.\n\n" +
+			"eval sample is for the other three. It picks nodes and writes a worksheet with what " +
+			"okfctl could read from each one, leaving the judgment blank for you to fill in, by " +
+			"hand or with a model you run yourself. okfctl never judges a claim true or false. " +
+			"It would have to read the source or call a model to do it.",
 	}
 	eval.AddCommand(newEvalTransparencyCmd())
 	eval.AddCommand(newEvalSampleCmd())
@@ -57,22 +56,27 @@ func newEvalTransparencyCmd() *cobra.Command {
 	var noIgnore *bool
 	c := &cobra.Command{
 		Use:   "transparency [bundle-dir]",
-		Short: "Gate TACA-Transparency: grade present, cited, internal citations resolve",
-		Long: "transparency runs the deterministic, offline TACA-Transparency checks over a " +
-			"bundle. Like lint it's advisory (exit 0) by default and never mutates the bundle; " +
-			"pass --strict to exit non-zero on any finding (the CI gate). The four checks:\n\n" +
-			"  grade-missing        a node carries no epistemic OR authority grade\n" +
-			"  grade-vocabulary     a grade value is off-vocabulary for the corpus (a likely typo)\n" +
-			"  uncited              a node carries no citations of any kind\n" +
-			"  citation-unresolved  an internal citation resolves to no node in the bundle\n\n" +
-			"External http(s) citations are deliberately out of scope — verifying them needs the " +
-			"network, which is the eval-sample / human pass, not this gate.",
-		Example: "  # Report transparency findings (advisory, exit 0)\n" +
-			"  okfctl eval transparency ./bundles/knowledge\n\n" +
+		Short: "Check that each node has a grade and citations, and that internal citations resolve",
+		Long: "transparency checks that each node shows where it came from. It prints one line " +
+			"per finding, then a count. It exits 0 by default. With --strict it exits 1 on any " +
+			"finding.\n\n" +
+			"It never edits a file.\n\n" +
+			"It has four checks:\n\n" +
+			"    grade-missing        the node has neither an epistemic nor an authority grade\n" +
+			"    grade-vocabulary     a grade value fewer than --grade-vocabulary-floor nodes\n" +
+			"                         use (likely a typo)\n" +
+			"    uncited              no sources, no # Citations section, and no link to\n" +
+			"                         another node\n" +
+			"    citation-unresolved  a sources entry names a .md path in the bundle that\n" +
+			"                         doesn't exist\n\n" +
+			"It doesn't fetch http(s) citations. Fetching needs the network. Leave those to eval " +
+			"sample and to yourself.",
+		Example: "  # Report findings (exits 0)\n" +
+			"  okfctl eval transparency ./mykb\n\n" +
 			"  # Fail CI on any finding\n" +
-			"  okfctl eval transparency --strict ./bundles/knowledge\n\n" +
-			"  # Machine-readable findings\n" +
-			"  okfctl eval transparency --json ./bundles/knowledge",
+			"  okfctl eval transparency --strict ./mykb\n\n" +
+			"  # Print findings as JSON\n" +
+			"  okfctl eval transparency --json ./mykb",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := bundleDirArg(args)
@@ -124,19 +128,22 @@ func newEvalSampleCmd() *cobra.Command {
 	var noIgnore *bool
 	c := &cobra.Command{
 		Use:   "sample [bundle-dir]",
-		Short: "Emit a spot-check eval-set scaffold for Accuracy/Alignment/Calibration",
-		Long: "sample selects a spot-check sample of nodes and emits a structured eval-set for " +
-			"the three TACA dimensions okfctl can't automate — Accuracy (are the claims supported " +
-			"by the cited source?), Alignment (does the node answer the question it set out to?), " +
-			"and Calibration (does the grade hold up on re-check?). Every field okfctl can extract " +
-			"is pre-populated; the judgment slots are left empty for a human or an out-of-band LLM " +
-			"judge to fill in. okfctl computes NO truth verdict.\n\n" +
-			"Selection: --changed-since <ref> samples nodes changed since a git ref (the curation/CI " +
-			"hook); otherwise --sample N draws a deterministic seeded random sample.",
+		Short: "Write a worksheet for the checks okfctl can't run: accuracy, alignment, calibration",
+		Long: "sample picks a few nodes and writes a worksheet for the three checks okfctl can't " +
+			"run itself. Accuracy: do the cited sources back the claims? Alignment: does the " +
+			"node answer the question in its title and description? Calibration: does its grade " +
+			"still hold on a second look?\n\n" +
+			"okfctl fills in what it can read from each node (title, grades, trust tier, " +
+			"sources, candidate claims). You fill in the judgment slots, by hand or with a " +
+			"model. okfctl leaves them empty and offers no verdict.\n\n" +
+			"--changed-since <ref> picks the nodes that changed since a git ref, for a " +
+			"pull-request check. Otherwise --sample N picks N nodes at random. The same --seed " +
+			"picks the same nodes each time. With neither flag it picks nothing. --format md " +
+			"writes the worksheet for a person. JSON is the default.",
 		Example: "  # A worksheet for 5 random nodes\n" +
-			"  okfctl eval sample --sample 5 --format md ./bundles/knowledge\n\n" +
-			"  # Machine eval-set for nodes changed on this branch (curation hook)\n" +
-			"  okfctl eval sample --changed-since origin/main ./bundles/knowledge",
+			"  okfctl eval sample --sample 5 --format md ./mykb\n\n" +
+			"  # JSON for the nodes changed on this branch\n" +
+			"  okfctl eval sample --changed-since origin/main ./mykb",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := bundleDirArg(args)

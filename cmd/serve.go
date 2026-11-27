@@ -63,14 +63,17 @@ func newServeCmd() *cobra.Command {
 	var addr string
 	c := &cobra.Command{
 		Use:   "serve [bundle-dir]",
-		Short: "Serve an interactive web visualization of the bundle graph",
-		Long: "serve starts a local web server that renders the bundle as an interactive, " +
-			"navigable knowledge graph. Assets are embedded in the binary — no separate " +
-			"install. Binds loopback by default; override with --addr.",
-		Example: "  # Serve the current bundle on http://127.0.0.1:8080\n" +
+		Short: "Draw the bundle's link graph in your browser",
+		Long: "serve runs a web server on 127.0.0.1:8080 that draws the bundle's link graph in " +
+			"your browser, where you can click a node to see its type and links and filter the " +
+			"graph by type or by top-level directory. Dashed nodes are orphans. The page is part " +
+			"of the binary.\n\n" +
+			"serve loads the bundle at startup and never edits it. Restart it to pick up a " +
+			"change. It listens only on your own machine unless you pass --addr.",
+		Example: "  # Serve the bundle in the current directory on http://127.0.0.1:8080\n" +
 			"  okfctl serve\n\n" +
-			"  # Serve a bundle elsewhere on a custom address\n" +
-			"  okfctl serve --addr 127.0.0.1:9000 ./bundles/knowledge",
+			"  # Serve a bundle elsewhere on another port\n" +
+			"  okfctl serve --addr 127.0.0.1:9000 ./mykb",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."

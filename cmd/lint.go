@@ -72,41 +72,50 @@ func newLintCmd() *cobra.Command {
 	var noIgnore *bool
 	c := &cobra.Command{
 		Use:   "lint [bundle-dir]",
-		Short: "Report a bundle's curation health (orphans, broken links, coverage gaps, hygiene)",
-		Long: "lint surfaces judgment-worthy curation findings, not spec-floor violations " +
-			"(use validate for those). It never mutates the bundle. By default it's advisory " +
-			"and exits 0 even with findings; pass --strict to exit non-zero on any finding.\n\n" +
-			"A broken-link finding reports an internal .md link that resolves to no node when a " +
-			"node with the same basename exists elsewhere — a moved or mistyped path (a defect), " +
-			"distinct from a genuinely unwritten concept (a coverage gap, which analyze reports " +
-			"advisorily and lint stays quiet on).\n\n" +
-			"tag-hygiene reports two or more `tags` spellings that fold to one canonical form. " +
-			"The fold is a heuristic: case, trimmed, separator-insensitive (so run-book, run_book " +
-			"and runbook are one value), plus a vocabulary-aware plural merge (a plural folds onto " +
-			"its singular only when that singular is itself a tag in the bundle). Like type-hygiene, " +
-			"it never rejects a value: it only reports spellings that fold together, so a curator " +
-			"can pick one. Because the fold is heuristic, review a finding before normalizing — it " +
-			"groups spellings that look like one tag, not a proof that they are.\n\n" +
-			"OKF §5 checks (advisory; the bundle stays conformant, so validate never fails on them): " +
-			"timestamp-form reports a §5 timestamp key (generated.at, verified[].at, stale_after, " +
-			"sources[].last_modified, usage_window.from/to) whose value is not an RFC 3339 date-time " +
-			"with an offset or a full-date — a date-time without an offset is not valid, and an " +
-			"unparseable stale_after is treated as stale, never fresh. verified-event reports a " +
-			"verified event missing by or at, which consumers ignore. superseded-by reports a " +
-			"superseded_by that resolves to no concept, or that is set on a concept whose status is " +
-			"not deprecated. status-lifecycle notes a status §5.4 does not define; such a concept " +
-			"is not stable and is excluded from current knowledge.\n\n" +
-			"--semantic adds similarity-driven checks (similar-but-unlinked pairs, nodes with " +
-			"no semantic neighbors) by reading the index built by 'okfctl-search index build'. " +
-			"Core only reads that index, so no embedding model is needed to lint.",
-		Example: "  # Report curation findings for the current bundle (advisory, exit 0)\n" +
+		Short: "Report what a curator should look at: orphans, unlinked mentions, broken links, hygiene",
+		Long: "lint reports what a careful curator would want a second look at. Your bundle can " +
+			"pass validate with a node no other node links to. It can have a node that names " +
+			"another and has no link to it. lint prints one line per finding, then a count. It " +
+			"exits 0 by default. With --strict it exits 1 on any finding. Put that line in CI.\n\n" +
+			"It never edits a file. None of its findings makes a bundle non-conformant under " +
+			"§11.1. These are its checks:\n\n" +
+			"    orphan                   nothing links to the node, not index.md or log.md either\n" +
+			"    missing-xref             the body names another node's title but doesn't link it\n" +
+			"    broken-link              a link or path field finds no node, but one with that\n" +
+			"                             file name exists elsewhere\n" +
+			"    coverage-gap             an alias some node declares, mentioned by at least\n" +
+			"                             --coverage-threshold nodes, with no node of its own\n" +
+			"    type-hygiene             type values that differ only by case or a plural s\n" +
+			"    tag-hygiene              tags that fold to one spelling (case, separators, or a\n" +
+			"                             plural of a tag already in use)\n" +
+			"    status-lifecycle         a status §5.4 doesn't define, so the node isn't stable\n" +
+			"    spec-version             a per-node okf_spec_version key (the version belongs\n" +
+			"                             on the bundle-root index.md, §8.1)\n" +
+			"    source-missing-resource  a sources entry with no resource (§5.1)\n" +
+			"    timestamp-form           a §5 timestamp that's neither an RFC 3339 date-time\n" +
+			"                             with an offset nor a plain date\n" +
+			"    verified-event           a verified event missing by or at (§5.2)\n" +
+			"    superseded-by            a superseded_by that finds no concept, or sits on a\n" +
+			"                             node that isn't deprecated\n\n" +
+			"A link to a file that exists nowhere isn't a finding. The spec treats it as " +
+			"knowledge no one has written (§6.1). analyze lists it under coverage. The two " +
+			"hygiene checks group spellings that look alike, but two tags can look alike and " +
+			"still mean different things. Read the finding first and rename later. An " +
+			"unparseable stale_after gets a timestamp-form finding and never counts as fresh " +
+			"(§5.5).\n\n" +
+			"--semantic adds two checks that read the index okfctl-search index build writes. " +
+			"similar-unlinked flags two nodes that read alike with no link between them. " +
+			"no-semantic-neighbors flags a node with nothing close to it. lint loads no model to " +
+			"do this. It reads the index. With no index on disk, lint exits 1 and says to build " +
+			"one.",
+		Example: "  # Report findings for the bundle in the current directory (exits 0)\n" +
 			"  okfctl lint\n\n" +
 			"  # Fail CI on any finding\n" +
-			"  okfctl lint --strict ./bundles/knowledge\n\n" +
-			"  # Machine-readable findings for tooling\n" +
-			"  okfctl lint --json ./bundles/knowledge\n\n" +
-			"  # Also run similarity checks against a prebuilt semantic index\n" +
-			"  okfctl lint --semantic ./bundles/knowledge",
+			"  okfctl lint --strict ./mykb\n\n" +
+			"  # Print findings as JSON for another tool\n" +
+			"  okfctl lint --json ./mykb\n\n" +
+			"  # Add the similarity checks (needs okfctl-search index build ./mykb first)\n" +
+			"  okfctl lint --semantic ./mykb",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := "."

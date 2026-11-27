@@ -16,13 +16,15 @@ entry below.
 
 ## okfctl analyze
 
-Report where a bundle is weak (freshness, gaps, connectivity, clusters, structure)
+Report where a bundle is thin, stale, or poorly connected
 
-analyze is a proactive curation REPORT, not a gate. Where lint answers "is this corpus broken?" (a CI gate: --strict exits non-zero), analyze answers "where is this corpus weak?" across five dimensions — coverage gaps, freshness (staleness from stale_after, plus an aging advisory), connectivity, tag-cluster synthesis candidates, and structure. It never mutates the bundle.
+analyze shows where a bundle is thin or stale or poorly connected, to help you pick what to write or check next. It prints a section for each question with the nodes that answer it, then a count of actionable signals.
 
-Report semantics: analyze exits 0 whenever the analysis runs successfully, regardless of how many findings it produces. The exit code reflects whether the analysis succeeded, not whether the corpus is perfect. There's deliberately no --strict flag; use lint --strict for a gate.
+Coverage lists links to nodes no one has written, plus nodes shorter than --thin-lines lines and nodes with zero citations or one. Freshness lists nodes past their stale_after (§5.5) and nodes not checked in --aging-days days, plus time-sensitive nodes that have aged. Connectivity lists orphans and nodes with one link. Clusters lists any tag on --cluster-min or more nodes with no overview node. Structure lists titles and file names close enough to be one node. It also tallies the epistemic grades and status values it finds, for you to read.
 
-Pass --json for the machine path (the curation sweep files research cards from it).
+It never edits a file. It exits 0 whenever the report completes, however many signals it finds. It has no --strict flag; lint --strict is the gate for CI.
+
+--json prints the same report for a script.
 
 ```
 okfctl analyze [bundle-dir] [flags]
@@ -31,14 +33,14 @@ okfctl analyze [bundle-dir] [flags]
 Example:
 
 ```
-# Human-readable weakness report for the current bundle
+# Report on the bundle in the current directory
   okfctl analyze
 
   # Report on a bundle elsewhere
-  okfctl analyze ./bundles/knowledge
+  okfctl analyze ./mykb
 
-  # Machine-readable report (the curation sweep files research cards from this)
-  okfctl analyze --json ./bundles/knowledge
+  # The same report as JSON, for a script
+  okfctl analyze --json ./mykb
 ```
 
 Flags:
@@ -218,22 +220,24 @@ Example:
 
 ## okfctl eval
 
-Measure KB-node trustworthiness (TACA): a Transparency gate + a spot-check sampler
+Check how far you can trust a bundle's nodes
 
-eval decomposes node trust along the four TACA dimensions — Transparency, Accuracy, Calibration, Alignment — as far as a pure-Go, offline, no-model tool can.
+eval checks how far you can trust a bundle's nodes, using the four TACA dimensions (Transparency, Accuracy, Calibration, Alignment). okfctl can check only the first one by itself.
 
-'eval transparency' is the deterministic gate: it checks that provenance is present (a grade + citations) and that internal citations resolve. It's the first machine gate that touches trust rather than format.
+eval transparency is the gate. It looks for a grade and citations on each node and makes sure citations to other nodes in the bundle resolve. Put it in CI.
 
-'eval sample' scaffolds the three dimensions okfctl can't automate (Accuracy, Alignment, Calibration) into an eval-set for a human or an out-of-band LLM judge to complete. okfctl never computes a truth verdict itself — checking a claim against a source needs a model or the network, which core deliberately doesn't do.
+eval sample is for the other three. It picks nodes and writes a worksheet with what okfctl could read from each one, leaving the judgment blank for you to fill in, by hand or with a model you run yourself. okfctl never judges a claim true or false. It would have to read the source or call a model to do it.
 
 
 ### okfctl eval sample
 
-Emit a spot-check eval-set scaffold for Accuracy/Alignment/Calibration
+Write a worksheet for the checks okfctl can't run: accuracy, alignment, calibration
 
-sample selects a spot-check sample of nodes and emits a structured eval-set for the three TACA dimensions okfctl can't automate — Accuracy (are the claims supported by the cited source?), Alignment (does the node answer the question it set out to?), and Calibration (does the grade hold up on re-check?). Every field okfctl can extract is pre-populated; the judgment slots are left empty for a human or an out-of-band LLM judge to fill in. okfctl computes NO truth verdict.
+sample picks a few nodes and writes a worksheet for the three checks okfctl can't run itself. Accuracy: do the cited sources back the claims? Alignment: does the node answer the question in its title and description? Calibration: does its grade still hold on a second look?
 
-Selection: --changed-since <ref> samples nodes changed since a git ref (the curation/CI hook); otherwise --sample N draws a deterministic seeded random sample.
+okfctl fills in what it can read from each node (title, grades, trust tier, sources, candidate claims). You fill in the judgment slots, by hand or with a model. okfctl leaves them empty and offers no verdict.
+
+--changed-since <ref> picks the nodes that changed since a git ref, for a pull-request check. Otherwise --sample N picks N nodes at random. The same --seed picks the same nodes each time. With neither flag it picks nothing. --format md writes the worksheet for a person. JSON is the default.
 
 ```
 okfctl eval sample [bundle-dir] [flags]
@@ -243,10 +247,10 @@ Example:
 
 ```
 # A worksheet for 5 random nodes
-  okfctl eval sample --sample 5 --format md ./bundles/knowledge
+  okfctl eval sample --sample 5 --format md ./mykb
 
-  # Machine eval-set for nodes changed on this branch (curation hook)
-  okfctl eval sample --changed-since origin/main ./bundles/knowledge
+  # JSON for the nodes changed on this branch
+  okfctl eval sample --changed-since origin/main ./mykb
 ```
 
 Flags:
@@ -262,16 +266,23 @@ Flags:
 
 ### okfctl eval transparency
 
-Gate TACA-Transparency: grade present, cited, internal citations resolve
+Check that each node has a grade and citations, and that internal citations resolve
 
-transparency runs the deterministic, offline TACA-Transparency checks over a bundle. Like lint it's advisory (exit 0) by default and never mutates the bundle; pass --strict to exit non-zero on any finding (the CI gate). The four checks:
+transparency checks that each node shows where it came from. It prints one line per finding, then a count. It exits 0 by default. With --strict it exits 1 on any finding.
 
-  grade-missing        a node carries no epistemic OR authority grade
-  grade-vocabulary     a grade value is off-vocabulary for the corpus (a likely typo)
-  uncited              a node carries no citations of any kind
-  citation-unresolved  an internal citation resolves to no node in the bundle
+It never edits a file.
 
-External http(s) citations are deliberately out of scope — verifying them needs the network, which is the eval-sample / human pass, not this gate.
+It has four checks:
+
+    grade-missing        the node has neither an epistemic nor an authority grade
+    grade-vocabulary     a grade value fewer than --grade-vocabulary-floor nodes
+                         use (likely a typo)
+    uncited              no sources, no # Citations section, and no link to
+                         another node
+    citation-unresolved  a sources entry names a .md path in the bundle that
+                         doesn't exist
+
+It doesn't fetch http(s) citations. Fetching needs the network. Leave those to eval sample and to yourself.
 
 ```
 okfctl eval transparency [bundle-dir] [flags]
@@ -280,14 +291,14 @@ okfctl eval transparency [bundle-dir] [flags]
 Example:
 
 ```
-# Report transparency findings (advisory, exit 0)
-  okfctl eval transparency ./bundles/knowledge
+# Report findings (exits 0)
+  okfctl eval transparency ./mykb
 
   # Fail CI on any finding
-  okfctl eval transparency --strict ./bundles/knowledge
+  okfctl eval transparency --strict ./mykb
 
-  # Machine-readable findings
-  okfctl eval transparency --json ./bundles/knowledge
+  # Print findings as JSON
+  okfctl eval transparency --json ./mykb
 ```
 
 Flags:
@@ -302,14 +313,16 @@ Flags:
 
 ## okfctl graph
 
-Query and export the bundle's knowledge graph
+Export the bundle's link graph
 
 
 ### okfctl graph export
 
-Export the graph in a machine format (json or dot)
+Print the link graph as JSON or Graphviz DOT
 
-graph export serializes the bundle's concept-node link graph for use in other tools and CI. Formats: json (default) and dot. For SVG, pipe dot to Graphviz: okfctl graph export --format dot | dot -Tsvg > graph.svg
+graph export prints the bundle's link graph for another tool to draw or check. Each node is a concept with its path, title, type, and top-level directory. Orphans are flagged. Each edge is a link or path field from one concept to another (§6.4).
+
+JSON is the default. --format dot writes Graphviz DOT. Pipe that to dot -Tsvg for a picture. It never edits a file.
 
 ```
 okfctl graph export [bundle-dir] [flags]
@@ -318,14 +331,14 @@ okfctl graph export [bundle-dir] [flags]
 Example:
 
 ```
-# Export the current bundle's graph as JSON
+# Print the graph of the bundle in the current directory as JSON
   okfctl graph export
 
-  # Export a bundle elsewhere as Graphviz DOT
-  okfctl graph export --format dot ./bundles/knowledge
+  # Print a bundle elsewhere as Graphviz DOT
+  okfctl graph export --format dot ./mykb
 
-  # Render an SVG via Graphviz
-  okfctl graph export --format dot ./bundles/knowledge | dot -Tsvg > graph.svg
+  # Draw it as an SVG with Graphviz
+  okfctl graph export --format dot ./mykb | dot -Tsvg > graph.svg
 ```
 
 Flags:
@@ -407,17 +420,34 @@ Flags:
 
 ## okfctl lint
 
-Report a bundle's curation health (orphans, broken links, coverage gaps, hygiene)
+Report what a curator should look at: orphans, unlinked mentions, broken links, hygiene
 
-lint surfaces judgment-worthy curation findings, not spec-floor violations (use validate for those). It never mutates the bundle. By default it's advisory and exits 0 even with findings; pass --strict to exit non-zero on any finding.
+lint reports what a careful curator would want a second look at. Your bundle can pass validate with a node no other node links to. It can have a node that names another and has no link to it. lint prints one line per finding, then a count. It exits 0 by default. With --strict it exits 1 on any finding. Put that line in CI.
 
-A broken-link finding reports an internal .md link that resolves to no node when a node with the same basename exists elsewhere — a moved or mistyped path (a defect), distinct from a genuinely unwritten concept (a coverage gap, which analyze reports advisorily and lint stays quiet on).
+It never edits a file. None of its findings makes a bundle non-conformant under §11.1. These are its checks:
 
-tag-hygiene reports two or more `tags` spellings that fold to one canonical form. The fold is a heuristic: case, trimmed, separator-insensitive (so run-book, run_book and runbook are one value), plus a vocabulary-aware plural merge (a plural folds onto its singular only when that singular is itself a tag in the bundle). Like type-hygiene, it never rejects a value: it only reports spellings that fold together, so a curator can pick one. Because the fold is heuristic, review a finding before normalizing — it groups spellings that look like one tag, not a proof that they are.
+    orphan                   nothing links to the node, not index.md or log.md either
+    missing-xref             the body names another node's title but doesn't link it
+    broken-link              a link or path field finds no node, but one with that
+                             file name exists elsewhere
+    coverage-gap             an alias some node declares, mentioned by at least
+                             --coverage-threshold nodes, with no node of its own
+    type-hygiene             type values that differ only by case or a plural s
+    tag-hygiene              tags that fold to one spelling (case, separators, or a
+                             plural of a tag already in use)
+    status-lifecycle         a status §5.4 doesn't define, so the node isn't stable
+    spec-version             a per-node okf_spec_version key (the version belongs
+                             on the bundle-root index.md, §8.1)
+    source-missing-resource  a sources entry with no resource (§5.1)
+    timestamp-form           a §5 timestamp that's neither an RFC 3339 date-time
+                             with an offset nor a plain date
+    verified-event           a verified event missing by or at (§5.2)
+    superseded-by            a superseded_by that finds no concept, or sits on a
+                             node that isn't deprecated
 
-OKF §5 checks (advisory; the bundle stays conformant, so validate never fails on them): timestamp-form reports a §5 timestamp key (generated.at, verified[].at, stale_after, sources[].last_modified, usage_window.from/to) whose value is not an RFC 3339 date-time with an offset or a full-date — a date-time without an offset is not valid, and an unparseable stale_after is treated as stale, never fresh. verified-event reports a verified event missing by or at, which consumers ignore. superseded-by reports a superseded_by that resolves to no concept, or that is set on a concept whose status is not deprecated. status-lifecycle notes a status §5.4 does not define; such a concept is not stable and is excluded from current knowledge.
+A link to a file that exists nowhere isn't a finding. The spec treats it as knowledge no one has written (§6.1). analyze lists it under coverage. The two hygiene checks group spellings that look alike, but two tags can look alike and still mean different things. Read the finding first and rename later. An unparseable stale_after gets a timestamp-form finding and never counts as fresh (§5.5).
 
---semantic adds similarity-driven checks (similar-but-unlinked pairs, nodes with no semantic neighbors) by reading the index built by 'okfctl-search index build'. Core only reads that index, so no embedding model is needed to lint.
+--semantic adds two checks that read the index okfctl-search index build writes. similar-unlinked flags two nodes that read alike with no link between them. no-semantic-neighbors flags a node with nothing close to it. lint loads no model to do this. It reads the index. With no index on disk, lint exits 1 and says to build one.
 
 ```
 okfctl lint [bundle-dir] [flags]
@@ -426,17 +456,17 @@ okfctl lint [bundle-dir] [flags]
 Example:
 
 ```
-# Report curation findings for the current bundle (advisory, exit 0)
+# Report findings for the bundle in the current directory (exits 0)
   okfctl lint
 
   # Fail CI on any finding
-  okfctl lint --strict ./bundles/knowledge
+  okfctl lint --strict ./mykb
 
-  # Machine-readable findings for tooling
-  okfctl lint --json ./bundles/knowledge
+  # Print findings as JSON for another tool
+  okfctl lint --json ./mykb
 
-  # Also run similarity checks against a prebuilt semantic index
-  okfctl lint --semantic ./bundles/knowledge
+  # Add the similarity checks (needs okfctl-search index build ./mykb first)
+  okfctl lint --semantic ./mykb
 ```
 
 Flags:
@@ -932,19 +962,13 @@ Example:
 
 ## okfctl search
 
-Search the bundle lexically or by graph neighborhood (core, stdlib-only)
+Find nodes by text or by link distance, with no model or index
 
-search queries the bundle from the CLI without a model or index.
+search needs neither a model nor an index. It looks for your query in each node's title, tags, type, or body, ignoring case, and prints a line per match with its path and type and the fields that matched. --field limits the match to one of those. No match prints nothing and exits 0.
 
-Lexical mode (default): okfctl search "query" [dir] matches concept nodes by
-title, tag, type, or body substring (case-insensitive). Restrict the fields
-with --field title|tag|type|body.
+--neighbors <node-path> asks a different question: which nodes sit within --depth links of that node, following links either way.
 
-Graph-structural mode: okfctl search --neighbors <node-path> [dir] returns the
-nodes within --depth hops of a node in the link graph (edges are undirected).
-
-Semantic (vector) search is the separate okfctl-search plugin: run
-`okfctl-search --semantic "query"` (PRD §8).
+It never edits a file. To search by meaning, install the okfctl-search plugin and run `okfctl-search --semantic "query"` (PRD §8).
 
 ```
 okfctl search [query] [bundle-dir] [flags]
@@ -953,14 +977,14 @@ okfctl search [query] [bundle-dir] [flags]
 Example:
 
 ```
-# Lexical search across all fields in the current bundle
+# Search every field in the bundle in the current directory
   okfctl search "income statement"
 
-  # Restrict the match to titles, in a bundle elsewhere
-  okfctl search --field title revenue ./bundles/knowledge
+  # Match titles only, in a bundle elsewhere
+  okfctl search --field title revenue ./mykb
 
-  # Graph mode: nodes within 2 hops of a node in the link graph
-  okfctl search --neighbors concepts/income-statement.md --depth 2 ./bundles/knowledge
+  # Nodes within 2 links of one node
+  okfctl search --neighbors concepts/income-statement.md --depth 2 ./mykb
 ```
 
 Flags:
@@ -976,9 +1000,11 @@ Flags:
 
 ## okfctl serve
 
-Serve an interactive web visualization of the bundle graph
+Draw the bundle's link graph in your browser
 
-serve starts a local web server that renders the bundle as an interactive, navigable knowledge graph. Assets are embedded in the binary — no separate install. Binds loopback by default; override with --addr.
+serve runs a web server on 127.0.0.1:8080 that draws the bundle's link graph in your browser, where you can click a node to see its type and links and filter the graph by type or by top-level directory. Dashed nodes are orphans. The page is part of the binary.
+
+serve loads the bundle at startup and never edits it. Restart it to pick up a change. It listens only on your own machine unless you pass --addr.
 
 ```
 okfctl serve [bundle-dir] [flags]
@@ -987,11 +1013,11 @@ okfctl serve [bundle-dir] [flags]
 Example:
 
 ```
-# Serve the current bundle on http://127.0.0.1:8080
+# Serve the bundle in the current directory on http://127.0.0.1:8080
   okfctl serve
 
-  # Serve a bundle elsewhere on a custom address
-  okfctl serve --addr 127.0.0.1:9000 ./bundles/knowledge
+  # Serve a bundle elsewhere on another port
+  okfctl serve --addr 127.0.0.1:9000 ./mykb
 ```
 
 Flags:
@@ -1076,9 +1102,15 @@ Flags:
 
 ## okfctl validate
 
-Check a bundle for OKF spec-floor conformance (optionally overlay team type-templates)
+Check a bundle against the OKF spec floor, and optionally your team's type templates
 
-validate enforces the OKF spec floor: every concept's frontmatter parses and carries a non-empty type, and reserved index.md/log.md files follow §8/§9. A .md file with no frontmatter or no type is not a concept (OKF v0.3 §3.2): it is reported as a warning and never fails the run. It also reports git drift: a node whose frontmatter `modified` contradicts its git last-commit date (read-only — it never rewrites the file, and degrades to nothing outside a git repo). With --templates it runs the opt-in team overlay (PRD §9.4) as well, reporting template drift; templates may be referenced from a separate bundle via the .okf `templates:` key or --templates-from (PRD §9.2). All drift is advisory by default (exit 0); pass --strict to exit non-zero on any drift. Floor violations always fail regardless of --strict.
+validate checks a bundle against the floor every OKF bundle has to meet (§11.1). Every frontmatter block has to parse as YAML. Each reserved index.md and log.md has to follow §8 and §9. A floor failure prints FAIL and always exits 1.
+
+It never edits a file. A .md file with no frontmatter or no type isn't a concept (OKF v0.3 §3.2). validate warns about it and the run still passes. It also warns about drift. One kind is a node whose modified date disagrees with its last git commit (outside a git repo it's silent). The other is an okf_version in the legacy .okf sidecar that disagrees with the one in index.md (§8.1, §12).
+
+Drift is advice. The run exits 0 unless you pass --strict.
+
+--templates also checks each node against your team's type template (PRD §9.4) and reports where a node strays from it as more drift. The templates can live in another bundle, named by the .okf templates: key or by --templates-from (PRD §9.2). An unknown type or an extra key never fails the floor (§11.2).
 
 ```
 okfctl validate [bundle-dir] [flags]
@@ -1087,17 +1119,17 @@ okfctl validate [bundle-dir] [flags]
 Example:
 
 ```
-# Check the spec floor for the bundle in the current directory
+# Check the bundle in the current directory
   okfctl validate
 
   # Check a bundle elsewhere
-  okfctl validate ./bundles/knowledge
+  okfctl validate ./mykb
 
-  # Also run the opt-in team template overlay, failing CI on any drift
-  okfctl validate --templates --strict ./bundles/knowledge
+  # Also check type templates, and fail CI on any drift
+  okfctl validate --templates --strict ./mykb
 
-  # Overlay templates from a specific bundle, overriding the .okf reference
-  okfctl validate --templates --templates-from ../okf-type-templates ./bundles/knowledge
+  # Take the templates from another bundle instead of the .okf reference
+  okfctl validate --templates --templates-from ../okf-type-templates ./mykb
 ```
 
 Flags:
