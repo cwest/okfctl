@@ -17,7 +17,7 @@
 package okf
 
 // Node is a single OKF concept: its bundle-relative path is its identity,
-// its frontmatter carries typed metadata (type is required, §7), and body
+// its frontmatter carries typed metadata (type is required, OKF §4.1), and body
 // holds the Markdown after the frontmatter block.
 type Node struct {
 	Path        string         // bundle-relative, e.g. "wine/tannin.md"

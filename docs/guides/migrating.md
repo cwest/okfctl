@@ -221,7 +221,16 @@ From v0.1 (v0.3 Appendix B), two renames:
   only one follow-able resource (a URL with a scheme, or the path of a file in
   the bundle, per §5.1 and §6.2) turns into one `sources` entry: that resource,
   plus the entry's text as `title`. The claim beside the URL comes along with
-  it. The body list stays.
+  it. An entry with no URL that carries exactly one DOI, arXiv id, PubMed id,
+  or ISBN gets a `resource` built from that identifier:
+  `https://doi.org/<doi>`, `https://arxiv.org/abs/<id>`,
+  `https://pubmed.ncbi.nlm.nih.gov/<pmid>/`, or
+  `https://openlibrary.org/isbn/<isbn>`. An ISBN must pass its check digit
+  first. The URL is built offline from a fixed pattern; `migrate` never fetches
+  it. Such a source gets no `title`: a title names the work, and the full
+  citation isn't a name. An identifier that another entry in the same list
+  also names is a cross-reference, so that entry stays a judgment item. The
+  body list stays.
 
 From v0.2 (v0.3 §13.1), two edits:
 
@@ -249,7 +258,8 @@ present, is bumped too.
 
 - a citation entry with no follow-able resource (§5.1 wants one), or with two
   different ones, where picking one or splitting the entry is your call
-  (`prose-citation`)
+  (`prose-citation`). Two identifiers count as two resources, and so does an
+  ISBN with a bad check digit.
 - a `timestamp` rename with no actor (§7, `missing-actor`)
 - a date-time with no offset, for example `2026-06-20T10:00:00`
   (`timestamp-no-offset`, §5 and §13.2). It names no instant. Only the

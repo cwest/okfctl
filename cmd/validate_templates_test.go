@@ -67,7 +67,7 @@ func TestValidateTemplates_Strict(t *testing.T) {
 }
 
 func TestValidate_FloorUnchangedWithoutFlag(t *testing.T) {
-	// A drifting-but-typed node passes plain validate (floor purity, §7.4).
+	// A drifting-but-typed node passes plain validate (floor purity, PRD §7.4).
 	dir := writeOverlayBundle(t, driftingFrontmatter, driftingBody)
 	out, err := runOKF(t, "validate", dir)
 	if err != nil {

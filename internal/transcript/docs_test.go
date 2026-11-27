@@ -51,15 +51,22 @@ func docFiles(t *testing.T) []string {
 	return files
 }
 
-// buildOkfctl builds the binary from this tree into a fresh bin dir and
-// returns the env that puts it first on PATH.
+// buildOkfctl builds okfctl and the okfctl-search plugin from this tree into a
+// fresh bin dir and returns the env that puts it first on PATH. The plugin is
+// built too so a doc's `$ okfctl-search` lines run this tree's plugin, never
+// an older copy that happens to sit on the host's PATH.
 func buildOkfctl(t *testing.T) []string {
 	t.Helper()
 	bin := t.TempDir()
-	build := exec.Command("go", "build", "-o", filepath.Join(bin, "okfctl"), "github.com/cwest/okfctl")
-	build.Env = append(os.Environ(), "CGO_ENABLED=0")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("go build okfctl: %v\n%s", err, out)
+	for name, pkg := range map[string]string{
+		"okfctl":        "github.com/cwest/okfctl",
+		"okfctl-search": "github.com/cwest/okfctl/cmd/okfctl-search",
+	} {
+		build := exec.Command("go", "build", "-o", filepath.Join(bin, name), pkg)
+		build.Env = append(os.Environ(), "CGO_ENABLED=0")
+		if out, err := build.CombinedOutput(); err != nil {
+			t.Fatalf("go build %s: %v\n%s", name, err, out)
+		}
 	}
 	fixtures, err := filepath.Abs(filepath.Join(repoRoot, "testdata", "transcripts"))
 	if err != nil {
