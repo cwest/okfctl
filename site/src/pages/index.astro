@@ -446,13 +446,13 @@ const goInstallCmd = version.tag
 
               <div role="tabpanel" id="t-lint" aria-labelledby="tab-lint" tabindex="0" hidden><pre>
 <span class="p">$</span> <span class="c">okfctl lint</span> <span class="f">mykb</span>
-<span class="o">missing-xref: concepts/oak.md mentions "tannin" but does not link to concepts/tannin.md</span>
+<span class="o">missing-xref: concepts/oak.md mentions "Tannin" but does not link to concepts/tannin.md</span>
 <span class="o">1 lint finding(s)</span>
 <span class="p">$</span> <span class="c">echo</span> $?
 <span class="ok">0</span>   <span class="cm"># advisory by default</span>
 
 <span class="p">$</span> <span class="c">okfctl lint</span> <span class="f">--strict</span> <span class="f">mykb</span>
-<span class="o">missing-xref: concepts/oak.md mentions "tannin" but does not link to concepts/tannin.md</span>
+<span class="o">missing-xref: concepts/oak.md mentions "Tannin" but does not link to concepts/tannin.md</span>
 <span class="o">1 lint finding(s)</span>
 <span class="bad">okfctl: 1 lint finding(s)</span>
 <span class="p">$</span> <span class="c">echo</span> $?
@@ -462,13 +462,16 @@ const goInstallCmd = version.tag
 <span class="cm"># the first gate that touches provenance, not just format:</span>
 <span class="cm"># grade-missing · grade-vocabulary · uncited · citation-unresolved</span>
 <span class="p">$</span> <span class="c">okfctl eval transparency</span> <span class="f">mykb</span>
-<span class="o">uncited: concepts/aging.md carries no citations (no sources, no # Citations, no internal reference)</span>
 <span class="o">grade-missing: concepts/aging.md carries no epistemic or authority grade (provenance is invisible)</span>
+<span class="o">uncited: concepts/aging.md carries no citations (no sources, no # Citations, no internal reference)</span>
 <span class="o">2 transparency finding(s)</span>
 <span class="p">$</span> <span class="c">echo</span> $?
 <span class="ok">0</span>   <span class="cm"># advisory by default, like lint</span>
 
 <span class="p">$</span> <span class="c">okfctl eval transparency</span> <span class="f">--strict</span> <span class="f">mykb</span>
+<span class="o">grade-missing: concepts/aging.md carries no epistemic or authority grade (provenance is invisible)</span>
+<span class="o">uncited: concepts/aging.md carries no citations (no sources, no # Citations, no internal reference)</span>
+<span class="o">2 transparency finding(s)</span>
 <span class="bad">okfctl: 2 transparency finding(s)</span>
 <span class="p">$</span> <span class="c">echo</span> $?
 <span class="bad">1</span>   <span class="cm"># the CI gate</span>
@@ -480,18 +483,13 @@ const goInstallCmd = version.tag
 
               <div role="tabpanel" id="t-scale" aria-labelledby="tab-scale" tabindex="0" hidden><pre>
 <span class="cm"># a real corpus, not a fixture</span>
-<span class="p">$</span> <span class="c">okfctl bundle info</span> <span class="f">bundles/knowledge</span>
-<span class="o">nodes: hundreds</span>
+<span class="p">$</span> <span class="c">okfctl bundle info</span> <span class="f">bundles/knowledge</span> | <span class="c">grep</span> okf_version
 <span class="o">okf_version: undeclared (v0.2 fallbacks apply, §12.1)</span>
 
 <span class="p">$</span> <span class="c">okfctl validate</span> <span class="f">bundles/knowledge</span>
 <span class="ok">OK: bundle conforms to the OKF spec floor</span>
 
-<span class="p">$</span> <span class="c">okfctl analyze</span> <span class="f">bundles/knowledge</span> | <span class="c">head</span> <span class="f">-6</span>
-<span class="o"># OKF Corpus Analysis</span>
-<span class="o"></span>
-<span class="o">Thousands of internal link(s). Aging threshold: 180d.</span>
-<span class="o"></span>
+<span class="p">$</span> <span class="c">okfctl analyze</span> <span class="f">bundles/knowledge</span> | <span class="c">grep</span> <span class="f">-A1</span> dangling
 <span class="o">## Coverage gaps — dangling forward-links (research opportunities)</span>
 <span class="ok">  ✓ none</span></pre></div>
             </div>
