@@ -105,10 +105,13 @@ func writeMigrateSummary(out io.Writer, plan okf.MigratePlan) {
 	fmt.Fprintf(out, "judgment: %d item(s); %s\n", len(plan.Judgment), strings.Join(kinds, ", "))
 }
 
-// maxLCSCells bounds the LCS table unifiedDiff builds for the changed middle
-// of a file. Past it, the middle is shown as one replaced block: still a
-// correct diff, only less minimal.
-const maxLCSCells = 4 << 20
+// maxLCSCells and maxLCSLines bound the LCS table unifiedDiff builds for the
+// changed middle of a file. Past either, the middle is shown as one replaced
+// block: still a correct diff, only less minimal.
+const (
+	maxLCSCells = 4 << 20
+	maxLCSLines = 1 << 16
+)
 
 // diffOp is one line of a unified diff: ' ' kept, '-' removed, '+' added. ai
 // and bi are the 0-based line numbers in the old and new text.
@@ -153,7 +156,7 @@ func unifiedDiff(path, a, b string) string {
 func middleOps(am, bm []string, off int) []diffOp {
 	n, m := len(am), len(bm)
 	var ops []diffOp
-	if n == 0 || m == 0 || n > maxLCSCells/m {
+	if n == 0 || m == 0 || n >= maxLCSLines || m >= maxLCSLines || n*m > maxLCSCells {
 		for k, s := range am {
 			ops = append(ops, diffOp{'-', s, off + k, off})
 		}
@@ -162,16 +165,18 @@ func middleOps(am, bm []string, off int) []diffOp {
 		}
 		return ops
 	}
-	lcs := make([][]int, n+1)
-	for i := range lcs {
-		lcs[i] = make([]int, m+1)
-	}
+	// One flat table of (n+1)*(m+1) cells; both dimensions are below
+	// maxLCSLines, so the product is at most about maxLCSLines² and cannot
+	// overflow an int.
+	w := m + 1
+	cells := make([]int, (n+1)*w)
+	at := func(i, j int) int { return cells[i*w+j] }
 	for i := n - 1; i >= 0; i-- {
 		for j := m - 1; j >= 0; j-- {
 			if am[i] == bm[j] {
-				lcs[i][j] = lcs[i+1][j+1] + 1
+				cells[i*w+j] = at(i+1, j+1) + 1
 			} else {
-				lcs[i][j] = max(lcs[i+1][j], lcs[i][j+1])
+				cells[i*w+j] = max(at(i+1, j), at(i, j+1))
 			}
 		}
 	}
@@ -182,7 +187,7 @@ func middleOps(am, bm []string, off int) []diffOp {
 			ops = append(ops, diffOp{' ', am[i], off + i, off + j})
 			i++
 			j++
-		case i < n && (j == m || lcs[i+1][j] >= lcs[i][j+1]):
+		case i < n && (j == m || at(i+1, j) >= at(i, j+1)):
 			ops = append(ops, diffOp{'-', am[i], off + i, off + j})
 			i++
 		default:
