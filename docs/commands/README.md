@@ -574,7 +574,7 @@ Flags:
 
 ### okfctl node list
 
-List nodes with their type (§7.3)
+List nodes with their type (PRD §7.3)
 
 list prints every concept node in the bundle with its managed type, sorted by path (PRD §7.3: reads reveal the type). Reserved files (index.md, log.md) aren't nodes and aren't listed. Read-only.
 
@@ -629,9 +629,9 @@ Flags:
 
 ### okfctl node new
 
-Create a conformant node (type required, PRD §7)
+Create a conformant node (type required, OKF §4.1)
 
-new creates a conformant concept node at <path>. A non-empty --type is REQUIRED: type is the one managed field (PRD §7 — a node must carry a non-empty type; the value itself is open per PRD §7.4, so any string is accepted). The presence requirement is the spec floor (OKF §4.1 / §11: every frontmatter block carries a non-empty type). If a type template governs the given type, the node is scaffolded from it (PRD §9.3); the template may be local or referenced from a separate bundle (the .okf `templates:` key, or --templates-from which overrides it, §9.2). Otherwise a plain conformant node is written. Creation is recorded in log.md and index.md is regenerated, so a new node is never an audit gap. It doesn't open an editor — use `okfctl node edit` for that.
+new creates a conformant concept node at <path>. A non-empty --type is REQUIRED: type is the one managed field (a node must carry a non-empty type; the value itself is open per OKF §4.1, so any string is accepted). The presence requirement is the spec floor (OKF §4.1 / §11: every frontmatter block carries a non-empty type). If a type template governs the given type, the node is scaffolded from it (PRD §9.3); the template may be local or referenced from a separate bundle (the .okf `templates:` key, or --templates-from which overrides it, PRD §9.2). Otherwise a plain conformant node is written. Creation is recorded in log.md and index.md is regenerated, so a new node is never an audit gap. It doesn't open an editor — use `okfctl node edit` for that.
 
 ```
 okfctl node new <path> [flags]
@@ -656,7 +656,7 @@ Flags:
       --bundle string           bundle directory to operate on (default ".")
       --templates-from string   resolve type templates from this bundle directory, overriding the .okf templates key (PRD §9.2)
       --title string            title for the new node (omitted from frontmatter when empty)
-      --type string             type to assign the new node (required; any non-empty value, PRD §7.4)
+      --type string             type to assign the new node (required; any non-empty value, OKF §4.1)
 ```
 
 
@@ -754,7 +754,7 @@ Flags:
 
 ### okfctl node show
 
-Print a node, surfacing its type (§7.3)
+Print a node, surfacing its type (PRD §7.3)
 
 show prints a single node's path, its type, and its Markdown body (PRD §7.3: reads reveal the managed type). The .md suffix is optional in <path>. Read-only — it never mutates the bundle. It errors if no node matches.
 
@@ -1058,7 +1058,7 @@ Flags:
 
 Check a bundle for OKF spec-floor conformance (optionally overlay team type-templates)
 
-validate enforces the OKF spec floor: every concept's frontmatter parses and carries a non-empty type, and reserved index.md/log.md files follow §8/§9. A .md file with no frontmatter or no type is not a concept (OKF v0.3 §3.2): it is reported as a warning and never fails the run. It also reports git drift: a node whose frontmatter `modified` contradicts its git last-commit date (read-only — it never rewrites the file, and degrades to nothing outside a git repo). With --templates it runs the opt-in team overlay (§9.4) as well, reporting template drift; templates may be referenced from a separate bundle via the .okf `templates:` key or --templates-from (§9.2). All drift is advisory by default (exit 0); pass --strict to exit non-zero on any drift. Floor violations always fail regardless of --strict.
+validate enforces the OKF spec floor: every concept's frontmatter parses and carries a non-empty type, and reserved index.md/log.md files follow §8/§9. A .md file with no frontmatter or no type is not a concept (OKF v0.3 §3.2): it is reported as a warning and never fails the run. It also reports git drift: a node whose frontmatter `modified` contradicts its git last-commit date (read-only — it never rewrites the file, and degrades to nothing outside a git repo). With --templates it runs the opt-in team overlay (PRD §9.4) as well, reporting template drift; templates may be referenced from a separate bundle via the .okf `templates:` key or --templates-from (PRD §9.2). All drift is advisory by default (exit 0); pass --strict to exit non-zero on any drift. Floor violations always fail regardless of --strict.
 
 ```
 okfctl validate [bundle-dir] [flags]
@@ -1085,7 +1085,7 @@ Flags:
 ```
       --no-ignore               walk EVERY directory, including vendored/derived ones (node_modules, venv, dist, ...) that are skipped by default; dot directories are never part of the bundle (OKF v0.3 §3.2)
       --strict                  exit non-zero on any drift (git drift and, with --templates, template drift); default: advisory, exit 0
-      --templates               also run the opt-in type-template overlay (§9.4), reporting drift as warnings
+      --templates               also run the opt-in type-template overlay (PRD §9.4), reporting drift as warnings
       --templates-from string   resolve type templates from this bundle directory, overriding the .okf templates key (PRD §9.2)
 ```
 

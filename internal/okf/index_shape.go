@@ -145,7 +145,7 @@ func sharedTagList(folded map[string]foldedTag, min, max int) ([]string, bool) {
 // progressive disclosure), as trailing parenthesised text with a leading space,
 // e.g. ` (37 concepts · Application, Concept, Map · shared tags: ux, layout) · 46 in subtree`.
 // It aggregates over the child directory's OWN IMMEDIATE concept nodes (not the
-// whole subtree): the count, the distinct types in full (sorted, §7.4 leaves the
+// whole subtree): the count, the distinct types in full (sorted, PRD §7.4 leaves the
 // type vocabulary open so every type prints as-is), and the shared tags (§4.1).
 // The `· N in subtree` total is appended only when the child has content-bearing
 // descendants (subtree count > own count). Returns "" when disabled.

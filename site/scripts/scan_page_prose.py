@@ -36,7 +36,11 @@ never forked.
 WHICH SURFACES. HTML: the BUILT site (site/dist/**/*.html), because meta/OG/footer
 copy is assembled at build time and a source-level scan structurally cannot see
 it. Markdown: the prose surfaces this repo SHIPS to readers -- README.md,
-CONTRIBUTING.md, docs/*.md, docs/guides/*.md, docs/commands/README.md. Internal,
+CONTRIBUTING.md, docs/*.md, docs/guides/*.md, docs/commands/README.md, and
+site/public/llms.txt (Markdown by the llms.txt convention, so it rides the
+Markdown front end despite its .txt extension). JSON: the top-level description
+of plugin.json, the blurb an agent client shows when it lists the plugin; every
+other manifest value is data and is never scanned. Internal,
 unpublished Markdown (docs/PRD.md, docs/adr/, docs/plans/, docs/specs/, testdata/)
 is deliberately excluded: it is working material full of fixture prose, not
 reader-facing copy, and gating it would train everyone to ignore the check. The
@@ -86,20 +90,34 @@ medium's typography, not prose typography, so the gate must never fire there. Th
 en dash (–, number ranges) and the closed-up em dash (word—word) are both left
 alone; only the spaced em dash between two prose words is a finding.
 
+THE THIRD CLASS: BUILD INTERNALS AS SELLING POINTS. "no CGO", "CGO_ENABLED"
+(outside code), "no model runtime", and "no Python" describe how the binary is
+built, not what a user gets, so shipped copy must not sell them. This class
+reads MORE than the other two: <span> chips and short fragments count, because
+the homepage spec strip and a bulleted list are where these phrases shipped.
+Code stays exempt, so a build command remains legal. Two prose sections that
+explain the build on purpose (install.md's build-from-source section, the
+search guide's model2vec section) are exempt through BUILD_INTERNALS_ALLOWLIST,
+scoped to the section and only for this class.
+
 Usage:
     scan_page_prose.py <path.html|path.md> [more ...]
     # HTML, typically from CI:
     scan_page_prose.py $(find site/dist -name '*.html')
     # Markdown prose surfaces:
     scan_page_prose.py README.md CONTRIBUTING.md docs/*.md docs/guides/*.md
+    # Shipped non-.md surfaces:
+    scan_page_prose.py site/public/llms.txt plugin.json
 
-The front end is chosen per file by extension: .md/.markdown -> Markdown, every
-other extension -> HTML.
+The front end is chosen per file by name: .md/.markdown and llms.txt ->
+Markdown, .json -> manifest prose fields, every other extension -> HTML.
 
-Exit 0 when clean, 1 when a finding is present, 2 on a usage error. Stdlib only.
+Exit 0 when clean, 1 when a finding is present, 2 on a usage error (including a
+.json file that does not parse). Stdlib only.
 """
 
 import html
+import json
 import re
 import sys
 from pathlib import Path
@@ -138,12 +156,49 @@ NEG_LISTING = re.compile(
 # does not smuggle a spaced dash past it or invent a false one.
 EM_DASH_SPACING = re.compile(r"\s\u2014\s")
 
-# The gate's detectors, each a (class-name, compiled-pattern) pair. find_hits
+# Build internals sold as features. Users don't care that the binary has "no
+# CGO" or "no model runtime" unless the copy says what IS in it, so shipped copy
+# must not list these as selling points. ONE mention is a finding (unlike the
+# two-member negative-listing chain), case does not matter, and "CGO_ENABLED"
+# counts only outside code: the extractors already drop fenced/indented code,
+# inline `code`, and HTML <code>/<pre>, so a build command stays legal. Where
+# prose genuinely has to explain the build, see BUILD_INTERNALS_ALLOWLIST.
+# "CGO_?ENABLED": the Markdown front end strips "_" emphasis runs, so in an
+# extracted .md block the token reads "CGOENABLED".
+BUILD_INTERNALS = re.compile(
+    r"\bno\s+cgo\b|\bCGO_?ENABLED\b|\bno\s+model\s+runtime\b|\bno\s+python\b",
+    re.IGNORECASE,
+)
+
+# The prose detectors, each a (class-name, compiled-pattern) pair. find_hits
 # runs EVERY detector against EVERY extracted prose string, so both classes ride
 # the same code-block / inline-code / frontmatter exemptions the extractors give.
 DETECTORS: tuple[tuple[str, "re.Pattern[str]"], ...] = (
     ("negative-listing", NEG_LISTING),
     ("spaced-em-dash", EM_DASH_SPACING),
+)
+
+# The build-internals detector runs on a WIDER extraction than the prose
+# detectors (fragments=True): it also reads <span> chips and strings shorter
+# than the 15-character prose floor, because a spec-strip chip or a two-word
+# bullet ("no Python") is exactly where a build internal gets sold. The
+# chip/bullet exemption exists for the negative-listing RHYTHM, not for content.
+FRAGMENT_DETECTORS: tuple[tuple[str, "re.Pattern[str]"], ...] = (
+    ("build-internals", BUILD_INTERNALS),
+)
+
+# Sections where prose legitimately explains how okfctl is built, exempt from
+# the build-internals class ONLY. Each entry is (path suffix, heading prefix):
+# the section runs from a heading whose visible text starts with the prefix to
+# the next heading of the same or higher level. Matched in both the Markdown
+# source and the built HTML of the same page. Keep this list short and give
+# every entry a reason; anything not listed is selling copy.
+BUILD_INTERNALS_ALLOWLIST: tuple[tuple[str, str], ...] = (
+    # Build instructions: the reader asked how to compile it.
+    ("docs/install.md", "Building from source"),
+    # Technical explanation of how the model2vec embedder stays pure Go.
+    ("docs/guides/search.md", "Real semantic search with"),
+    ("guides/search/index.html", "Real semantic search with"),
 )
 
 # Non-prose regions: their text is not a sentence a reader reads, so a match
@@ -155,12 +210,14 @@ PROSE_BLOCKS = ("h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "blockquote",
                 "figcaption", "dd", "dt")
 
 
-def extract_prose(page: str) -> list[tuple[str, str]]:
+def extract_prose(page: str, fragments: bool = False) -> list[tuple[str, str]]:
     """Return (source_label, text) for every human-visible prose string.
 
     Subtractive on the body: strip non-prose regions first, then take the block
     containers that remain -- so a newly-added prose element is included by
-    default and only <span>/script/style/code/pre are ever exempt.
+    default and only <span>/script/style/code/pre are ever exempt. With
+    fragments=True, <span> text and strings under the prose floor are kept too
+    (the build-internals pass; see FRAGMENT_DETECTORS).
     """
     out: list[tuple[str, str]] = []
 
@@ -189,13 +246,15 @@ def extract_prose(page: str) -> list[tuple[str, str]]:
     for tag in NON_PROSE_TAGS:
         body = re.sub(rf"<{tag}\b.*?</{tag}>", " ", body, flags=re.S | re.I)
 
+    floor = 0 if fragments else 15
+    blocks = PROSE_BLOCKS + (("span",) if fragments else ())
     block_re = re.compile(
-        rf"<({'|'.join(PROSE_BLOCKS)})\b[^>]*>(.*?)</\1>", re.S | re.I
+        rf"<({'|'.join(blocks)})\b[^>]*>(.*?)</\1>", re.S | re.I
     )
     for m in block_re.finditer(body):
         txt = html.unescape(re.sub(r"<[^>]+>", " ", m.group(2)))
         txt = re.sub(r"\s+", " ", txt).strip()
-        if len(txt) > 15:  # skip nav fragments / single words
+        if len(txt) > floor:  # skip nav fragments / single words
             out.append((f"<{m.group(1).lower()}>", txt))
 
     # 4. Alt text and aria-labels -- prose a human reads via assistive tech.
@@ -205,7 +264,7 @@ def extract_prose(page: str) -> list[tuple[str, str]]:
     return out
 
 
-def extract_prose_markdown(doc: str) -> list[tuple[str, str]]:
+def extract_prose_markdown(doc: str, fragments: bool = False) -> list[tuple[str, str]]:
     """Return (source_label, text) for every human-visible prose block in Markdown.
 
     Same contract as extract_prose, different front end: it feeds the SAME
@@ -256,7 +315,7 @@ def extract_prose_markdown(doc: str) -> list[tuple[str, str]]:
             return
         raw = " ".join(block)
         txt = _markdown_to_text(raw)
-        if len(txt) > 15:                # skip nav fragments / lone words
+        if len(txt) > (0 if fragments else 15):  # skip nav fragments / lone words
             out.append((f"md:L{block_line}", txt))
         block.clear()
 
@@ -319,13 +378,17 @@ def _markdown_to_text(raw: str) -> str:
 
 
 def find_hits(
-    items: list[tuple[str, str]], suppress: frozenset[str] = frozenset()
+    items: list[tuple[str, str]],
+    suppress: frozenset[str] = frozenset(),
+    detectors: tuple[tuple[str, "re.Pattern[str]"], ...] = DETECTORS,
 ) -> list[tuple[str, str, str, str]]:
     """Return (detector_class, source_label, matched_text, full_text) per finding.
 
-    Runs EVERY detector in DETECTORS against every extracted prose string, so
-    the negative-listing and spaced-em-dash classes share one extraction pass
-    and therefore one set of exemptions (code fences, inline code, frontmatter).
+    Runs every detector in `detectors` (default DETECTORS) against every
+    extracted prose string, so the negative-listing and spaced-em-dash classes
+    share one extraction pass and one set of exemptions (code fences, inline
+    code, frontmatter). The build-internals pass calls it with
+    FRAGMENT_DETECTORS on a wider extraction.
 
     `suppress` names detector classes to skip for this file. It exists for ONE
     case: a GENERATED reference doc (docs/commands/README.md) mirrors the CLI
@@ -336,7 +399,7 @@ def find_hits(
     """
     hits: list[tuple[str, str, str, str]] = []
     for label, txt in items:
-        for cls, pattern in DETECTORS:
+        for cls, pattern in detectors:
             if cls in suppress:
                 continue
             for m in pattern.finditer(txt):
@@ -360,11 +423,98 @@ def suppressed_classes(text: str) -> frozenset[str]:
     return frozenset()
 
 
-def extract_for_path(path: str, text: str) -> list[tuple[str, str]]:
-    """Pick the front end by file extension: .md/.markdown -> Markdown, else HTML."""
-    if path.lower().endswith(MARKDOWN_SUFFIXES):
-        return extract_prose_markdown(text)
-    return extract_prose(text)
+# llms.txt (https://llmstxt.org) is Markdown by convention despite its .txt
+# extension. It ships verbatim to okfctl.dev, so it gets the Markdown front end;
+# routed by extension it fell to the HTML front end, found zero prose strings,
+# and passed unread.
+MARKDOWN_BASENAMES = ("llms.txt", "llms-full.txt")
+
+# JSON manifest fields that are prose a reader reads. In plugin.json only the
+# top-level description qualifies: an agent client shows it as the plugin's
+# blurb. Every other value (schema URL, names, keywords, install commands) is
+# data, not prose, and is never scanned.
+JSON_PROSE_KEYS = ("description",)
+
+
+class UsageError(Exception):
+    """An input the scanner cannot read. Exits 2, never passes silently."""
+
+
+def extract_prose_json(doc: str) -> list[tuple[str, str]]:
+    """Return (source_label, text) for the top-level prose fields of a manifest."""
+    try:
+        data = json.loads(doc)
+    except json.JSONDecodeError as e:
+        raise UsageError(f"not valid JSON: {e}") from e
+    out: list[tuple[str, str]] = []
+    if isinstance(data, dict):
+        for key in JSON_PROSE_KEYS:
+            if isinstance(data.get(key), str):
+                out.append((f"json:{key}", data[key]))
+    return out
+
+
+def extract_for_path(path: str, text: str, fragments: bool = False) -> list[tuple[str, str]]:
+    """Pick the front end by file name: .md/.markdown/llms.txt -> Markdown,
+    .json -> manifest prose fields, every other extension -> HTML."""
+    lower = path.lower()
+    if lower.endswith(MARKDOWN_SUFFIXES) or Path(lower).name in MARKDOWN_BASENAMES:
+        return extract_prose_markdown(text, fragments=fragments)
+    if lower.endswith(".json"):
+        return extract_prose_json(text)
+    return extract_prose(text, fragments=fragments)
+
+
+def _allowlisted_headings(path: str) -> list[str]:
+    """Heading prefixes allowlisted for this path (suffix match on a / boundary)."""
+    norm = "/" + Path(path).as_posix().lstrip("/")
+    return [h for suffix, h in BUILD_INTERNALS_ALLOWLIST if norm.endswith("/" + suffix)]
+
+
+def strip_allowlisted_sections(path: str, text: str) -> str:
+    """Remove BUILD_INTERNALS_ALLOWLIST sections from text before the
+    build-internals pass. A section runs from its heading to the next heading of
+    the same or higher level (Markdown, fence-aware) or the next <h1>..<hN> /
+    </main> (HTML). Files with no allowlist entry are returned unchanged."""
+    prefixes = _allowlisted_headings(path)
+    if not prefixes:
+        return text
+    is_md = not path.lower().endswith((".html", ".htm"))
+    for prefix in prefixes:
+        text = _strip_md_section(text, prefix) if is_md else _strip_html_section(text, prefix)
+    return text
+
+
+def _strip_md_section(doc: str, prefix: str) -> str:
+    lines = doc.split("\n")
+    out: list[str] = []
+    fence: str | None = None
+    cut_level = 0                        # >0 while inside the allowlisted section
+    for line in lines:
+        m = re.match(r"^\s*(`{3,}|~{3,})", line)
+        if m:
+            marker = m.group(1)[0] * 3
+            fence = marker if fence is None else (None if marker == fence else fence)
+        elif fence is None and (h := re.match(r"^(#{1,6})\s+(.*)$", line)):
+            level = len(h.group(1))
+            if cut_level and level <= cut_level:
+                cut_level = 0
+            if not cut_level and _markdown_to_text(h.group(2)).startswith(prefix):
+                cut_level = level
+        if not cut_level:
+            out.append(line)
+    return "\n".join(out)
+
+
+def _strip_html_section(page: str, prefix: str) -> str:
+    for m in re.finditer(r"<h([1-6])\b[^>]*>(.*?)</h\1>", page, re.S | re.I):
+        visible = html.unescape(re.sub(r"<[^>]+>", "", m.group(2))).strip()
+        if not visible.startswith(prefix):
+            continue
+        level = int(m.group(1))
+        end = re.compile(rf"<h[1-{level}]\b|</main>", re.I).search(page, m.end())
+        return page[: m.start()] + page[end.start() if end else len(page):]
+    return page
 
 
 def main() -> int:
@@ -379,8 +529,16 @@ def main() -> int:
     class_counts: dict[str, int] = {}
     for path in sys.argv[1:]:
         page = Path(path).read_text()
-        items = extract_for_path(path, page)
+        try:
+            items = extract_for_path(path, page)
+        except UsageError as e:
+            print(f"scan_page_prose.py: {path}: {e}", file=sys.stderr)
+            return 2
         hits = find_hits(items, suppress=suppressed_classes(page))
+        fragment_items = extract_for_path(
+            path, strip_allowlisted_sections(path, page), fragments=True
+        )
+        hits += find_hits(fragment_items, detectors=FRAGMENT_DETECTORS)
         print(f"=== {path} — {len(items)} prose strings scanned ===")
         if hits:
             for cls, label, matched, txt in hits:
@@ -397,7 +555,9 @@ def main() -> int:
         parts = ", ".join(f"{n} {cls}" for cls, n in sorted(class_counts.items()))
         print(f"RESULT: {total_hits} prose finding(s) [{parts}] — rewrite "
               f"negative-listing prose to plain positive statements (every fact "
-              f"preserved) and close up spaced em dashes to Chicago (word—word).")
+              f"preserved), close up spaced em dashes to Chicago (word—word), and "
+              f"replace build internals (no CGO, CGO_ENABLED, no model runtime, "
+              f"no Python) with what okfctl IS or does.")
         return 1
     print("RESULT: CLEAN")
     return 0

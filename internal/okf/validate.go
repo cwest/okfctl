@@ -39,7 +39,7 @@ type Finding struct {
 // conformance (§3.2 rule 2, §11.1): it is reported by ValidateWarnings, never
 // here.
 //
-// It never enforces a taxonomy of type VALUES (§7.4): unknown types pass.
+// It never enforces a taxonomy of type VALUES (PRD §7.4): unknown types pass.
 // It returns findings; an empty slice means the bundle passes the floor.
 //
 // The index-frontmatter rule closes the loop: okfctl generates index.md, so

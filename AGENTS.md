@@ -87,13 +87,13 @@ rules, does not add a taxonomy the spec leaves open, and does not tighten a
 permissive clause into a strict one. Two failure directions, both real:
 
 - **Under-conformance**—emitting or accepting something the spec forbids.
-- **Over-conformance**—rejecting something the spec permits. §7.4 leaves `type`
+- **Over-conformance**—rejecting something the spec permits. §4.1 leaves `type`
   values open, so an unknown `type` MUST pass the floor. Inventing a closed
   vocabulary is a spec violation in the strict direction, and it is the easier
   one to ship by accident because it *looks* like rigor.
 
 The line the PRD draws: the tool enforces the **spec floor** for everyone, and
-puts anything beyond it behind an explicit opt-in overlay (`--templates`, §9.4)
+puts anything beyond it behind an explicit opt-in overlay (`--templates`, PRD §9.4)
 that never leaks into the floor.
 
 ## The conformance gate—run it, don't assume it
@@ -139,8 +139,8 @@ STILL be run against a v0.1 fixture too—otherwise "it passes" only proves the
 v0.2 path and silently breaks a legacy bundle.
 
 Permissiveness is still the quiet trap in the other direction: an unrecognized
-future key or an unknown `type` MUST pass `validate` clean (§7.4 open `type`,
-§11 unknown-key tolerance). That is correct floor behavior and it is *not*
+future key or an unknown `type` MUST pass `validate` clean (§4.1 open `type`,
+§4.1 and §11.2 unknown-key tolerance). That is correct floor behavior and it is *not*
 license to enum-gate an optional or unknown field. `epistemic` (§11 unknown key)
 is surfaced by `analyze`, never rejected; `status` (§5.4 optional) is soft
 lint guidance, never a `validate` failure. Never turn a permissive clause strict.
@@ -157,7 +157,7 @@ The negative control is the one that gets skipped, and it is the load-bearing on
 
 ## Citing the spec in code and review
 
-When a behavior is spec-mandated, **cite the section** (`§6`, `§7.4`, `§9.4`,
+When a behavior is spec-mandated, **cite the section** (`§4.1`, `§6`,
 `§11`) in the code comment, the test name, and the PR body. The existing suites do
 this—read `internal/okf/conformance_test.go` for the house pattern. A citation
 turns "the reviewer disagreed" into "the spec says," which is the whole point: the
