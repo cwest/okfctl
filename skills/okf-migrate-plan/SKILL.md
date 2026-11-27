@@ -1,7 +1,7 @@
 ---
 name: okf-migrate-plan
 description: Use when working an okfctl migrate-plan.json — the judgment items okfctl migrate refuses to guess when upgrading a v0.1 or v0.2 bundle to OKF v0.3. Covers the deterministic/judgment split, handing a plan to any agent or working it by hand, and verifying the applied migration.
-version: 1.1.0
+version: 1.2.0
 author: okfctl
 license: Apache-2.0
 metadata:
@@ -57,15 +57,21 @@ call — the tool decides per item:
 | Old form | v0.3 form | Deterministic when… | Judgment when… |
 |---|---|---|---|
 | `timestamp:` frontmatter (v0.1) | `generated: {by, at}` (§7) | you pass `--generated-by <actor>` | no actor supplied → `missing-actor` |
-| body `# Citations` item (v0.1) | `sources[].resource` (§5.1) | the item carries a follow-able resource — a bare URL, or a markdown link whose target the parser can extract (§6) | it is prose with no resource → `prose-citation` |
+| body `# Citations` entry (v0.1) | `sources[]: {resource, title}` (§5.1) | the entry names exactly one follow-able resource — an absolute URL or a markdown link to a bundle path (§6.2) — anywhere in it, even across wrapped lines; the entry text becomes `title` | it names no resource, or two different ones → `prose-citation` |
 | bare link or path field that resolves only from the bundle root (v0.2, §12.1) | the same target with a leading `/` (§6 rule 2) | always: the tool knows which file it resolves to today | never |
 | §5 timestamp not in RFC 3339 form | `"2026-06-20T10:00:00Z"` | it carries an offset (`Z`, `+0000`, `-05:00`), so the instant is fixed | no offset → `timestamp-no-offset`; not a date at all → `timestamp-invalid` |
 
-The version marker is always deterministic: the bundle-root `index.md` declares
-`okf_version: "0.3"` (§8.1) on apply, and a legacy `.okf` sidecar, if present,
-is bumped too. A bundle that declares v0.3 already, a later version, or one the
-tool doesn't recognize is never rewritten to an older version (§12): the plan
-says `keep`.
+The version marker waits for the judgment items. On apply, the bundle-root
+`index.md` declares `okf_version: "0.3"` (§8.1) and a legacy `.okf` sidecar, if
+present, is bumped too — but **only when no `prose-citation` or `missing-actor`
+item is left**. Those items are still readable only through the v0.1 fallbacks
+(`# Citations`, `timestamp`; Appendix B), and §12.1 grants those fallbacks only
+to a bundle that declares 0.2 or earlier, or nothing. Declaring 0.3 first would
+make every v0.3 consumer drop them. So while any remain, the plan says `hold`:
+the edits apply and the declaration waits. `--force-declare` overrides that, and
+the plan says so. A bundle that declares v0.3 already, a later version, or one
+the tool doesn't recognize is never rewritten to an older version (§12): the
+plan says `keep`.
 
 **Why the refusals are correct, not lazy.** §5.1 makes `resource` *required* for
 every `sources` entry. A "citation" that is actually an evidence finding —
@@ -84,9 +90,9 @@ won't pick one.
 Build the binary once (`CGO_ENABLED=0 go build -o okfctl .` in a checkout, then
 put it on PATH). Everything below was run against a scratch two-node v0.1 bundle
 (`concepts/mouthfeel.md`, `concepts/tannin.md`); the output is reproduced
-verbatim. The two nodes carry, between them, every citation shape that matters: a
-bare URL, a markdown link the parser resolves, a markdown link it does *not* (see
-the pitfall below), and pure prose findings. `tannin.md` also links
+verbatim. The two nodes carry, between them, the citation shapes that matter: a
+bare URL, markdown links to bundle paths, and pure prose findings. Both carry a
+legacy `timestamp`, and the bundle declares v0.1 in a `.okf` sidecar. `tannin.md` also links
 `[mouthfeel](concepts/mouthfeel.md)`, a bare path that resolves only from the
 bundle root.
 
@@ -94,11 +100,11 @@ bundle root.
 
 ```sh
 $ okfctl migrate mykb --plan migrate-plan.json
-Wrote migrate-plan.json: 2 file(s) with deterministic edits (4 edit(s)), 5 judgment item(s).
-version: 0.1 -> declare v0.3
-edits: 2 file(s); timestamp->generated 0, citations->sources 3, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
-judgment: 5 item(s); missing-actor 2, prose-citation 3
-5 item(s) need a decision before they can migrate; see the plan file.
+Wrote migrate-plan.json: 2 file(s) with deterministic edits (5 edit(s)), 4 judgment item(s).
+version: 0.1 -> hold (4 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
+edits: 2 file(s); timestamp->generated 0, citations->sources 4, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+judgment: 4 item(s); missing-actor 2, prose-citation 2
+4 item(s) need a decision before they can migrate; see the plan file.
 ```
 
 Nothing was written to the bundle — only the plan file. Inspect it:
@@ -107,13 +113,14 @@ Nothing was written to the bundle — only the plan file. Inspect it:
 {
   "target_version": "0.3",
   "declared_version": "0.1",
-  "version_action": "bump",
+  "version_action": "hold",
   "nodes": [
     {
       "path": "concepts/mouthfeel.md",
       "sources": [
-        { "resource": "/concepts/tannin.md" },
-        { "resource": "https://en.wikipedia.org/wiki/Mouthfeel" }
+        { "resource": "/concepts/tannin.md", "title": "tannin glossary" },
+        { "resource": "https://en.wikipedia.org/wiki/Mouthfeel" },
+        { "resource": "/concepts/mouthfeel.md", "title": "mouthfeel" }
       ]
     },
     {
@@ -128,7 +135,6 @@ Nothing was written to the bundle — only the plan file. Inspect it:
   ],
   "judgment": [
     { "path": "concepts/mouthfeel.md", "kind": "missing-actor",  "context": "2026-02-03" },
-    { "path": "concepts/mouthfeel.md", "kind": "prose-citation", "context": "- [mouthfeel](/concepts/mouthfeel.md)" },
     { "path": "concepts/mouthfeel.md", "kind": "prose-citation", "context": "- Personal observation from a comparative tasting, 2026. Not published anywhere." },
     { "path": "concepts/tannin.md",    "kind": "missing-actor",  "context": "2026-01-15T09:30:00Z" },
     { "path": "concepts/tannin.md",    "kind": "prose-citation", "context": "- Tasting notes from a 2026 barrel sampling; no public source." }
@@ -138,20 +144,24 @@ Nothing was written to the bundle — only the plan file. Inspect it:
 
 Read the file top to bottom:
 
+- **`version_action: "hold"`** — the bundle will NOT declare v0.3 on this apply,
+  because four items still depend on the v0.1 fallbacks. Resolve them (steps 2
+  and 3) and re-plan, and it becomes `"bump"`.
 - **`nodes[]`** — the deterministic edits the tool already worked out. `mouthfeel`
-  got two `sources`: a bundle-relative link (`[tannin glossary](/concepts/tannin.md)`,
-  whose target the parser extracted and kept relative per §6) and a bare
-  Wikipedia URL. `tannin` got its one bare URL, and its root-relative link
+  got three `sources`: two links to bundle paths (the link text becomes `title`;
+  the path keeps its form per §6) and a bare Wikipedia URL, which gets no
+  `title` because the entry is nothing but the URL. An entry with words around its
+  one URL — `[1] Smith, Tannin chemistry, 2024. https://…` — keeps those words as
+  `title`, so the claim travels with the resource. `tannin` got its one bare URL, and its root-relative link
   `concepts/mouthfeel.md` becomes `/concepts/mouthfeel.md` (`paths[]`), which
   resolves to the same file once the bundle declares v0.3. You do not need to
   touch these.
 - **`judgment[]`** — one entry per thing the tool refused to guess. Each carries
   the `path` (which node), the `kind` (`missing-actor` or `prose-citation`), and
-  the verbatim `context` (the timestamp value, or the citation line) you need to
-  decide it. Note the first `prose-citation`: `- [mouthfeel](/concepts/mouthfeel.md)`
-  *looks* follow-able but the parser could not resolve it — that is the pitfall
-  described below, and the tool correctly refuses to guess rather than drop a
-  half-parsed target into `sources`.
+  the verbatim `context` (the timestamp value, or the citation entry) you need to
+  decide it. Both `prose-citation` items here name no resource at all. An entry
+  that names two different URLs lands here too: picking which one is "the"
+  source, or splitting the entry, is your call, not the tool's.
 
 ### 2. Resolve the deterministic actor renames
 
@@ -160,15 +170,15 @@ Supplying the provenance actor turns every `missing-actor` item into a real
 
 ```sh
 $ okfctl migrate mykb --plan migrate-plan.json --generated-by "human:alex"
-Wrote migrate-plan.json: 2 file(s) with deterministic edits (6 edit(s)), 3 judgment item(s).
-version: 0.1 -> declare v0.3
-edits: 2 file(s); timestamp->generated 2, citations->sources 3, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
-judgment: 3 item(s); prose-citation 3
-3 item(s) need a decision before they can migrate; see the plan file.
+Wrote migrate-plan.json: 2 file(s) with deterministic edits (7 edit(s)), 2 judgment item(s).
+version: 0.1 -> hold (2 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
+edits: 2 file(s); timestamp->generated 2, citations->sources 4, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+judgment: 2 item(s); prose-citation 2
+2 item(s) need a decision before they can migrate; see the plan file.
 ```
 
 The two `missing-actor` items are gone (folded into `nodes[].generated`); only
-the three `prose-citation` items remain. Use an actor string that means something
+the two `prose-citation` items remain, so the version is still held. Use an actor string that means something
 in your world — `human:<name>`, a tool identifier, a team handle. The tool does
 not interpret it; it records it verbatim as `generated.by` (§7).
 
@@ -199,44 +209,50 @@ it exactly as the tool would have.
 deliberately unspecified. Split `judgment[]` however you distribute work; the
 tool neither knows nor cares who resolves an item.
 
-**Route C — by hand (no model required).** The plan is ordinary JSON; edit it in
-any text editor. To turn a judgment item into an applied edit, **add the resolved
-`resource` to that node's entry under `nodes[]`, and delete the item from
-`judgment[]`.** Example — the reader decided one finding does have a citable
-resource:
+**Route C — by hand (no model required).** The plan is ordinary JSON, and the
+bundle is ordinary Markdown. The tool reads the body `# Citations` list on every
+plan, so **resolve an item in the node, then re-plan**:
 
-```json
-"nodes": [
-  {
-    "path": "concepts/mouthfeel.md",
-    "generated": { "by": "human:alex", "at": "2026-02-03" },
-    "sources": [
-      { "resource": "https://example.org/interviews/winemaker-2026" }
-    ]
-  }
-]
+- If the finding does have a citable resource, put it in the entry
+  (`- Winemaker interview, 2026. https://example.org/interviews/winemaker-2026`).
+  The next plan turns it into a `sources` entry, with the entry text as `title`.
+- If it has no citable resource, decide where the claim lives: move it out of
+  the `# Citations` list (into the body prose, or a §5.2 `verified` event), or
+  delete it. It is no longer a citation, so it stops being a judgment item.
+
+You can also add a resolved `resource` straight to that node's entry under
+`nodes[]` in the plan file and apply it. That writes the source, but the prose
+line is still in `# Citations`, so the next plan still lists it and still holds
+the version. Fix the body entry too, or see `--force-declare` below.
+
+Anything you leave unresolved is simply not applied. That is a valid end state:
+the bundle keeps the edits, stays at its current version, and every v0.3 consumer
+still reads the prose list through the §12.1 fallback.
+
+**When you are done deciding.** If you have worked every item you intend to
+and want v0.3 anyway, re-plan with `--force-declare`. The plan records the
+choice, and the summary tells you how many items lose the fallback:
+
+```sh
+$ okfctl migrate mykb --plan migrate-plan.json --generated-by "human:alex" --force-declare
+Wrote migrate-plan.json: 2 file(s) with deterministic edits (7 edit(s)), 2 judgment item(s).
+version: 0.1 -> declare v0.3 (forced: 2 prose-citation/missing-actor item(s) lose the §12.1 fallback)
+edits: 2 file(s); timestamp->generated 2, citations->sources 4, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+judgment: 2 item(s); prose-citation 2
+2 item(s) need a decision before they can migrate; see the plan file.
 ```
-
-and remove the matching `- Winemaker interview (unrecorded).` object from
-`judgment[]`. Anything you leave in `judgment[]` is simply not applied — that is
-fine; unresolved is a valid end state.
 
 ### 4. Apply (phase 2) — but dry-run first, and diff
 
 **Always dry-run before the real apply.** `--dry-run` writes nothing and prints
 the unified diff the real apply would write, through the same renderer, so it is
-a faithful preview:
+a faithful preview. With the held plan from step 2:
 
 ```sh
 $ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
---- a/.okf
-+++ b/.okf
-@@ -1,1 +1,1 @@
--okf_version: 0.1
-+okf_version: "0.3"
 --- a/concepts/mouthfeel.md
 +++ b/concepts/mouthfeel.md
-@@ -1,7 +1,10 @@
+@@ -1,7 +1,13 @@
  ---
  type: Reference
  title: Mouthfeel
@@ -244,7 +260,10 @@ $ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
 +generated: {by: "human:alex", at: 2026-02-03}
 +sources:
 +  - resource: /concepts/tannin.md
++    title: tannin glossary
 +  - resource: "https://en.wikipedia.org/wiki/Mouthfeel"
++  - resource: /concepts/mouthfeel.md
++    title: mouthfeel
  ---
 
  # Mouthfeel
@@ -267,28 +286,20 @@ $ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
 
  # Citations
  - https://en.wikipedia.org/wiki/Tannin
---- a/index.md
-+++ b/index.md
-@@ -1,1 +1,5 @@
-+---
-+okf_version: "0.3"
-+---
-+
- # Knowledge Base
-version: 0.1 -> declare v0.3
-edits: 2 file(s); timestamp->generated 2, citations->sources 3, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
-judgment: 3 item(s); prose-citation 3
-4 file(s) would change (dry run; nothing written).
+version: 0.1 -> hold (2 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
+edits: 2 file(s); timestamp->generated 2, citations->sources 4, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+judgment: 2 item(s); prose-citation 2
+2 file(s) would change (dry run; nothing written).
 ```
 
 Read the diff: `timestamp` became `generated` (the value carried across verbatim,
-at full precision), the follow-able citations became `sources`, the root-relative
-link gained its leading `/`, and the root `index.md` now declares v0.3. Everything
-else — including any unrecognized keys — is byte-for-byte unchanged (§11: the
-migration is additive and never drops a key it doesn't understand). The body
-`# Citations` list is **left in place**; the migration *adds* frontmatter
-`sources`, it does not delete the prose list, so prose findings you chose not to
-migrate simply stay where they were.
+at full precision), the follow-able citations became `sources`, and the
+root-relative link gained its leading `/`. Neither `index.md` nor `.okf` is in
+the diff: the version is held. Everything else — including any unrecognized
+keys — is byte-for-byte unchanged (§11: the migration is additive and never
+drops a key it doesn't understand). The body `# Citations` list is **left in
+place**; the migration *adds* frontmatter `sources`, it does not delete the prose
+list.
 
 If that is what you expect, apply for real. Snapshot the bundle first (a copy, or
 just commit it to git) so you can diff afterwards too:
@@ -298,13 +309,46 @@ $ cp -r mykb mykb-before          # or: git add -A && git commit
 $ okfctl migrate mykb --apply --plan migrate-plan.json
 migrated concepts/mouthfeel.md
 migrated concepts/tannin.md
-2 file(s) migrated; bundle declares v0.3.
-bundle valid as v0.3
-note: 3 judgment item(s) were not applied (they need a decision; see the plan file).
+2 file(s) migrated; okf_version declaration held: bundle still declares v0.1 (v0.2 fallbacks apply, §12.1).
+bundle valid
+note: 2 judgment item(s) were not applied (they need a decision; see the plan file).
 ```
 
-The apply **re-validates automatically** and reports `bundle valid as v0.3`. The
-closing note is the tool being honest: unresolved judgment items were left alone.
+The apply **re-validates automatically**. The closing note is the tool being
+honest: unresolved judgment items were left alone.
+
+Now resolve the two prose items (here, by deleting both lines from their
+`# Citations` lists) and re-plan. Nothing relies on the fallback any more, so the
+plan bumps, and the only edits left are the version markers:
+
+```sh
+$ okfctl migrate mykb --plan migrate-plan.json
+Wrote migrate-plan.json: 0 file(s) with deterministic edits (0 edit(s)), 0 judgment item(s).
+version: 0.1 -> declare v0.3
+edits: 0 file(s); timestamp->generated 0, citations->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
+judgment: 0 item(s); none
+$ okfctl migrate mykb --apply --plan migrate-plan.json --dry-run
+--- a/.okf
++++ b/.okf
+@@ -1,1 +1,1 @@
+-okf_version: 0.1
++okf_version: "0.3"
+--- a/index.md
++++ b/index.md
+@@ -1,1 +1,5 @@
++---
++okf_version: "0.3"
++---
++
+ # Knowledge Base
+version: 0.1 -> declare v0.3
+edits: 0 file(s); timestamp->generated 0, citations->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
+judgment: 0 item(s); none
+2 file(s) would change (dry run; nothing written).
+$ okfctl migrate mykb --apply --plan migrate-plan.json
+0 file(s) migrated; bundle declares v0.3.
+bundle valid as v0.3
+```
 
 ### 5. Verify
 
@@ -317,9 +361,12 @@ $ okfctl bundle info mykb | tail -1
 okf_version: 0.3 (declared in index.md)
 ```
 
-The migration is also **idempotent**: re-running plan+apply on an
+The migration is also **idempotent**, two ways. Re-running plan+apply on an
 already-migrated bundle finds `0 file(s) with deterministic edits` and produces a
-zero-byte diff. Safe to re-run; safe to run twice.
+zero-byte diff. And re-applying an old plan file to a tree it already migrated
+changes nothing: every edit re-checks the file first, so a source already listed
+is not added again and a `timestamp` already renamed is not renamed twice. Safe
+to re-run; safe to run twice.
 
 ## Common Pitfalls
 
@@ -347,34 +394,30 @@ zero-byte diff. Safe to re-run; safe to run twice.
    The plan file's consumer (agent, colleague, shell loop, human) lives *beside*
    the tool. Any prompt to give `okfctl` a credential is wrong.
 
-7. **Editing `nodes[]` but forgetting to remove the item from `judgment[]`
-   (by-hand route).** Leaving it in `judgment[]` is harmless — it just isn't
-   applied — but the "N item(s) need a decision" count won't drop, which is
-   confusing. Move resolved items out of `judgment[]` so the count reflects
-   reality.
+7. **Reaching for `--force-declare` to make the plan "clean".** A held version
+   is the tool protecting the prose citations you haven't decided yet: declaring
+   0.3 switches off the §12.1 fallback that is the only way a consumer still
+   reads them. Force it only once every item you care about is resolved and you
+   have chosen to let the rest go.
 
-8. **Expecting every markdown-link citation to resolve deterministically.** It
-   depends on the link text. A link with descriptive text —
-   `[tannin glossary](/concepts/tannin.md)` — resolves to a `sources` entry. But a
-   link whose text is a single bare word — `[mouthfeel](/concepts/mouthfeel.md)` —
-   is read as a bracket citation-*key* (`[mouthfeel]`) with no follow-able target,
-   so it lands in `judgment[]` as a `prose-citation`. This is the tool refusing to
-   guess, not a bug in your bundle: rather than half-parse the target it hands the
-   item back for you to decide. If a single-word link *should* migrate, the safe
-   fixes are on your side — give the link descriptive text, cite the bare URL/path
-   directly (`- /concepts/mouthfeel.md` won't parse either; use a real link or
-   URL), or resolve it by hand (pitfall 7). A bare URL always resolves.
+8. **Expecting a citation with two URLs to migrate.** An entry that names two
+   different resources — `[4] Vendor docs https://a.example/x, mirrored at
+   https://b.example/x` — is a judgment item. The tool will not pick one, and it
+   will not split the entry into two sources: both change what the entry claims.
+   Split it yourself (one entry per resource) and re-plan, and each half
+   migrates. The same URL repeated within one entry counts once.
 
 ## Verification Checklist
 
 - [ ] Phase 1 (`okfctl migrate <bundle>`) wrote a plan and touched no node files
 - [ ] Every `missing-actor` item you can resolve was cleared with
       `--generated-by <actor>` (a real actor, not a placeholder)
-- [ ] Every `prose-citation` item was decided (resolved with a real resource, or
-      deliberately left in `judgment[]`) — no fabricated resources
+- [ ] Every `prose-citation` item was decided (resolved with a real resource,
+      moved out of `# Citations`, or deliberately left) — no fabricated resources
 - [ ] `--apply --dry-run` previewed the exact edits and you snapshotted the
       bundle (copy or git commit) before the real apply
-- [ ] Real apply reported `bundle valid as v<target>`; you diffed before/after
+- [ ] The summary's `version:` line says what you expect: `hold` while items
+      remain, `declare v0.3` once they are resolved (or forced on purpose)
 - [ ] `okfctl validate <bundle>` exits 0 and `okfctl bundle info <bundle>` shows
-      `okf_version: 0.3 (declared in index.md)`
+      `okf_version: 0.3 (declared in index.md)` once the version is declared
 - [ ] Re-running plan+apply produces a zero diff (idempotent)

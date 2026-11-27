@@ -1,7 +1,7 @@
 ---
 name: okf-authoring
 description: Use when creating or maintaining nodes in an OKF bundle with okfctl — scaffolding concept nodes, applying type templates, running the bundle lifecycle, and keeping the reserved index.md and log.md files current.
-version: 1.0.0
+version: 1.1.0
 author: okfctl
 license: Apache-2.0
 metadata:
@@ -51,22 +51,26 @@ $ okfctl bundle init mykb
 Initialized OKF bundle in mykb
 ```
 
-A fresh bundle contains exactly three files:
+A fresh bundle contains exactly two files:
 
 ```
-mykb/.okf         # bundle marker: `okf_version: 0.1`
-mykb/index.md     # RESERVED — generated table of contents (type: Index)
+mykb/index.md     # RESERVED — table of contents; its frontmatter declares okf_version: "0.3" (§8.1)
 mykb/log.md       # RESERVED — change history
 ```
 
-`bundle info` summarizes any bundle:
+There is no `.okf` sidecar: the bundle-root `index.md` frontmatter is where a
+bundle declares its version (OKF v0.3 §8.1, §12). `bundle info` summarizes any
+bundle:
 
 ```sh
 $ okfctl bundle info mykb
 nodes: 0
 reserved: 2
-okf_version: 0.1
+okf_version: 0.3 (declared in index.md)
 ```
+
+A bundle that declares no version reports `okf_version: undeclared (v0.2
+fallbacks apply, §12.1)`; `okfctl migrate` upgrades it (see `okf-migrate-plan`).
 
 ## 2. Author concept nodes
 

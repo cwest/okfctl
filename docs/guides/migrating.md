@@ -9,7 +9,10 @@ model dependency, and it never guesses a judgment call.
 From v0.1 (v0.3 Appendix B), two renames:
 
 - frontmatter `timestamp` → `generated.at`
-- body `# Citations` list → frontmatter `sources`
+- body `# Citations` list → frontmatter `sources`. An entry that names exactly
+  one follow-able resource (an absolute URL, or a link to a bundle path; §5.1,
+  §6.2) becomes one `sources` entry: that resource, plus the entry's text as
+  `title`, so the claim beside the URL comes along. The body list stays.
 
 From v0.2 (v0.3 §13.1), two edits:
 
@@ -30,11 +33,26 @@ existing root frontmatter block keeps every other byte; an index with no block
 gets an `okf_version`-only block. A legacy `.okf` sidecar, if present, is bumped
 too.
 
+## When the version waits
+
+A `prose-citation` or `missing-actor` judgment item is still readable through a
+v0.1 fallback: a consumer MAY parse the body `# Citations` list, or use a legacy
+`timestamp` (Appendix B). §12.1 grants those fallbacks only to a bundle that
+declares 0.2 or earlier, or nothing. Declaring 0.3 while such an item remains
+would make every v0.3 consumer drop it.
+
+So while any remain, the plan's `version_action` is `hold`: apply writes the
+content edits and leaves `index.md` and `.okf` alone. Resolve the items, re-plan,
+and the next apply declares v0.3. If you decide to let the remaining items go,
+re-plan with `--force-declare`; the plan records it, and the summary counts the
+items that lose the fallback.
+
 ## Judgment items
 
 `migrate` writes these to the plan and leaves them unchanged:
 
-- a prose citation with no follow-able resource (§5.1 requires one)
+- a citation entry with no follow-able resource (§5.1 requires one), or with two
+  different ones (picking one, or splitting the entry, is the author's call)
 - a `timestamp` rename with no actor (§7)
 - a date-time with no offset, for example `2026-06-20T10:00:00` (§5, §13.2: it
   names no instant, and only the author knows which offset was meant)
@@ -50,10 +68,10 @@ judgment item, writing only the plan file, and prints a summary of the counts by
 kind:
 
 ```text
-Wrote migrate-plan.json: 2 file(s) with deterministic edits (6 edit(s)), 3 judgment item(s).
-version: 0.1 -> declare v0.3
-edits: 2 file(s); timestamp->generated 2, citations->sources 3, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
-judgment: 3 item(s); prose-citation 3
+Wrote migrate-plan.json: 2 file(s) with deterministic edits (7 edit(s)), 2 judgment item(s).
+version: 0.1 -> hold (2 prose-citation/missing-actor item(s) still rely on the §12.1 fallback that declaring v0.3 turns off; resolve them and re-plan, or re-plan with --force-declare)
+edits: 2 file(s); timestamp->generated 2, citations->sources 4, root-relative links->/ 1, root-relative path fields->/ 0, timestamps->RFC 3339 0
+judgment: 2 item(s); prose-citation 2
 ```
 
 ## Phase 2—apply
@@ -72,8 +90,9 @@ re-validate:
 okfctl migrate ./mykb --apply --plan migrate-plan.json
 ```
 
-A second plan on the migrated bundle carries no edits, so `migrate` is safe to
-re-run.
+A second plan on the migrated bundle carries no edits, and re-applying the same
+plan file changes nothing (every edit re-checks the file first), so `migrate` is
+safe to re-run.
 
 ## Bundles migrate leaves alone
 
@@ -84,4 +103,5 @@ consumption and doesn't refuse the bundle, and rewriting it toward v0.3 would be
 downgrade.
 
 `--generated-by` records the actor as `generated.by` for each timestamp rename.
-See `okfctl migrate --help` for the full flag set.
+`--force-declare` declares v0.3 despite remaining fallback items. See
+`okfctl migrate --help` for the full flag set.
