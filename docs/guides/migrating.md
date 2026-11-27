@@ -164,9 +164,10 @@ label (§5.1: per-claim attribution is a footnote whose label is a
 entry's place in the list.
 
 A body `# Citations` list goes only when nothing in it would be lost: every
-entry's full text is the footnote definition of its source, every resource it
-names is a source's `resource`, the section holds nothing but entries, and no
-body `[k]` still points at it. `acidity.md` passes, so its list goes.
+entry's full text is the footnote definition of its source (or opens it, when
+a hand-annotated title was moved in after it), every resource it names is a
+source's `resource`, the section holds nothing but entries, and no body `[k]`
+still points at it. `acidity.md` passes, so its list goes.
 `tannin.md` fails on the Montalcino line, so its list stays as written.
 
 ### 3. Apply
@@ -263,7 +264,11 @@ From v0.1 (v0.3 Appendix B), two renames:
   An earlier run may have written the whole entry into `title`. Once the
   entry's text is the footnote definition of the source's `id`, that title
   is cut to the work's name, or removed with a `source-title-unnamed` item
-  when the entry names none. A title that is already a name stays, and so
+  when the entry names none. A title that opens with the entry's `[key]` but
+  was annotated by hand past the entry's text (`[S8] iCIMS, AI recruiting
+  software page (fetched 2026-11-27). VENDOR-DOC.`) has that text appended
+  to the footnote definition `migrate` writes, then is cut or removed the
+  same way, so nothing is lost. A title that is already a name stays, and so
   do the source's other keys (`note`, `x-` keys; §4.1). The plan summary
   counts these on a `titles:` line.
   An entry with no URL that carries exactly one DOI, arXiv id, PubMed id,

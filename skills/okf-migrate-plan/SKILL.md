@@ -298,7 +298,7 @@ comes back to you as a judgment item:
 | source whose `title` is its whole `# Citations` entry (an earlier run wrote it) | `title` cut to the work's name, or removed (§5.1) | the footnote definition `[^id]` holds the entry's text, in this plan or already in the body | it names no work: `source-title-unnamed` (title removed; the text is in the footnote); no footnote holds the text: `source-title-unpreserved` (title kept) |
 | link or path field that resolves only from the bundle root (§12.1) | same target with a leading `/` (§6) | always | never |
 | §5 timestamp not in RFC 3339 form | `"2026-06-20T10:00:00Z"` | it has an offset (`Z`, `+0000`, `-05:00`) | no offset: `timestamp-no-offset`; not a date: `timestamp-invalid` |
-| the body `# Citations` list itself | removed (§4.2: no citation list in the body) | the migrated file holds all of it: each entry's text (whitespace collapsed) is the footnote definition of its first source, each URL or bundle path it names is a source's `resource`, every line is an entry, and no body `[k]` still cites it | anything would be lost: `citations-kept`, naming each entry and what it would lose (the whole list stays) |
+| the body `# Citations` list itself | removed (§4.2: no citation list in the body) | the migrated file holds all of it: each entry's text (whitespace collapsed) is the footnote definition of its first source, or opens it followed by a moved title annotation, each URL or bundle path it names is a source's `resource`, every line is an entry, and no body `[k]` still cites it | anything would be lost: `citations-kept`, naming each entry and what it would lose (the whole list stays) |
 
 Feed it `[1] Smith, *Tannin chemistry*, 2024. https://…` and the new
 `title` is `Tannin chemistry`. The authors, year, and URL stay in the body. The
@@ -379,7 +379,10 @@ list. An item goes away when the node stops producing it.
 - **A whole-entry title kept (`source-title-unpreserved`).** No footnote
   `[^id]` holds the entry's text, so the tool left the title alone. Make the
   footnote definition hold the entry, or shorten the title yourself once the
-  text lives somewhere else.
+  text lives somewhere else. A hand-annotated title (one that opens with the
+  entry's `[key]` but says more) lands here when the author already wrote
+  `[^id]`: the tool never edits an author's footnote, so add the title's text
+  to it yourself.
 - **A title that differs from the citation (`source-title-conflict`).** The
   tool didn't touch the old `title`. Decide which name is right and edit the
   source.

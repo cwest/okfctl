@@ -239,3 +239,27 @@ func TestConformance_MigrateRemoveCitations_Section5_1_UnrewrittenBodyRefKeepsLi
 		t.Fatalf("the list must stay")
 	}
 }
+
+// Negative control: a footnote that runs the entry's last word on into more
+// text ("2026-06-01)X") does not hold the entry's text, so the list stays.
+// Only the entry text followed by a space and more text counts as held.
+func TestConformance_MigrateRemoveCitations_Section5_1_FootnoteRunOnKeepsList(t *testing.T) {
+	node := strings.Replace(convertedKeptNode, "(read 2026-06-01)\n\n# Citations", "(read 2026-06-01)X\n\n# Citations", 1)
+	dir := mkMigrateBundle(t, kb(node))
+	_, plan := planFor(t, dir, "", false)
+	if nm := planNodeMigration(plan, "a.md"); nm != nil && nm.RemoveCitations {
+		t.Fatalf("§5.1: a run-on footnote must keep the list: %+v", nm)
+	}
+	findJudgment(t, plan, "a.md", JudgmentCitationsKept)
+}
+
+// Positive control: a footnote holding the entry's text and then more (an
+// annotation an earlier run moved there) holds the entry; the list goes.
+func TestConformance_MigrateRemoveCitations_Section5_1_FootnoteWithAppendedTextRemovesList(t *testing.T) {
+	node := strings.Replace(convertedKeptNode, "(read 2026-06-01)\n\n# Citations", "(read 2026-06-01) Doc A landing page. VENDOR-DOC.\n\n# Citations", 1)
+	dir := mkMigrateBundle(t, kb(node))
+	_, plan := planFor(t, dir, "", false)
+	if nm := planNodeMigration(plan, "a.md"); nm == nil || !nm.RemoveCitations {
+		t.Fatalf("§4.2: entry text plus appended text must allow removal: %+v / %+v", nm, plan.Judgment)
+	}
+}

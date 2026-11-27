@@ -381,9 +381,15 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 			}
 			if cur, ok := lookupSourceTitle(existing, res); ok {
 				attach(i, cur.resource)
-				if !att[i].duplicate && cur.has && cur.title != src.Title && isEntryText(cur.title, item) {
-					retitle = append(retitle, retitleCandidate{entry: i, cur: cur, name: src.Title})
-					deferred[cur.resource] = []titleCall{}
+				if !att[i].duplicate && cur.has && cur.title != src.Title {
+					switch {
+					case isEntryText(cur.title, item):
+						retitle = append(retitle, retitleCandidate{entry: i, cur: cur, name: src.Title})
+						deferred[cur.resource] = []titleCall{}
+					case annotatedTitle(cur.title, item):
+						retitle = append(retitle, retitleCandidate{entry: i, cur: cur, name: src.Title, moved: true})
+						deferred[cur.resource] = []titleCall{}
+					}
 				}
 				// A source whose title may be shortened is decided once its
 				// final title is known (replayTitleCalls), so a re-plan of

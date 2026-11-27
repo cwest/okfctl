@@ -63,12 +63,14 @@ func newMigrateCmd() *cobra.Command {
 			"with case folded), the entry's full text becomes the footnote definition " +
 			"[^id], and body [k] references become [^id] (§5.1, §4.2). A source title that " +
 			"holds its whole entry is cut to the work's name, or removed when the entry " +
-			"names none, once that footnote holds the text. An entry that names " +
+			"names none, once that footnote holds the text. A title that opens with the " +
+			"entry's [key] but was annotated past the entry's text has that text added " +
+			"to the footnote first, then is cut the same way. An entry that names " +
 			"two or more resources (code spans aside) is split into one source per resource, " +
 			"with ids <id>, <id>-2, <id>-3; the first holds the full entry text as its " +
 			"footnote, a later one its link text or resource, and each body [k] becomes " +
-			"[^id][^id-2]... Once every entry's text is the footnote definition of its " +
-			"source and every resource it names is a source's resource, the body # Citations " +
+			"[^id][^id-2]... Once every entry's text opens the footnote definition of its " +
+			"source (alone, or followed by a moved title annotation) and every resource it names is a source's resource, the body # Citations " +
 			"list is removed (§4.2); otherwise it stays. The v0.2 changes " +
 			"(§13.1) give a leading / to any link or path field that resolves only from the " +
 			"bundle root (§12.1). It then points at the same file under v0.3 (§6). They " +

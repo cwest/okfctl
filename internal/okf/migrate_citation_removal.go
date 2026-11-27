@@ -28,7 +28,9 @@ import (
 //   - every entry's full text (list marker removed, wrapped lines joined, a
 //     leading `[id]` dropped only when it became the id: footnoteText) is,
 //     whitespace collapsed, the text of a footnote definition whose label is
-//     a `sources[].id`. A split entry's first part holds it.
+//     a `sources[].id`, or the start of it followed by a space (holdsEntry:
+//     a moved title annotation comes after the entry's text). A split
+//     entry's first part holds it.
 //   - every resource the entry names (citationResources: link targets and
 //     URLs outside code) is some source's `resource`.
 //   - the section holds nothing but entries: a status-key line or group
@@ -93,6 +95,15 @@ func frontmatterSources(fm map[string]any) []noteSource {
 
 // collapse joins s's whitespace runs into single spaces.
 func collapse(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+// holdsEntry reports whether the footnote text def holds the entry text: it
+// is that text, or that text then a space and more (a hand-annotated title
+// migrate moved into the footnote). Both are whitespace-collapsed. The entry
+// text is then in the footnote byte for byte, so removing the list loses
+// nothing; a footnote that only starts the same way does not count.
+func holdsEntry(def, entry string) bool {
+	return def == entry || strings.HasPrefix(def, entry+" ")
+}
 
 // citationListLoss reports what removing the `# Citations` section of a node
 // whose file bytes are raw would lose, one line per entry part, body
@@ -184,7 +195,7 @@ func citationListLoss(b *Bundle, rel string, raw []byte) (lost []string, has boo
 			lost = append(lost, fmt.Sprintf("%s: source %s has no id, so no footnote holds the entry's text", name, first))
 		case !defined:
 			lost = append(lost, fmt.Sprintf("%s: source %s has no footnote definition [^%s]", name, src.id, src.id))
-		case def != collapse(footnoteText(entry, src.id)):
+		case !holdsEntry(def, collapse(footnoteText(entry, src.id))):
 			lost = append(lost, fmt.Sprintf("%s: footnote [^%s] does not hold the entry's text", name, src.id))
 		}
 		for _, p := range parts {
