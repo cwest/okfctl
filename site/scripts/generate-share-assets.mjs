@@ -35,6 +35,7 @@ import { brand } from "./brand.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const siteRoot = join(here, "..");
 const publicDir = join(siteRoot, "public");
+const shareDir = join(siteRoot, ".share-assets");
 
 // XML-escape text we interpolate into the SVG. Tokens are ours, but escape
 // anyway so a future token with an & or < can never emit broken SVG.
@@ -95,10 +96,16 @@ function rasterize(svg, width) {
 async function main() {
   await mkdir(publicDir, { recursive: true });
 
-  // 1) Social card.
+  // 1) Social card. The SVG it is rasterized from is written out too, so the
+  //    prose gate (scripts/scan_page_prose.py) can read the card's <text>
+  //    lines: words inside a PNG are invisible to every text check. It lives
+  //    outside public/ so it is not deployed.
   const card = cardSvg();
   await writeFile(join(publicDir, "og.png"), rasterize(card, 1200));
   console.log("share-assets: wrote public/og.png (1200x630)");
+  await mkdir(shareDir, { recursive: true });
+  await writeFile(join(shareDir, "og.svg"), card);
+  console.log("share-assets: wrote .share-assets/og.svg (card text for the prose gate)");
 
   // 2) Icons, rasterized from the committed favicon.svg so the PNG fallback and
   //    apple-touch-icon are the exact same mark.
