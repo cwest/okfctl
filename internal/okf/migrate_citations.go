@@ -25,8 +25,9 @@ import (
 // optional ("a label for humans"). An entry is converted only when it names
 // exactly ONE follow-able resource: an absolute URL or a bundle path (§6.2).
 // That resource is the one thing §5.1 requires, and it comes from the entry's
-// own text, so nothing is invented. The entry's text becomes the `title`, so
-// the claim the author wrote next to the URL is carried across, not dropped.
+// own text, so nothing is invented. The `title` is the cited work's name
+// (citationName) when the entry marks one, and is left unset otherwise; the
+// full entry text stays in the body.
 // An entry with no URL or path but exactly one DOI, arXiv id, PubMed id or
 // valid ISBN gets its resource built from that identifier (identifierResource).
 // An entry with no resource, or with two different ones, is a judgment item:
@@ -211,11 +212,13 @@ func citationSource(entry string) (SourceEdit, bool) {
 }
 
 // citationSourceFrom converts one citation entry to a §5.1 source when it names
-// exactly one follow-able resource. A sole link keeps its link text as the
-// title and a sole URL gets none; otherwise the title is the entry text with
-// its list marker removed. ok is false for an entry with no resource or with
-// more than one distinct resource. fromIdentifier reports that the resource
-// was built from a DOI, arXiv id, PubMed id or ISBN rather than read as a URL.
+// exactly one follow-able resource. The title is the work's name only
+// (citationName); a sole link keeps its link text as the name. An entry
+// that marks no name gets no title: §5.1 title is "a label for humans", and
+// the full entry text (authors, venue, year, URLs, grades) is not one. ok is
+// false for an entry with no resource or with more than one distinct
+// resource. fromIdentifier reports that the resource was built from a DOI,
+// arXiv id, PubMed id or ISBN rather than read as a URL.
 func citationSourceFrom(entry string) (src SourceEdit, ok, fromIdentifier bool) {
 	text := strings.TrimSpace(entry)
 	text = citationMarkerRe.ReplaceAllString(text, "")
@@ -256,14 +259,26 @@ func citationSourceFrom(entry string) (src SourceEdit, ok, fromIdentifier bool) 
 		return SourceEdit{}, false, false
 	}
 	res := resources[0]
-	title := text
+	title := ""
 	switch {
 	case citationLinkSpanRe.FindString(text) == text:
 		title = strings.TrimSpace(linkText)
 	case strings.Trim(text, "<>") == res:
-		title = ""
+	default:
+		title, _ = citationName(text)
 	}
 	return SourceEdit{Resource: res, Title: title}, true, false
+}
+
+// citationHasProse reports whether a single-resource entry says anything
+// beyond its resource: a bare URL or a sole link does not, so there is no
+// name to look for and nothing to report when none is found.
+func citationHasProse(entry string) bool {
+	text := strings.TrimSpace(entry)
+	text = citationMarkerRe.ReplaceAllString(text, "")
+	text = strings.TrimSpace(orderedMarkerRe.ReplaceAllString(text, ""))
+	bare := strings.Trim(text, "<>")
+	return citationLinkSpanRe.FindString(text) != text && citationURLRe.FindString(bare) != bare
 }
 
 // trimURL drops the sentence punctuation and emphasis that commonly follow a

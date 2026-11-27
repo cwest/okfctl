@@ -83,20 +83,19 @@ func TestConformance_MigrateIdentifier_Section5_1_BadISBNChecksumNotLinked(t *te
 // an entry that already names a URL keeps it as its one resource. An
 // identifier that repeats the URL (or names another document) adds nothing, so
 // the DOI never becomes a second source and the conversion is the one made
-// before identifiers were read.
+// before identifiers were read. The title is the work's name only
+// (citationName): none for an entry that marks no name.
 func TestConformance_MigrateIdentifier_Section5_1_URLAlreadyPresentNotDuplicated(t *testing.T) {
 	for entry, want := range map[string]SourceEdit{
 		"[1] Ordóñez & Roggen, *Sensors* 2016, DOI 10.3390/s16010115. <https://doi.org/10.3390/s16010115>": {
 			Resource: "https://doi.org/10.3390/s16010115",
-			Title:    "[1] Ordóñez & Roggen, *Sensors* 2016, DOI 10.3390/s16010115. <https://doi.org/10.3390/s16010115>",
 		},
 		"[2] Paper, arXiv:2310.20410 — https://arxiv.org/abs/2310.20410": {
 			Resource: "https://arxiv.org/abs/2310.20410",
-			Title:    "[2] Paper, arXiv:2310.20410 — https://arxiv.org/abs/2310.20410",
 		},
 		"[3] [The paper](https://example.org/p), doi:10.1000/xyz": {
 			Resource: "https://example.org/p",
-			Title:    "[3] [The paper](https://example.org/p), doi:10.1000/xyz",
+			Title:    "The paper",
 		},
 	} {
 		s, ok := citationSource(entry)
