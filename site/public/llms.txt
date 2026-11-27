@@ -1,8 +1,8 @@
 # okfctl
 
 > A command-line tool for authoring and maintaining Open Knowledge Format (OKF)
-> bundles. It is a single static binary written in pure Go and built with CGO
-> disabled, so it runs without Python or a model runtime. okfctl does not author
+> bundles. It ships as one static binary for macOS, Linux, and Windows: put it
+> on your PATH and it runs. okfctl does not author
 > the OKF specification; it is a conformant consumer that enforces the spec floor
 > and keeps anything stricter behind an explicit opt-in overlay.
 
