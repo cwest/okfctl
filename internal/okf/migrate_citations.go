@@ -26,6 +26,8 @@ import (
 // That resource is the one thing §5.1 requires, and it comes from the entry's
 // own text, so nothing is invented. The entry's text becomes the `title`, so
 // the claim the author wrote next to the URL is carried across, not dropped.
+// An entry with no URL or path but exactly one DOI, arXiv id, PubMed id or
+// valid ISBN gets its resource built from that identifier (identifierResource).
 // An entry with no resource, or with two different ones, is a judgment item:
 // choosing which URL is "the" source, or splitting the entry, is the author's
 // call.
@@ -127,12 +129,20 @@ func markerStarts(line string, open, unordered, curOrdered bool, curIndent int) 
 	return unordered || curOrdered
 }
 
-// citationSource converts one citation entry to a §5.1 source when it names
+// citationSource converts one citation entry to a §5.1 source; see
+// citationSourceFrom.
+func citationSource(entry string) (SourceEdit, bool) {
+	s, ok, _ := citationSourceFrom(entry)
+	return s, ok
+}
+
+// citationSourceFrom converts one citation entry to a §5.1 source when it names
 // exactly one follow-able resource. A sole link keeps its link text as the
 // title and a sole URL gets none; otherwise the title is the entry text with
 // its list marker removed. ok is false for an entry with no resource or with
-// more than one distinct resource.
-func citationSource(entry string) (SourceEdit, bool) {
+// more than one distinct resource. fromIdentifier reports that the resource
+// was built from a DOI, arXiv id, PubMed id or ISBN rather than read as a URL.
+func citationSourceFrom(entry string) (src SourceEdit, ok, fromIdentifier bool) {
 	text := strings.TrimSpace(entry)
 	text = citationMarkerRe.ReplaceAllString(text, "")
 	text = orderedMarkerRe.ReplaceAllString(text, "")
@@ -159,8 +169,17 @@ func citationSource(entry string) (SourceEdit, bool) {
 	for _, u := range citationURLRe.FindAllString(rest, -1) {
 		add(trimURL(u))
 	}
+	if len(resources) == 0 {
+		// No URL or bundle path: a DOI, arXiv id, PubMed id or valid ISBN in
+		// the entry still names one document, and its resolver URL is the
+		// resource. The entry text is not copied as the title: a title is
+		// the work's name, never the full citation.
+		if res, ok := identifierResource(rest); ok {
+			return SourceEdit{Resource: res}, true, true
+		}
+	}
 	if len(resources) != 1 {
-		return SourceEdit{}, false
+		return SourceEdit{}, false, false
 	}
 	res := resources[0]
 	title := text
@@ -170,7 +189,7 @@ func citationSource(entry string) (SourceEdit, bool) {
 	case strings.Trim(text, "<>") == res:
 		title = ""
 	}
-	return SourceEdit{Resource: res, Title: title}, true
+	return SourceEdit{Resource: res, Title: title}, true, false
 }
 
 // trimURL drops the sentence punctuation and emphasis that commonly follow a
