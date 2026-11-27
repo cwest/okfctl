@@ -36,7 +36,11 @@ never forked.
 WHICH SURFACES. HTML: the BUILT site (site/dist/**/*.html), because meta/OG/footer
 copy is assembled at build time and a source-level scan structurally cannot see
 it. Markdown: the prose surfaces this repo SHIPS to readers -- README.md,
-CONTRIBUTING.md, docs/*.md, docs/guides/*.md, docs/commands/README.md. Internal,
+CONTRIBUTING.md, docs/*.md, docs/guides/*.md, docs/commands/README.md, and
+site/public/llms.txt (Markdown by the llms.txt convention, so it rides the
+Markdown front end despite its .txt extension). JSON: the top-level description
+of plugin.json, the blurb an agent client shows when it lists the plugin; every
+other manifest value is data and is never scanned. Internal,
 unpublished Markdown (docs/PRD.md, docs/adr/, docs/plans/, docs/specs/, testdata/)
 is deliberately excluded: it is working material full of fixture prose, not
 reader-facing copy, and gating it would train everyone to ignore the check. The
@@ -92,14 +96,18 @@ Usage:
     scan_page_prose.py $(find site/dist -name '*.html')
     # Markdown prose surfaces:
     scan_page_prose.py README.md CONTRIBUTING.md docs/*.md docs/guides/*.md
+    # Shipped non-.md surfaces:
+    scan_page_prose.py site/public/llms.txt plugin.json
 
-The front end is chosen per file by extension: .md/.markdown -> Markdown, every
-other extension -> HTML.
+The front end is chosen per file by name: .md/.markdown and llms.txt ->
+Markdown, .json -> manifest prose fields, every other extension -> HTML.
 
-Exit 0 when clean, 1 when a finding is present, 2 on a usage error. Stdlib only.
+Exit 0 when clean, 1 when a finding is present, 2 on a usage error (including a
+.json file that does not parse). Stdlib only.
 """
 
 import html
+import json
 import re
 import sys
 from pathlib import Path
@@ -360,10 +368,45 @@ def suppressed_classes(text: str) -> frozenset[str]:
     return frozenset()
 
 
+# llms.txt (https://llmstxt.org) is Markdown by convention despite its .txt
+# extension. It ships verbatim to okfctl.dev, so it gets the Markdown front end;
+# routed by extension it fell to the HTML front end, found zero prose strings,
+# and passed unread.
+MARKDOWN_BASENAMES = ("llms.txt", "llms-full.txt")
+
+# JSON manifest fields that are prose a reader reads. In plugin.json only the
+# top-level description qualifies: an agent client shows it as the plugin's
+# blurb. Every other value (schema URL, names, keywords, install commands) is
+# data, not prose, and is never scanned.
+JSON_PROSE_KEYS = ("description",)
+
+
+class UsageError(Exception):
+    """An input the scanner cannot read. Exits 2, never passes silently."""
+
+
+def extract_prose_json(doc: str) -> list[tuple[str, str]]:
+    """Return (source_label, text) for the top-level prose fields of a manifest."""
+    try:
+        data = json.loads(doc)
+    except json.JSONDecodeError as e:
+        raise UsageError(f"not valid JSON: {e}") from e
+    out: list[tuple[str, str]] = []
+    if isinstance(data, dict):
+        for key in JSON_PROSE_KEYS:
+            if isinstance(data.get(key), str):
+                out.append((f"json:{key}", data[key]))
+    return out
+
+
 def extract_for_path(path: str, text: str) -> list[tuple[str, str]]:
-    """Pick the front end by file extension: .md/.markdown -> Markdown, else HTML."""
-    if path.lower().endswith(MARKDOWN_SUFFIXES):
+    """Pick the front end by file name: .md/.markdown/llms.txt -> Markdown,
+    .json -> manifest prose fields, every other extension -> HTML."""
+    lower = path.lower()
+    if lower.endswith(MARKDOWN_SUFFIXES) or Path(lower).name in MARKDOWN_BASENAMES:
         return extract_prose_markdown(text)
+    if lower.endswith(".json"):
+        return extract_prose_json(text)
     return extract_prose(text)
 
 
@@ -379,7 +422,11 @@ def main() -> int:
     class_counts: dict[str, int] = {}
     for path in sys.argv[1:]:
         page = Path(path).read_text()
-        items = extract_for_path(path, page)
+        try:
+            items = extract_for_path(path, page)
+        except UsageError as e:
+            print(f"scan_page_prose.py: {path}: {e}", file=sys.stderr)
+            return 2
         hits = find_hits(items, suppress=suppressed_classes(page))
         print(f"=== {path} — {len(items)} prose strings scanned ===")
         if hits:

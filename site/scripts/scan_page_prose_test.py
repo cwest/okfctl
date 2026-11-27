@@ -622,5 +622,109 @@ class GeneratedReferenceSuppressesEmDashOnly(unittest.TestCase):
         self.assertIn("NEGATIVE-LISTING", r.stdout)
 
 
+def run_named(name: str, text: str):
+    """Write text to a temp file with an exact basename, run the scanner on it.
+
+    The front end is chosen by file name, so the shipped surfaces that are not
+    .md/.html (llms.txt, plugin.json) need their real names in the fixture.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / name
+        p.write_text(text)
+        return subprocess.run(
+            [sys.executable, str(SCANNER), str(p)],
+            capture_output=True,
+            text=True,
+        )
+
+
+LLMS_CLEAN = (
+    "# okfctl\n\n"
+    "> A command-line tool for authoring Open Knowledge Format bundles. It is a\n"
+    "> single static binary written in pure Go (`CGO_ENABLED=0`).\n\n"
+    "## Docs\n\n"
+    "- [Command reference](https://okfctl.dev/reference/commands/): Every command\u2014generated from the binary.\n"
+)
+
+
+class LlmsTxtIsScannedAsMarkdown(unittest.TestCase):
+    """site/public/llms.txt ships verbatim to okfctl.dev and is Markdown by the
+    llms.txt convention, but its .txt extension once routed it to the HTML
+    front end, which found zero prose strings in it, so it passed unread."""
+
+    def test_clean_llms_txt_passes(self):
+        r = run_named("llms.txt", LLMS_CLEAN)
+        self.assertEqual(r.returncode, 0, f"expected clean:\n{r.stdout}")
+        self.assertNotIn("0 prose strings", r.stdout, "llms.txt must be read, not skipped")
+
+    def test_spaced_em_dash_in_llms_txt_fails(self):
+        # Positive control: an em-dash-dense sentence planted in llms.txt.
+        doc = LLMS_CLEAN + (
+            "\nokfctl checks a corpus \u2014 every node \u2014 against the spec floor.\n"
+        )
+        r = run_named("llms.txt", doc)
+        self.assertEqual(r.returncode, 1, f"planted em dash must fail:\n{r.stdout}")
+        self.assertIn("SPACED-EM-DASH", r.stdout)
+
+    def test_negative_listing_in_llms_txt_fails(self):
+        # The exact line F8 of the writing audit found shipped in llms.txt.
+        doc = "# okfctl\n\n> Pure Go, no CGO, no Python, no model runtime.\n"
+        r = run_named("llms.txt", doc)
+        self.assertEqual(r.returncode, 1, f"neg-listing must fail:\n{r.stdout}")
+        self.assertIn("NEGATIVE-LISTING", r.stdout)
+
+    def test_spaced_em_dash_in_llms_txt_code_span_passes(self):
+        # Negative control: the Markdown exemptions carry over to llms.txt.
+        doc = LLMS_CLEAN + "\nRun `okfctl lint \u2014 strict` in CI.\n"
+        r = run_named("llms.txt", doc)
+        self.assertEqual(r.returncode, 0, f"code span must be exempt:\n{r.stdout}")
+
+
+PLUGIN_CLEAN = """{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "okfctl",
+  "description": "Author and maintain OKF bundles from your agent\\u2014scaffold and validate nodes.",
+  "keywords": ["okf"]
+}
+"""
+
+
+class PluginJsonDescriptionIsScanned(unittest.TestCase):
+    """plugin.json's description is the blurb an agent client shows when it
+    lists the plugin. It is prose a reader reads; the rest of the manifest
+    (schema URL, names, keywords, install commands) is data, not prose."""
+
+    def test_clean_plugin_json_passes(self):
+        r = run_named("plugin.json", PLUGIN_CLEAN)
+        self.assertEqual(r.returncode, 0, f"expected clean:\n{r.stdout}")
+        self.assertIn("1 prose strings", r.stdout, "the description must be read")
+
+    def test_spaced_em_dash_in_description_fails(self):
+        doc = PLUGIN_CLEAN.replace("agent\\u2014scaffold", "agent \\u2014 scaffold")
+        r = run_named("plugin.json", doc)
+        self.assertEqual(r.returncode, 1, f"description em dash must fail:\n{r.stdout}")
+        self.assertIn("SPACED-EM-DASH in json:description", r.stdout)
+
+    def test_negative_listing_in_description_fails(self):
+        doc = PLUGIN_CLEAN.replace(
+            "scaffold and validate nodes.", "pure Go, no CGO, no Python."
+        )
+        r = run_named("plugin.json", doc)
+        self.assertEqual(r.returncode, 1, f"neg-listing must fail:\n{r.stdout}")
+        self.assertIn("NEGATIVE-LISTING", r.stdout)
+
+    def test_spaced_em_dash_outside_description_passes(self):
+        # Negative control: a non-description value is data, never scanned.
+        doc = PLUGIN_CLEAN.replace(
+            '"name": "okfctl"', '"name": "okfctl \\u2014 no CGO, no Python"'
+        )
+        r = run_named("plugin.json", doc)
+        self.assertEqual(r.returncode, 0, f"non-description field must be exempt:\n{r.stdout}")
+
+    def test_malformed_json_is_usage_error(self):
+        r = run_named("plugin.json", "{ not json")
+        self.assertEqual(r.returncode, 2, f"malformed JSON must not pass silently:\n{r.stdout}")
+
+
 if __name__ == "__main__":
     unittest.main()
