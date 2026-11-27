@@ -16,6 +16,7 @@ package okf
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -44,6 +45,9 @@ var (
 	citationLinkSpanRe = regexp.MustCompile(`!?\[([^\]\n]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)`)
 	// citationURLRe matches a bare or <angle-wrapped> absolute http(s) URL.
 	citationURLRe = regexp.MustCompile("https?://[^\\s<>\"`\\]]+")
+	// citationRefDefRe matches a whole-line markdown link reference definition
+	// (`[label]: dest "title"`).
+	citationRefDefRe = regexp.MustCompile(`^ {0,3}\[[^\]\n]+\]:[ \t]*<?[^\s<>]+>?(?:[ \t]+(?:"[^"]*"|'[^']*'|\([^)]*\)))?[ \t]*$`)
 )
 
 // citationEntries returns the entries under a `# Citations` heading in body
@@ -54,7 +58,17 @@ var (
 // never an entry start. Lines outside any entry (a status-key paragraph) are
 // skipped.
 //
-// An entry-marker line starts an entry only at the open entry's indent or
+// An unbulleted bracket-key line always starts an entry at a paragraph start:
+// the first line of the section, or the first after a blank or legend line.
+// Inside an open entry, a hard-wrapped line that merely begins with a bracket
+// token (`[9]: C4 provides ...`, `[4]).`, `**[2026-11-25 corrected]**`) is
+// continuation text; splitting there would write a fragment as a §5.1 title.
+// Two shapes still start an entry with no blank line before them: the next
+// key of a tight list (`[2]` after `[1]`, `[1b]` after `[1a]`; see
+// bracketKeyContinues), and a link reference definition (`[label]: url`)
+// right after another, each its own entry as CommonMark reads it.
+//
+// A bullet line starts an entry only at the open entry's indent or
 // shallower; a marker indented deeper is wrapped text inside that entry. An
 // ordered `n.` line starts an entry only where a list item can start: when no
 // entry is open (it begins a list block), or as the next sibling of an open
@@ -71,6 +85,7 @@ func citationEntries(body string) []string {
 	var out []string
 	var cur []string
 	curOrdered := false // the open entry is an ordered-list item
+	curRefDef := false  // the open entry is a link reference definition
 	curIndent := 0      // indent of the open ordered entry's marker
 	flush := func() {
 		if len(cur) > 0 {
@@ -78,11 +93,13 @@ func citationEntries(body string) []string {
 			cur = nil
 		}
 		curOrdered = false
+		curRefDef = false
 	}
 	start := func(line string, ordered bool) {
 		flush()
 		cur = []string{strings.TrimRight(line, " \t\r")}
 		curOrdered = ordered
+		curRefDef = citationRefDefRe.MatchString(line)
 		curIndent = len(line) - len(strings.TrimLeft(line, " \t"))
 	}
 	for _, line := range strings.Split(body[loc[1]:], "\n") {
@@ -100,7 +117,11 @@ func citationEntries(body string) []string {
 			if cur != nil {
 				cur = append(cur, trimmed)
 			}
-		case (citationEntryRe.MatchString(line) || citationBulletRe.MatchString(line)) && markerStarts(line, cur != nil, true, curOrdered, curIndent):
+		case citationBulletRe.MatchString(line) && markerStarts(line, cur != nil, true, curOrdered, curIndent):
+			start(line, false)
+		case citationEntryRe.MatchString(line) && !citationBulletRe.MatchString(line) &&
+			(cur == nil || curRefDef && citationRefDefRe.MatchString(line) ||
+				bracketKeyContinues(cur[0], line, curOrdered, curIndent)):
 			start(line, false)
 		case citationOrderedRe.MatchString(line) && markerStarts(line, cur != nil, false, curOrdered, curIndent):
 			start(line, true)
@@ -112,13 +133,66 @@ func citationEntries(body string) []string {
 	return out
 }
 
+// bracketKeyContinues reports whether an unbulleted bracket-key line starts
+// the next entry of a tight list (no blank line between entries) while an
+// entry is open. A bracket token on a wrapped line is usually a back-reference
+// (`[9]: C4 provides ...`, `[4]).`, `[21].`) or a tag (`**[2026-11-25
+// corrected]**`), so the line starts an entry only when its key is a citation
+// key (digits, optional lowercase letter) that comes next in sequence after
+// the open entry's key: `[2]` after `[1]`, `[1a]` after `[1]`, `[1b]` after
+// `[1a]`, `[2]` after `[1c]`. When the open entry carries no citation key (an
+// unkeyed bullet, a `[V]` legend-style key), only `[1]`, the start of a keyed
+// list, qualifies. A line indented deeper than the open entry's marker, or
+// any bracket line inside an ordered `n.` entry, is wrapped text.
+func bracketKeyContinues(first, line string, curOrdered bool, curIndent int) bool {
+	if curOrdered || len(line)-len(strings.TrimLeft(line, " \t")) > curIndent {
+		return false
+	}
+	n1, s1, ok := citationKey(line)
+	if !ok {
+		return false
+	}
+	n0, s0, ok := citationKey(first)
+	if !ok {
+		return n1 == 1 && s1 == ""
+	}
+	switch {
+	case n1 == n0+1:
+		return s1 == ""
+	case n1 == n0 && s0 == "":
+		return s1 == "a"
+	case n1 == n0:
+		return s1 != "" && s1[0] == s0[0]+1
+	}
+	return false
+}
+
+// citationKeyRe captures a leading citation key: `[12]`, `**[1b]**`, or the
+// same after a list bullet.
+var citationKeyRe = regexp.MustCompile(`^\s*(?:[-*]\s+)?(?:\*\*)?\[(\d{1,4})([a-z]?)\]`)
+
+// citationKey parses a line's leading citation key into its number and
+// optional letter suffix; ok is false when the line opens with no such key.
+func citationKey(line string) (n int, suffix string, ok bool) {
+	m := citationKeyRe.FindStringSubmatch(line)
+	if m == nil {
+		return 0, "", false
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0, "", false
+	}
+	return n, m[2], true
+}
+
 // markerStarts reports whether an entry-marker line begins a new entry. With no
 // entry open, any marker does. With an entry open, a marker indented deeper
 // than the open entry's marker is wrapped text inside that entry. At the same
-// or a shallower indent, a bracket-key or bullet marker (unordered) starts the
-// next entry, and an ordered marker does only when the open entry is itself an
-// ordered item (its next sibling); after a bracket-key or bullet entry, a line
-// that merely begins with digits and a period is wrapped text.
+// or a shallower indent, a bullet marker (unordered) starts the next entry,
+// and an ordered marker does only when the open entry is itself an ordered
+// item (its next sibling); after a bracket-key or bullet entry, a line that
+// merely begins with digits and a period is wrapped text. Unbulleted
+// bracket-key lines are decided in citationEntries and bracketKeyContinues.
 func markerStarts(line string, open, unordered, curOrdered bool, curIndent int) bool {
 	if !open {
 		return true
