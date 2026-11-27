@@ -238,6 +238,36 @@ func TestConformance_MigrateCitationTitle_Section5_1_DOISpellingTitlesExistingSo
 	}
 }
 
+// A source titled by an earlier migration that split the entry at a wrapped
+// line holds a fragment of the entry's own text (its head or its tail). That
+// is the entry's text, not a different work, so it is not a conflict. A short
+// title that differs from the name is still reported.
+func TestConformance_MigrateCitationTitle_Section5_1_EntryFragmentTitleIsNotAConflict(t *testing.T) {
+	node := "---\ntype: Concept\nsources:\n" +
+		"  - resource: https://youtu.be/v\n" +
+		"    title: \"[V] SOURCE VIDEO — Dr. Sealey, \\\"How to Crave Hard Things,\\\" https://youtu.be/v (transcript). Originates the thesis; \\\"~16,000 steps\\\" is NUANCED (see\"\n" +
+		"  - resource: https://docs.example/guardrails\n" +
+		"    title: \"[\\\"VIOLENCE\\\"].score }`; policy-effects table. https://docs.example/guardrails\"\n" +
+		"  - resource: https://short.example/\n" +
+		"    title: \"Google Cloud\"\n" +
+		"---\n\n# Def\n\n# Citations\n\n" +
+		"[V] SOURCE VIDEO — Dr. Sealey, \"How to Crave Hard Things,\" https://youtu.be/v (transcript).\n" +
+		"Originates the thesis; \"~16,000 steps\" is NUANCED (see\n[1]); the rest is unverified.\n\n" +
+		"[18] VERIFIED. AWS, Guide, \"Getting started with guardrails\": `forbid when { x\n[\"VIOLENCE\"].score }`; policy-effects table. https://docs.example/guardrails\n\n" +
+		"[19] VERIFIED — Google Cloud, *Vertex AI Pipelines*: orchestration. https://short.example/\n"
+	dir := mkMigrateBundle(t, map[string]string{
+		"index.md": "# KB\n", "log.md": "# Log\n", "a.md": node,
+	})
+	_, plan := planFor(t, dir, "", false)
+	got := titleJudgments(plan, JudgmentSourceTitleConflict)
+	if len(got) != 1 || !strings.Contains(got[0].Context, "Vertex AI Pipelines") {
+		t.Fatalf("want only the short differing title reported, got %+v", got)
+	}
+	if nm := planNodeMigration(plan, "a.md"); nm != nil {
+		t.Fatalf("a titled source is never edited, got %+v", nm)
+	}
+}
+
 // A stale plan re-applied after the author titled the source by hand must not
 // overwrite that title.
 func TestConformance_MigrateCitationTitle_Section5_1_ApplyNeverOverwritesTitle(t *testing.T) {

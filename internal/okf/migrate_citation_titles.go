@@ -97,9 +97,9 @@ func entryText(entry string) string {
 //     JudgmentSourceTitleUnnamed item.
 //   - A titled source keeps its title. It is reported as a
 //     JudgmentSourceTitleConflict only when the entry names a different work.
-//     A title equal to the name, or to this entry's full text (a title an
-//     earlier migration wrote), is not a conflict; rewriting such titles to
-//     the name is a separate change.
+//     A title equal to the name, or to this entry's full text or the head or
+//     tail of it (a title an earlier migration wrote), is not a conflict;
+//     rewriting such titles to the name is a separate change.
 func planSourceTitle(plan *MigratePlan, nm *NodeMigration, existing map[string]sourceTitle, rel, entry string, cur sourceTitle, name string) {
 	if linkRefDefRe.MatchString(entry) || !citationHasProse(entry) {
 		return
@@ -117,11 +117,23 @@ func planSourceTitle(plan *MigratePlan, nm *NodeMigration, existing map[string]s
 		plan.Judgment = append(plan.Judgment, JudgmentItem{
 			Path: rel, Kind: JudgmentSourceTitleUnnamed, Context: entry,
 		})
-	case name != "" && cur.title != name && cur.title != entryText(entry):
+	case name != "" && cur.title != name && !isEntryText(cur.title, entry):
 		plan.Judgment = append(plan.Judgment, JudgmentItem{
 			Path: rel, Kind: JudgmentSourceTitleConflict, Context: entry,
 		})
 	}
+}
+
+// isEntryText reports whether title is this entry's own text, or the head or
+// tail of it: an earlier migration wrote the entry text as the title, and one
+// that split the entry at a wrapped line wrote only a piece of it. Whitespace
+// is compared collapsed, because the entry is joined from wrapped lines.
+func isEntryText(title, entry string) bool {
+	t, e := strings.Join(strings.Fields(title), " "), strings.Join(strings.Fields(entryText(entry)), " ")
+	if t == "" {
+		return false
+	}
+	return t == e || strings.HasPrefix(e, t) || strings.HasSuffix(e, t)
 }
 
 // firstSourceItem returns the first `sources` item (a mapping) whose
