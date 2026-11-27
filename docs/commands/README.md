@@ -34,13 +34,13 @@ Example:
 
 ```
 # Report on the bundle in the current directory
-  okfctl analyze
+okfctl analyze
 
-  # Report on a bundle elsewhere
-  okfctl analyze ./mykb
+# Report on a bundle elsewhere
+okfctl analyze ./mykb
 
-  # The same report as JSON, for a script
-  okfctl analyze --json ./mykb
+# The same report as JSON, for a script
+okfctl analyze --json ./mykb
 ```
 
 Flags:
@@ -58,14 +58,18 @@ Flags:
 
 ## okfctl bundle
 
-Bundle lifecycle commands
+Create a bundle or summarize one
 
 
 ### okfctl bundle info
 
-Summarize a bundle (node count, spec version)
+Show a bundle's node count and declared OKF version
 
-info prints a one-glance summary of a bundle: how many concept nodes it holds, how many reserved files (index.md/log.md, OKF §3.1) it carries, and its okf_version (§12). The version is read from the bundle-root index.md frontmatter (§8.1), falling back to the legacy .okf sidecar. A bundle that declares neither is reported as undeclared: per §12.1 it is read with the v0.2 fallbacks. It's read-only and never mutates the bundle. It doesn't validate conformance — use `okfctl validate` for that.
+info prints three lines about the bundle in dir (the current directory by default): how many concept nodes it has, how many reserved files (index.md and log.md at each level, OKF §3.1), and the okf_version it declares (§12). In the example wine/ gets an index.md of its own, so one node in a subdirectory makes three reserved files.
+
+The version comes from the frontmatter of the bundle-root index.md (§8.1). When that has none, info reads the older .okf sidecar file. If neither declares one, info prints undeclared. okfctl then applies the v0.2 fallbacks §12.1 allows.
+
+info only reads. To find out if the bundle conforms, run `okfctl validate`.
 
 ```
 okfctl bundle info [dir]
@@ -74,19 +78,26 @@ okfctl bundle info [dir]
 Example:
 
 ```
-# Summarize the bundle in the current directory
-  okfctl bundle info
-
-  # Summarize a bundle elsewhere
-  okfctl bundle info ./bundles/knowledge
+$ okfctl bundle init cellar
+Initialized OKF bundle in cellar
+$ okfctl node new wine/tannin --type Concept --bundle cellar
+Created cellar/wine/tannin.md
+$ okfctl bundle info cellar
+nodes: 1
+reserved: 3
+okf_version: 0.3 (declared in index.md)
 ```
 
 
 ### okfctl bundle init
 
-Scaffold a minimal conformant OKF bundle
+Create a bundle with index.md and log.md, declared OKF v0.3
 
-init scaffolds a minimal bundle that conforms to the OKF spec floor: the two reserved files (index.md and log.md, OKF §3.1). The bundle-root index.md declares okf_version "0.3" in its frontmatter (§8.1, §12). It doesn't create any concept nodes — a fresh bundle has zero nodes; use `okfctl node new` to add them. It refuses to overwrite an existing bundle.
+init creates a bundle in dir (the current directory if you leave dir off) and makes the directory when it's missing. It writes the two reserved files (OKF §3.1). The root index.md declares okf_version "0.3" in its frontmatter (§8.1, §12). log.md starts with a placeholder line.
+
+There are no concept nodes at first. Add them with `okfctl node new`; index.md and log.md change with each node you add.
+
+init never checks for a bundle that's there. Run it on one and it exits 0 after overwriting index.md and log.md. The root frontmatter (a title or description you added) and the change history are gone, but none of your nodes are touched. If you aren't sure a directory is empty, run `okfctl bundle info` on it first.
 
 ```
 okfctl bundle init [dir]
@@ -95,11 +106,19 @@ okfctl bundle init [dir]
 Example:
 
 ```
-# Scaffold a new bundle in the current directory
-  okfctl bundle init
+$ okfctl bundle init newkb
+Initialized OKF bundle in newkb
+$ ls newkb
+index.md
+log.md
+$ cat newkb/index.md
+---
+okf_version: "0.3"
+---
 
-  # Scaffold in a named directory
-  okfctl bundle init ./my-bundle
+# Knowledge Base
+
+_Progressive-disclosure entry point. Add "start here" links as nodes land._
 ```
 
 
@@ -119,13 +138,13 @@ Example:
 
 ```
 # Load bash completions for the current shell
-  source <(okfctl completion bash)
+source <(okfctl completion bash)
 
-  # Install zsh completions
-  okfctl completion zsh > "${fpath[1]}/_okfctl"
+# Install zsh completions
+okfctl completion zsh > "${fpath[1]}/_okfctl"
 
-  # Install fish completions
-  okfctl completion fish > ~/.config/fish/completions/okfctl.fish
+# Install fish completions
+okfctl completion fish > ~/.config/fish/completions/okfctl.fish
 ```
 
 
@@ -150,7 +169,7 @@ Example:
 
 ```
 # Print one config value
-  okfctl config get model_path
+okfctl config get model_path
 ```
 
 
@@ -168,7 +187,7 @@ Example:
 
 ```
 # Show every stored config key and value
-  okfctl config list
+okfctl config list
 ```
 
 
@@ -186,7 +205,7 @@ Example:
 
 ```
 # Point okfctl-search at a local model2vec model
-  okfctl config set model_path ~/models/potion-base-8M
+okfctl config set model_path ~/models/potion-base-8M
 ```
 
 
@@ -208,13 +227,13 @@ Example:
 
 ```
 # Clone a registered remote into a directory named after the source
-  okfctl connect knowledge
+okfctl connect knowledge
 
-  # Clone an ad-hoc git URL into a chosen directory
-  okfctl connect https://github.com/acme/kb.git ./kb
+# Clone an ad-hoc git URL into a chosen directory
+okfctl connect https://github.com/acme/kb.git ./kb
 
-  # Re-run to fast-forward an existing checkout
-  okfctl connect knowledge ./kb
+# Re-run to fast-forward an existing checkout
+okfctl connect knowledge ./kb
 ```
 
 
@@ -247,10 +266,10 @@ Example:
 
 ```
 # A worksheet for 5 random nodes
-  okfctl eval sample --sample 5 --format md ./mykb
+okfctl eval sample --sample 5 --format md ./mykb
 
-  # JSON for the nodes changed on this branch
-  okfctl eval sample --changed-since origin/main ./mykb
+# JSON for the nodes changed on this branch
+okfctl eval sample --changed-since origin/main ./mykb
 ```
 
 Flags:
@@ -292,13 +311,13 @@ Example:
 
 ```
 # Report findings (exits 0)
-  okfctl eval transparency ./mykb
+okfctl eval transparency ./mykb
 
-  # Fail CI on any finding
-  okfctl eval transparency --strict ./mykb
+# Fail CI on any finding
+okfctl eval transparency --strict ./mykb
 
-  # Print findings as JSON
-  okfctl eval transparency --json ./mykb
+# Print findings as JSON
+okfctl eval transparency --json ./mykb
 ```
 
 Flags:
@@ -332,13 +351,13 @@ Example:
 
 ```
 # Print the graph of the bundle in the current directory as JSON
-  okfctl graph export
+okfctl graph export
 
-  # Print a bundle elsewhere as Graphviz DOT
-  okfctl graph export --format dot ./mykb
+# Print a bundle elsewhere as Graphviz DOT
+okfctl graph export --format dot ./mykb
 
-  # Draw it as an SVG with Graphviz
-  okfctl graph export --format dot ./mykb | dot -Tsvg > graph.svg
+# Draw it as an SVG with Graphviz
+okfctl graph export --format dot ./mykb | dot -Tsvg > graph.svg
 ```
 
 Flags:
@@ -351,16 +370,22 @@ Flags:
 
 ## okfctl index
 
-Manage the reserved index.md
+Rebuild or check the generated index.md files
 
 
 ### okfctl index build
 
-Regenerate index.md from the current bundle
+Rewrite every index.md to list the bundle's current nodes
 
-index build regenerates the reserved index.md navigation file(s) from the bundle's current concept nodes (OKF §8: index files are reserved, generated navigation files). It rewrites index.md at the bundle root and in each directory that has one; it never edits concept nodes. Run it after adding, moving, or removing nodes by hand (the node verbs regenerate it for you).
+build writes an index.md into the bundle root and into each directory under it that has concept nodes in it (OKF §8). Each lists its directory's nodes by title (plus the description where a node has one) and then links to the subdirectories. In the example a node moved with mv(1) leaves the index stale: check exits 1 until build fixes it.
 
-Each subdirectory entry carries a shape suffix — the child's own concept count, its types, its shared tags, and (when it nests deeper) a subtree total — so a reader can decide which branch to open without opening it. Tune it with --shape-tag-min / --shape-tag-max, or drop it with --no-shape.
+You'll seldom need it.
+
+Six node commands (new, mv, rm, edit, refresh, promote) rebuild the index when they finish. build is for the times you add, move, or delete node files yourself.
+
+Each subdirectory's link ends with a short summary (concept count, types, the tags common to most of its nodes, a subtree total for deeper trees) that tells you what a branch holds. --shape-tag-min and --shape-tag-max tune the tag list. --no-shape drops the summary.
+
+Only the root index.md's frontmatter survives a rebuild (that frontmatter is where the bundle's okf_version, title, and description live, §8.1). Everything below it in each index.md is rewritten from scratch. An index.md in a directory with no nodes is deleted. Subdirectory index.md files with frontmatter go too: each is a concept stored where §8 puts an index (validate fails it). Run `okfctl node promote` on such a file first or build throws away what you wrote there.
 
 ```
 okfctl index build [dir] [flags]
@@ -368,12 +393,28 @@ okfctl index build [dir] [flags]
 
 Example:
 
+<!-- transcript: exit 1 okfctl index check atlas -->
 ```
-# Regenerate index.md for the current bundle
-  okfctl index build
+$ okfctl bundle init atlas
+Initialized OKF bundle in atlas
+$ okfctl node new tannin --type Concept --title Tannin --bundle atlas
+Created atlas/tannin.md
+$ mkdir atlas/wine && mv atlas/tannin.md atlas/wine/
+$ okfctl index check atlas
+index.md is out of date; run `okfctl index build` to regenerate
+okfctl: index.md is out of date
+$ okfctl index build atlas
+Wrote 2 index.md file(s) under atlas
+$ cat atlas/index.md
+---
+okf_version: "0.3"
+---
 
-  # Regenerate for a bundle elsewhere
-  okfctl index build ./bundles/knowledge
+# Knowledge Base
+
+## Subdirectories
+
+* [Wine](wine/) (1 concept · Concept)
 ```
 
 Flags:
@@ -388,11 +429,15 @@ Flags:
 
 ### okfctl index check
 
-Verify index.md is current (nonzero exit if stale)
+Exit 1 if any index.md is out of date, without writing
 
-index check verifies the reserved index.md (OKF §8) is in sync with the bundle's current nodes, without writing anything. It's the CI-friendly counterpart to `index build`: it exits zero when the index is current and non-zero (printing what drifted) when a rebuild is needed. Read-only — it never rewrites the index.
+check renders each index.md the way `okfctl index build` would and compares the result with what's on disk (OKF §8). It writes nothing. When every file matches it prints "OK: index.md is current" and exits 0. Otherwise it names the first file that's missing, stale, or left in a directory with no nodes, then exits 1. In the example the node written with printf hasn't reached the index.
 
-Pass the SAME shape flags you built with (--shape-tag-min / --shape-tag-max / --no-shape); a check against a different shape configuration than the build reports drift by design.
+Put check in CI. lint --strict won't flag a stale index.
+
+Pass the --shape-tag-min, --shape-tag-max, and --no-shape flags you built with. Build with --no-shape and check with the default flags: any index that links a subdirectory reads as stale.
+
+check doesn't fix anything. build does.
 
 ```
 okfctl index check [dir] [flags]
@@ -400,12 +445,18 @@ okfctl index check [dir] [flags]
 
 Example:
 
+<!-- transcript: exit 1 okfctl index check pantry -->
 ```
-# Verify the index is current (exit 0) or report drift (exit 1)
-  okfctl index check
-
-  # Check a bundle elsewhere, e.g. in CI
-  okfctl index check ./bundles/knowledge
+$ okfctl bundle init pantry
+Initialized OKF bundle in pantry
+$ printf -- '---\ntype: Concept\ntitle: Tannin\n---\n' > pantry/tannin.md
+$ okfctl index check pantry
+index.md is out of date; run `okfctl index build` to regenerate
+okfctl: index.md is out of date
+$ okfctl index build pantry
+Wrote 1 index.md file(s) under pantry
+$ cd pantry && okfctl index check
+OK: index.md is current
 ```
 
 Flags:
@@ -457,16 +508,16 @@ Example:
 
 ```
 # Report findings for the bundle in the current directory (exits 0)
-  okfctl lint
+okfctl lint
 
-  # Fail CI on any finding
-  okfctl lint --strict ./mykb
+# Fail CI on any finding
+okfctl lint --strict ./mykb
 
-  # Print findings as JSON for another tool
-  okfctl lint --json ./mykb
+# Print findings as JSON for another tool
+okfctl lint --json ./mykb
 
-  # Add the similarity checks (needs okfctl-search index build ./mykb first)
-  okfctl lint --semantic ./mykb
+# Add the similarity checks (needs okfctl-search index build ./mykb first)
+okfctl lint --semantic ./mykb
 ```
 
 Flags:
@@ -484,14 +535,18 @@ Flags:
 
 ## okfctl log
 
-Manage the reserved log.md change history
+Add to or print the bundle's log.md change history
 
 
 ### okfctl log append
 
-Append a timestamped change entry to log.md
+Add a line to today's entry in log.md
 
-log append adds one timestamped entry to the reserved log.md change history (OKF §9: the log file is a reserved, append-only record of what changed in the bundle and when). The entry text is required via --message. It only appends — it never rewrites or reorders existing history. The node verbs append to log.md for you; use this for changes you made outside okfctl.
+append adds --message as one line under today's date in the log.md at the root of dir (the current directory by default), and writes today's date heading first if the log doesn't have one, because dates run newest first (OKF §9). No log.md? append creates it. The example prints <DATE> where your run prints today's date.
+
+You need it only for changes made outside okfctl. Six node commands (new, mv, rm, edit, refresh, promote) write their own line.
+
+Whatever sits above the first date heading, your title included, is left alone. The placeholder line `okfctl bundle init` wrote goes away, and older okfctl bullets with their date inline move under a date heading of their own. Only the first line of a message gets in. Leave off --message and append exits 1.
 
 ```
 okfctl log append [dir] [flags]
@@ -500,11 +555,15 @@ okfctl log append [dir] [flags]
 Example:
 
 ```
-# Record a manual change
-  okfctl log append --message "reworded the revenue concept"
+$ okfctl bundle init journal
+Initialized OKF bundle in journal
+$ okfctl log append --message 'split the oak node into barrel and cask' journal
+Appended log entry
+$ okfctl log show journal
+# Change Log
 
-  # Record against a bundle elsewhere
-  okfctl log append --message "imported Q3 sources" ./bundles/knowledge
+## <DATE>
+* split the oak node into barrel and cask
 ```
 
 Flags:
@@ -516,9 +575,11 @@ Flags:
 
 ### okfctl log show
 
-Print the change history
+Print log.md as it is on disk
 
-log show prints the reserved log.md change history (OKF §9) verbatim to stdout. It's read-only and doesn't mutate the bundle. Use it to review what changed and when, or to pipe the history into another tool.
+show prints the root log.md of dir (the current directory by default) byte for byte, to read or to pipe into another tool. In the example two nodes get created and one gets moved. All three land under one date heading, newest first (OKF §9).
+
+show never writes. It won't reformat the file or check it against §9; `okfctl validate` does that. A log.md in a subdirectory is ignored. With no log.md at all, show prints nothing and exits 0.
 
 ```
 okfctl log show [dir]
@@ -527,11 +588,21 @@ okfctl log show [dir]
 Example:
 
 ```
-# Print the change history for the current bundle
-  okfctl log show
+$ okfctl bundle init diary
+Initialized OKF bundle in diary
+$ okfctl node new wine/tannin --type Concept --bundle diary
+Created diary/wine/tannin.md
+$ okfctl node new wine/oak --type Concept --bundle diary
+Created diary/wine/oak.md
+$ okfctl node mv wine/oak barrel/oak --bundle diary
+Moved wine/oak.md -> barrel/oak.md (0 inbound link(s) rewritten)
+$ okfctl log show diary
+# Change Log
 
-  # Print the history for a bundle elsewhere
-  okfctl log show ./bundles/knowledge
+## <DATE>
+* moved wine/oak.md -> barrel/oak.md
+* created wine/oak.md
+* created wine/tannin.md
 ```
 
 
@@ -555,13 +626,13 @@ Example:
 
 ```
 # Write the plan; nothing in the bundle changes
-  okfctl migrate ./mykb --plan migrate-plan.json --generated-by human:casey
+okfctl migrate ./mykb --plan migrate-plan.json --generated-by human:casey
 
-  # See the diff the apply would write, without writing it
-  okfctl migrate ./mykb --apply --plan migrate-plan.json --dry-run
+# See the diff the apply would write, without writing it
+okfctl migrate ./mykb --apply --plan migrate-plan.json --dry-run
 
-  # Apply the plan, declare v0.3 if nothing is held, and validate
-  okfctl migrate ./mykb --apply --plan migrate-plan.json
+# Apply the plan, declare v0.3 if nothing is held, and validate
+okfctl migrate ./mykb --apply --plan migrate-plan.json
 ```
 
 Flags:
@@ -577,14 +648,22 @@ Flags:
 
 ## okfctl node
 
-Author and inspect nodes
+Create, move, remove, edit, and read concept nodes
 
 
 ### okfctl node edit
 
-Open a node in $EDITOR, then re-validate on return
+Open a node in your editor, then validate and log the change
 
-edit opens a node in your editor ($OKFCTL_EDITOR, then $VISUAL, then $EDITOR, then vi) and, on return, re-validates the whole bundle against the spec floor (OKF §4.1 / §11). If validation fails, the findings are printed and the command exits non-zero. On success it refreshes the node's `modified` timestamp (`created` is never touched), appends to log.md, and regenerates index.md — this is how `modified` stays honest for the okfctl-mediated edit path. Reserved files (index.md, log.md) can't be edited this way.
+edit opens the node at <path> in your editor and waits for it to close. The editor is $OKFCTL_EDITOR, then $VISUAL, then $EDITOR (vi if none is set). The .md suffix is optional. In the example the editor is true: it exits right away.
+
+After the editor closes, edit validates the whole bundle (OKF §11.1) and, if that passes with the node's type still set, sets modified to now, adds "edited <path>" to log.md, and rebuilds each index.md. created stays as it was. A node changed in your editor without okfctl keeps its old modified date. validate reports that later as git drift.
+
+A failed check prints the findings and exits 1. So does an emptied type (the file is no longer a concept, §3.2). Either way your change stays on disk and nothing else is touched. Fix it and run edit again.
+
+The variable's whole value is taken as one program name. OKFCTL_EDITOR="code --wait" fails. Put the arguments in a short script and name the script there.
+
+edit won't open index.md or log.md.
 
 ```
 okfctl node edit <path> [flags]
@@ -593,11 +672,18 @@ okfctl node edit <path> [flags]
 Example:
 
 ```
-# Edit a node, then re-validate on save
-  okfctl node edit concepts/revenue
+$ okfctl bundle init desk
+Initialized OKF bundle in desk
+$ okfctl node new tannin --type Concept --bundle desk
+Created desk/tannin.md
+$ OKFCTL_EDITOR=true okfctl node edit tannin --bundle desk
+tannin.md edited; bundle valid
+$ okfctl log show desk
+# Change Log
 
-  # Use a specific editor for this edit
-  OKFCTL_EDITOR="code --wait" okfctl node edit concepts/revenue
+## <DATE>
+* edited tannin.md
+* created tannin.md
 ```
 
 Flags:
@@ -609,9 +695,11 @@ Flags:
 
 ### okfctl node list
 
-List nodes with their type (PRD §7.3)
+List every concept node with its type, sorted by path
 
-list prints every concept node in the bundle with its managed type, sorted by path (PRD §7.3: reads reveal the type). Reserved files (index.md, log.md) aren't nodes and aren't listed. Read-only.
+list prints one line per concept node in the bundle given by --bundle (the current directory by default), sorted by path, with the node's type in the second column (PRD §7.3). Use it to see what a bundle holds, or to find nodes of one type with grep.
+
+index.md and log.md never appear (OKF §3.1). Neither does a .md file with no type, such as a README.md. The spec doesn't count those as concepts (§3.2), and `okfctl validate` warns about them. list only reads.
 
 ```
 okfctl node list [flags]
@@ -620,11 +708,16 @@ okfctl node list [flags]
 Example:
 
 ```
-# List every node in the current bundle
-  okfctl node list
-
-  # List nodes in a bundle elsewhere
-  okfctl node list --bundle ./bundles/knowledge
+$ okfctl bundle init catalog
+Initialized OKF bundle in catalog
+$ okfctl node new wine/tannin --type Concept --bundle catalog
+Created catalog/wine/tannin.md
+$ okfctl node new grape/sangiovese --type 'Grape Variety' --bundle catalog
+Created catalog/grape/sangiovese.md
+$ echo 'Notes for editors.' > catalog/README.md
+$ okfctl node list --bundle catalog
+grape/sangiovese.md                      Grape Variety
+wine/tannin.md                           Concept
 ```
 
 Flags:
@@ -636,9 +729,15 @@ Flags:
 
 ### okfctl node mv
 
-Move/rename a node, rewriting inbound links (path is identity)
+Move or rename a node and rewrite every link that points at it
 
-mv moves or renames a node. A node's path is its identity (OKF §6: cross-links are by path), so mv also rewrites every inbound internal link to point at the new path, then maintains log.md and index.md. The .md suffix is optional on both arguments. --dry-run prints the move and every link rewrite and writes nothing.
+mv takes the node at <old> to <new> in the bundle --bundle names (the current directory by default, with the .md suffix optional on either path). Links find their target by path (OKF §6). So mv rewrites each link in the bundle that pointed at the old path, README files included: one that started with / still starts with / while a relative one gets worked out again from its own file. Then mv adds "moved <old> -> <new>" to log.md and rebuilds each index.md.
+
+Try --dry-run first: it prints the move and each rewrite with nothing written.
+
+The links in the moved node stay as written. Relative ones that worked from the old directory can point at nothing from the new one. `okfctl lint` reports them as broken-link.
+
+With a file at <new>, mv exits 1 and changes nothing. It won't move index.md or log.md, nor put a node at either name.
 
 ```
 okfctl node mv <old> <new> [flags]
@@ -647,11 +746,20 @@ okfctl node mv <old> <new> [flags]
 Example:
 
 ```
-# Rename a node and rewrite inbound links
-  okfctl node mv concepts/revenue concepts/net-revenue
-
-  # Preview the move and rewrites without touching disk
-  okfctl node mv concepts/revenue concepts/net-revenue --dry-run
+$ okfctl bundle init map
+Initialized OKF bundle in map
+$ okfctl node new wine/tannin --type Concept --title Tannin --bundle map
+Created map/wine/tannin.md
+$ okfctl node new wine/oak --type Concept --title Oak --bundle map
+Created map/wine/oak.md
+$ echo 'Oak barrels add [tannin](tannin.md).' >> map/wine/oak.md
+$ okfctl node mv wine/tannin wine/tannins --dry-run --bundle map
+move wine/tannin.md -> wine/tannins.md
+  rewrite wine/oak.md: tannin.md -> tannins.md
+$ okfctl node mv wine/tannin wine/tannins --bundle map
+Moved wine/tannin.md -> wine/tannins.md (1 inbound link(s) rewritten)
+$ tail -n 1 map/wine/oak.md
+Oak barrels add [tannin](tannins.md).
 ```
 
 Flags:
@@ -664,9 +772,17 @@ Flags:
 
 ### okfctl node new
 
-Create a conformant node (type required, OKF §4.1)
+Create a concept node, then update log.md and index.md
 
-new creates a conformant concept node at <path>. A non-empty --type is REQUIRED: type is the one managed field (a node must carry a non-empty type; the value itself is open per OKF §4.1, so any string is accepted). The presence requirement is the spec floor (OKF §4.1 / §11: every frontmatter block carries a non-empty type). If a type template governs the given type, the node is scaffolded from it (PRD §9.3); the template may be local or referenced from a separate bundle (the .okf `templates:` key, or --templates-from which overrides it, PRD §9.2). Otherwise a plain conformant node is written. Creation is recorded in log.md and index.md is regenerated, so a new node is never an audit gap. It doesn't open an editor — use `okfctl node edit` for that.
+new writes a concept node at <path> in the bundle --bundle names (the current directory by default). The .md suffix is optional. You have to pass --type (a file with no type isn't a concept, OKF §4.1, §3.2). Any value works. The spec leaves the list of types open. The node gets that type and created and modified timestamps, plus the --title if you gave one. With no title, the heading is the file name.
+
+Then new adds "created <path>" to log.md and rebuilds each index.md, and that's why `okfctl index check` passes right after. If the --bundle directory is missing, new makes it and declares no okf_version.
+
+With a type template for --type in the bundle, the node starts from that template's fields and body headings (PRD §9.3). Templates live in the bundle itself or in another bundle named by the .okf templates key or --templates-from (PRD §9.2). Run `okfctl template list` to see them.
+
+Overwriting a node, writing outside the bundle, and a path that starts with a dot all exit 1.
+
+To edit the node in your editor, use `okfctl node edit`.
 
 ```
 okfctl node new <path> [flags]
@@ -674,15 +790,25 @@ okfctl node new <path> [flags]
 
 Example:
 
+<!-- transcript: exit 1 okfctl node new tannin --bundle shelf -->
 ```
-# Create a node of an open type
-  okfctl node new concepts/revenue --type Concept --title Revenue
+$ okfctl bundle init shelf
+Initialized OKF bundle in shelf
+$ okfctl node new tannin --bundle shelf
+okfctl: --type is required (OKF §4.1 / §11: every node needs a non-empty type)
+$ okfctl node new tannin --type Concept --title Tannin --bundle shelf
+Created shelf/tannin.md
+$ cat shelf/tannin.md
+---
+type: Concept
+title: Tannin
+created: <TIMESTAMP>
+modified: <TIMESTAMP>
+---
 
-  # Create in a bundle elsewhere
-  okfctl node new concepts/revenue --type Concept --bundle ./bundles/knowledge
-
-  # Scaffold from a referenced template bundle, overriding the .okf reference
-  okfctl node new runbooks/deploy --type Playbook --templates-from ../okf-type-templates
+# Tannin
+$ okfctl index check shelf
+OK: index.md is current
 ```
 
 Flags:
@@ -697,9 +823,13 @@ Flags:
 
 ### okfctl node promote
 
-Promote directory-as-concept index.md files to sibling concept files (bulk remediation)
+Turn each subdirectory index.md that holds a concept into its own node
 
-promote remediates the directory-as-concept pattern validate reports: every non-root index.md that carries frontmatter is moved to a sibling concept file (dir/<basename>.md; basename defaults to the directory name, --name overrides it). The body is preserved verbatim and `created` is immutable, matching node refresh. Inbound links to the old directory-concept are rewritten (both the dir/index.md and dir/ spellings), the real index.md is regenerated with no frontmatter, and log.md is appended. The bundle-root index is left alone. --dry-run lists every move and rewrite and writes nothing.
+promote fixes a concept written as a subdirectory's index.md, which validate fails. OKF §8 says an index file there has no frontmatter. promote moves each one to a node beside it named after the directory, so grape/index.md turns into grape/grape.md. --name picks another name. The body and created carry over as they were. Links to the old place get rewritten in both spellings, grape/index.md and grape/. One log.md line goes in per move. Then the index is rebuilt and grape/index.md is a generated list again.
+
+--dry-run prints each move and rewrite with nothing written.
+
+Run promote first. A rebuild deletes a subdirectory index.md, frontmatter and all, when its directory holds no other node. index build rebuilds, and so does each node command that changes the bundle. The root index.md isn't touched; §8.1 lets it hold bundle metadata. A taken target name makes promote exit 1 with nothing changed.
 
 ```
 okfctl node promote <bundle> [flags]
@@ -707,15 +837,27 @@ okfctl node promote <bundle> [flags]
 
 Example:
 
+<!-- transcript: exit 1 okfctl validate handbook -->
 ```
-# Promote every directory-as-concept index in the bundle
-  okfctl node promote ./bundles/knowledge
-
-  # Preview the moves and inbound-link rewrites without writing
-  okfctl node promote --dry-run ./bundles/knowledge
-
-  # Use a fixed basename for every promoted concept file
-  okfctl node promote --name overview ./bundles/knowledge
+$ okfctl bundle init handbook
+Initialized OKF bundle in handbook
+$ mkdir handbook/grape
+$ printf -- '---\ntype: Concept\ntitle: Grape\n---\n\nThe fruit.\n' > handbook/grape/index.md
+$ printf -- '---\ntype: Concept\ntitle: Tannin\n---\n\nTannin comes from [grape](grape/) skins.\n' > handbook/tannin.md
+$ okfctl validate handbook
+FAIL grape/index.md: index files contain no frontmatter (§8); only the bundle-root index may carry frontmatter (§8.1)
+okfctl: 1 conformance finding(s)
+$ okfctl node promote --dry-run handbook
+would promote grape/index.md -> grape/grape.md
+  rewrite tannin.md: grape/ -> grape/grape.md
+1 index(es) would be promoted (dry run; nothing written)
+$ okfctl node promote handbook
+promoted grape/index.md -> grape/grape.md (1 inbound link(s) rewritten)
+1 index(es) promoted
+$ tail -n 1 handbook/tannin.md
+Tannin comes from [grape](grape/grape.md) skins.
+$ cd handbook && okfctl validate .
+OK: bundle conforms to the OKF spec floor
 ```
 
 Flags:
@@ -728,11 +870,13 @@ Flags:
 
 ### okfctl node refresh
 
-Rewrite stale `modified` timestamps to git last-commit (bulk drift fix)
+Set modified to each node's last git commit date
 
-refresh is the remediation for the git drift that validate reports: it rewrites each drifting node's frontmatter `modified` to its git last-commit day. `created` is immutable and never touched, the Markdown body is preserved verbatim, and log.md/index.md are maintained. With a trailing path it fixes a single node. --dry-run lists what would change and writes nothing. It degrades to a clean no-op outside a git repo, and exits non-zero only on real failure.
+refresh fixes the git drift `okfctl validate` warns about: a node whose modified timestamp disagrees with the day git last committed it. Each drifting node gets that commit day as its modified date and a "refreshed <path>" line in log.md. The index is rebuilt once at the end. created and the body don't change. Put a path after the bundle to fix one node.
 
-A plan dominated by a single commit — the signature of a bulk mechanical commit, whose remediation would collapse real authoring history into the migration date — is REFUSED unless --yes is given. The right fix in that case is to list the mechanical commit in .okf-drift-ignore-revs (like `git blame --ignore-revs-file`), so drift walks back to the prior real commit.
+The example commits a node created today with a January date. validate warns. --dry-run lists the change and writes nothing. After refresh makes it, validate passes. Outside a git repository nothing drifts, and refresh exits 0 having done nothing.
+
+A bulk commit (a migration, a reformat) is the case to watch. Refreshing from it would stamp its date on every node it touched and wipe out their real history. So refresh stops when one commit accounts for half or more of a plan of 10 or more changes: it exits 1 and prints the commit's SHA. Add that SHA to .okf-drift-ignore-revs in the bundle root (it works like git blame --ignore-revs-file) and drift looks past the commit to the one before. --yes refreshes anyway.
 
 ```
 okfctl node refresh <bundle> [path] [flags]
@@ -741,14 +885,23 @@ okfctl node refresh <bundle> [path] [flags]
 Example:
 
 ```
-# Fix every drifting node in the bundle
-  okfctl node refresh ./bundles/knowledge
-
-  # Preview the plan without writing anything
-  okfctl node refresh --dry-run ./bundles/knowledge
-
-  # Fix a single node
-  okfctl node refresh ./bundles/knowledge concepts/income-statement.md
+$ okfctl bundle init ledger
+Initialized OKF bundle in ledger
+$ okfctl node new tannin --type Concept --bundle ledger
+Created ledger/tannin.md
+$ git -C ledger init -q && git -C ledger add .
+$ GIT_COMMITTER_DATE=2026-01-15T12:00:00Z git -C ledger -c user.name=me -c user.email=me@example.com commit -q -m import
+$ okfctl validate ledger
+warning tannin.md: modified <DATE> disagrees with git last-commit 2026-01-15; run `okfctl node refresh` to fix it (or `okfctl node edit` per node)
+1 drift warning(s)
+$ okfctl node refresh --dry-run ledger
+would refresh tannin.md: <DATE> -> 2026-01-15
+1 node(s) would be refreshed (dry run; nothing written)
+$ okfctl node refresh ledger
+refreshed tannin.md: <DATE> -> 2026-01-15
+1 node(s) refreshed
+$ okfctl validate ledger
+OK: bundle conforms to the OKF spec floor
 ```
 
 Flags:
@@ -761,9 +914,15 @@ Flags:
 
 ### okfctl node rm
 
-Remove a node and report resulting orphans
+Delete a node and list the nodes it leaves with no inbound links
 
-rm deletes a node and reports which nodes are orphaned as a result (left with no inbound links, OKF §6), then maintains log.md and index.md. The .md suffix is optional. It doesn't rewrite links that pointed at the removed node — those become broken links that `okfctl lint` will report, by design. --dry-run reports the plan and writes nothing.
+rm deletes the node at <path> from the bundle --bundle names (the current directory by default). The .md suffix is optional. Then it adds "removed <path>" to log.md, rebuilds each index.md, and prints the orphans: nodes the deleted one linked to that nothing else links to now (OKF §6.4). In the example oak was tannin's only link.
+
+Run it with --dry-run first to print the same list and leave the node in place.
+
+Links that pointed at the deleted node stay as they were. The spec allows a broken link (§6.1, §11.2), and afterward validate and lint pass. Only `okfctl analyze` mentions them, as dangling forward-links. To find them yourself, grep the bundle for the old path first.
+
+rm won't delete index.md or log.md (§3.1); it exits 1.
 
 ```
 okfctl node rm <path> [flags]
@@ -772,11 +931,19 @@ okfctl node rm <path> [flags]
 Example:
 
 ```
-# Remove a node and see resulting orphans
-  okfctl node rm concepts/deprecated
-
-  # Preview the removal without touching disk
-  okfctl node rm concepts/deprecated --dry-run
+$ okfctl bundle init rack
+Initialized OKF bundle in rack
+$ okfctl node new tannin --type Concept --bundle rack
+Created rack/tannin.md
+$ okfctl node new oak --type Concept --bundle rack
+Created rack/oak.md
+$ echo 'Oak barrels add [tannin](tannin.md).' >> rack/oak.md
+$ okfctl node rm oak --dry-run --bundle rack
+remove oak.md
+  orphaned: tannin.md
+$ okfctl node rm oak --bundle rack
+Removed oak.md
+  orphaned: tannin.md
 ```
 
 Flags:
@@ -789,9 +956,11 @@ Flags:
 
 ### okfctl node show
 
-Print a node, surfacing its type (PRD §7.3)
+Print one node's path, type, and body
 
-show prints a single node's path, its type, and its Markdown body (PRD §7.3: reads reveal the managed type). The .md suffix is optional in <path>. Read-only — it never mutates the bundle. It errors if no node matches.
+show prints a node's path and type, then its Markdown body, from the bundle --bundle names (the current directory by default). The .md suffix is optional. The type gets a line of its own: you see what kind of concept you're reading before the body starts (PRD §7.3). The rest of the frontmatter (title, timestamps, sources) stays hidden. cat the file for that.
+
+show never writes. Any path that isn't a concept node exits 1 with "node not found", index.md and log.md included. The spec says neither is ever a concept (§3.1).
 
 ```
 okfctl node show <path> [flags]
@@ -799,12 +968,22 @@ okfctl node show <path> [flags]
 
 Example:
 
+<!-- transcript: exit 1 okfctl node show index --bundle reader -->
 ```
-# Show a node (the .md suffix is optional)
-  okfctl node show concepts/revenue
+$ okfctl bundle init reader
+Initialized OKF bundle in reader
+$ okfctl node new wine/oak --type Concept --title Oak --bundle reader
+Created reader/wine/oak.md
+$ echo 'Oak barrels add tannin.' >> reader/wine/oak.md
+$ okfctl node show wine/oak --bundle reader
+path: wine/oak.md
+type: Concept
 
-  # Show a node in a bundle elsewhere
-  okfctl node show concepts/revenue --bundle ./bundles/knowledge
+# Oak
+Oak barrels add tannin.
+
+$ okfctl node show index --bundle reader
+okfctl: node not found: index.md
 ```
 
 Flags:
@@ -837,10 +1016,10 @@ Example:
 
 ```
 # Install a plugin executable into the managed plugins dir
-  okfctl plugin install ./okfctl-search
+okfctl plugin install ./okfctl-search
 
-  # Install into a specific directory
-  okfctl plugin install --dir ~/bin ./okfctl-search
+# Install into a specific directory
+okfctl plugin install --dir ~/bin ./okfctl-search
 ```
 
 Flags:
@@ -866,10 +1045,10 @@ Example:
 
 ```
 # List discovered plugins on $PATH
-  okfctl plugin list
+okfctl plugin list
 
-  # Scan a specific PATH
-  okfctl plugin list --path ~/bin
+# Scan a specific PATH
+okfctl plugin list --path ~/bin
 ```
 
 Flags:
@@ -902,7 +1081,7 @@ Example:
 
 ```
 # Register a remote bundle source
-  okfctl registry add knowledge https://github.com/acme/knowledge-base.git
+okfctl registry add knowledge https://github.com/acme/knowledge-base.git
 ```
 
 
@@ -920,7 +1099,7 @@ Example:
 
 ```
 # List every registered remote source
-  okfctl registry list
+okfctl registry list
 ```
 
 
@@ -938,7 +1117,7 @@ Example:
 
 ```
 # Unregister a remote source
-  okfctl registry remove knowledge
+okfctl registry remove knowledge
 ```
 
 
@@ -956,7 +1135,7 @@ Example:
 
 ```
 # Print one remote's git URL
-  okfctl registry show knowledge
+okfctl registry show knowledge
 ```
 
 
@@ -978,13 +1157,13 @@ Example:
 
 ```
 # Search every field in the bundle in the current directory
-  okfctl search "income statement"
+okfctl search "income statement"
 
-  # Match titles only, in a bundle elsewhere
-  okfctl search --field title revenue ./mykb
+# Match titles only, in a bundle elsewhere
+okfctl search --field title revenue ./mykb
 
-  # Nodes within 2 links of one node
-  okfctl search --neighbors concepts/income-statement.md --depth 2 ./mykb
+# Nodes within 2 links of one node
+okfctl search --neighbors concepts/income-statement.md --depth 2 ./mykb
 ```
 
 Flags:
@@ -1014,10 +1193,10 @@ Example:
 
 ```
 # Serve the bundle in the current directory on http://127.0.0.1:8080
-  okfctl serve
+okfctl serve
 
-  # Serve a bundle elsewhere on another port
-  okfctl serve --addr 127.0.0.1:9000 ./mykb
+# Serve a bundle elsewhere on another port
+okfctl serve --addr 127.0.0.1:9000 ./mykb
 ```
 
 Flags:
@@ -1052,13 +1231,13 @@ Example:
 
 ```
 # List templates declared by the current bundle
-  okfctl template list
+okfctl template list
 
-  # List templates in a bundle elsewhere
-  okfctl template list ./bundles/knowledge
+# List templates in a bundle elsewhere
+okfctl template list ./bundles/knowledge
 
-  # Resolve templates from a specific bundle, overriding the .okf reference
-  okfctl template list --templates-from ../okf-type-templates ./bundles/knowledge
+# Resolve templates from a specific bundle, overriding the .okf reference
+okfctl template list --templates-from ../okf-type-templates ./bundles/knowledge
 ```
 
 Flags:
@@ -1084,13 +1263,13 @@ Example:
 
 ```
 # Show the template that governs the "Runbook" type
-  okfctl template show Runbook
+okfctl template show Runbook
 
-  # Show a template in a bundle elsewhere
-  okfctl template show Runbook ./bundles/knowledge
+# Show a template in a bundle elsewhere
+okfctl template show Runbook ./bundles/knowledge
 
-  # Resolve from a specific template bundle, overriding the .okf reference
-  okfctl template show Runbook --templates-from ../okf-type-templates ./bundles/knowledge
+# Resolve from a specific template bundle, overriding the .okf reference
+okfctl template show Runbook --templates-from ../okf-type-templates ./bundles/knowledge
 ```
 
 Flags:
@@ -1120,16 +1299,16 @@ Example:
 
 ```
 # Check the bundle in the current directory
-  okfctl validate
+okfctl validate
 
-  # Check a bundle elsewhere
-  okfctl validate ./mykb
+# Check a bundle elsewhere
+okfctl validate ./mykb
 
-  # Also check type templates, and fail CI on any drift
-  okfctl validate --templates --strict ./mykb
+# Also check type templates, and fail CI on any drift
+okfctl validate --templates --strict ./mykb
 
-  # Take the templates from another bundle instead of the .okf reference
-  okfctl validate --templates --templates-from ../okf-type-templates ./mykb
+# Take the templates from another bundle instead of the .okf reference
+okfctl validate --templates --templates-from ../okf-type-templates ./mykb
 ```
 
 Flags:
@@ -1156,5 +1335,5 @@ Example:
 
 ```
 # Print the build version
-  okfctl version
+okfctl version
 ```

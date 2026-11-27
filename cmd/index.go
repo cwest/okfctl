@@ -42,24 +42,52 @@ func addShapeFlags(c *cobra.Command) func() okf.IndexShapeOptions {
 }
 
 func newIndexCmd() *cobra.Command {
-	index := &cobra.Command{Use: "index", Short: "Manage the reserved index.md"}
+	index := &cobra.Command{Use: "index", Short: "Rebuild or check the generated index.md files"}
 
 	buildCmd := &cobra.Command{
 		Use:   "build [dir]",
-		Short: "Regenerate index.md from the current bundle",
-		Long: "index build regenerates the reserved index.md navigation file(s) from the bundle's " +
-			"current concept nodes (OKF §8: index files are reserved, generated navigation " +
-			"files). It rewrites index.md at the bundle root and in each directory that has one; " +
-			"it never edits concept nodes. Run it after adding, moving, or removing nodes by hand " +
-			"(the node verbs regenerate it for you).\n\n" +
-			"Each subdirectory entry carries a shape suffix — the child's own concept count, its " +
-			"types, its shared tags, and (when it nests deeper) a subtree total — so a reader can " +
-			"decide which branch to open without opening it. Tune it with --shape-tag-min / " +
-			"--shape-tag-max, or drop it with --no-shape.",
-		Example: "  # Regenerate index.md for the current bundle\n" +
-			"  okfctl index build\n\n" +
-			"  # Regenerate for a bundle elsewhere\n" +
-			"  okfctl index build ./bundles/knowledge",
+		Short: "Rewrite every index.md to list the bundle's current nodes",
+		Long: "build writes an index.md into the bundle root and into each directory under it that " +
+			"has concept nodes in it (OKF §8). Each lists its directory's nodes by title (plus the " +
+			"description where a node has one) and then links to the subdirectories. In the " +
+			"example a node moved with mv(1) leaves the index stale: check exits 1 until build " +
+			"fixes it.\n\n" +
+			"You'll seldom need it.\n\n" +
+			"Six node commands (new, mv, rm, edit, refresh, promote) rebuild the index when they " +
+			"finish. build is for the times you add, move, or delete node files yourself.\n\n" +
+			"Each subdirectory's link ends with a short summary (concept count, types, the tags " +
+			"common to most of its nodes, a subtree total for deeper trees) that tells you what a branch holds. --shape-tag-min and --shape-tag-max tune the tag list. " +
+			"--no-shape drops the summary.\n\n" +
+			"Only the root index.md's frontmatter survives a rebuild (that frontmatter is " +
+			"where the bundle's okf_version, title, and description live, §8.1). Everything below " +
+			"it in each index.md is rewritten " +
+			"from scratch. An index.md in a directory with no nodes is deleted. Subdirectory index.md " +
+			"files with frontmatter go too: each is a concept stored where §8 puts an index " +
+			"(validate fails it). Run `okfctl node promote` on such a file first or build throws " +
+			"away what you wrote there.",
+		Annotations: map[string]string{
+			transcriptAnnotation: "<!-- transcript: exit 1 okfctl index check atlas -->",
+		},
+		Example: "  $ okfctl bundle init atlas\n" +
+			"  Initialized OKF bundle in atlas\n" +
+			"  $ okfctl node new tannin --type Concept --title Tannin --bundle atlas\n" +
+			"  Created atlas/tannin.md\n" +
+			"  $ mkdir atlas/wine && mv atlas/tannin.md atlas/wine/\n" +
+			"  $ okfctl index check atlas\n" +
+			"  index.md is out of date; run `okfctl index build` to regenerate\n" +
+			"  okfctl: index.md is out of date\n" +
+			"  $ okfctl index build atlas\n" +
+			"  Wrote 2 index.md file(s) under atlas\n" +
+			"  $ cat atlas/index.md\n" +
+			"  ---\n" +
+			"  okf_version: \"0.3\"\n" +
+			"  ---\n" +
+			"\n" +
+			"  # Knowledge Base\n" +
+			"\n" +
+			"  ## Subdirectories\n" +
+			"\n" +
+			"  * [Wine](wine/) (1 concept · Concept)",
 		Args: cobra.MaximumNArgs(1),
 	}
 	buildNoIgnore := addNoIgnoreFlag(buildCmd)
@@ -81,18 +109,30 @@ func newIndexCmd() *cobra.Command {
 
 	checkCmd := &cobra.Command{
 		Use:   "check [dir]",
-		Short: "Verify index.md is current (nonzero exit if stale)",
-		Long: "index check verifies the reserved index.md (OKF §8) is in sync with the bundle's " +
-			"current nodes, without writing anything. It's the CI-friendly counterpart to " +
-			"`index build`: it exits zero when the index is current and non-zero (printing what " +
-			"drifted) when a rebuild is needed. Read-only — it never rewrites the index.\n\n" +
-			"Pass the SAME shape flags you built with (--shape-tag-min / --shape-tag-max / " +
-			"--no-shape); a check against a different shape configuration than the build reports " +
-			"drift by design.",
-		Example: "  # Verify the index is current (exit 0) or report drift (exit 1)\n" +
-			"  okfctl index check\n\n" +
-			"  # Check a bundle elsewhere, e.g. in CI\n" +
-			"  okfctl index check ./bundles/knowledge",
+		Short: "Exit 1 if any index.md is out of date, without writing",
+		Long: "check renders each index.md the way `okfctl index build` would and compares the " +
+			"result with what's on disk (OKF §8). It writes nothing. When every file matches it " +
+			"prints \"OK: index.md is current\" and exits 0. Otherwise it names the first file " +
+			"that's missing, stale, or left in a directory with no nodes, then exits 1. In the " +
+			"example the node written with printf hasn't reached the index.\n\n" +
+			"Put check in CI. lint --strict won't flag a stale index.\n\n" +
+			"Pass the --shape-tag-min, --shape-tag-max, and --no-shape flags you built with. " +
+			"Build with --no-shape and check with the default flags: any index that links a " +
+			"subdirectory reads as stale.\n\n" +
+			"check doesn't fix anything. build does.",
+		Annotations: map[string]string{
+			transcriptAnnotation: "<!-- transcript: exit 1 okfctl index check pantry -->",
+		},
+		Example: "  $ okfctl bundle init pantry\n" +
+			"  Initialized OKF bundle in pantry\n" +
+			"  $ printf -- '---\\ntype: Concept\\ntitle: Tannin\\n---\\n' > pantry/tannin.md\n" +
+			"  $ okfctl index check pantry\n" +
+			"  index.md is out of date; run `okfctl index build` to regenerate\n" +
+			"  okfctl: index.md is out of date\n" +
+			"  $ okfctl index build pantry\n" +
+			"  Wrote 1 index.md file(s) under pantry\n" +
+			"  $ cd pantry && okfctl index check\n" +
+			"  OK: index.md is current",
 		Args: cobra.MaximumNArgs(1),
 	}
 	checkNoIgnore := addNoIgnoreFlag(checkCmd)
