@@ -32,6 +32,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -110,6 +111,78 @@ test("the homepage carries the social card (it renders outside Starlight)", asyn
   const html = await readFile(join(dist, "index.html"), "utf8");
   const missing = REQUIRED_TAGS.filter((t) => !t.pattern.test(html)).map((t) => t.name);
   assert.deepEqual(missing, [], `the homepage is missing: ${missing.join(", ")}`);
+});
+
+// Link-preview crawlers (Discord, Slack, LinkedIn, X) cache the card image by
+// its URL. If every page points at a bare /og.png, a regenerated card at the
+// same URL keeps unfurling as the old image indefinitely — which is how a
+// retired card kept showing up after its copy was fixed. So the image URL must
+// carry a version derived from the bytes actually deployed: the first
+// OG_HASH_LEN hex characters of the sha256 of dist/og.png.
+const OG_HASH_LEN = 10;
+const OG_BASE = "https://okfctl.dev/og.png";
+
+function ogHash(bytes) {
+  return createHash("sha256").update(bytes).digest("hex").slice(0, OG_HASH_LEN);
+}
+
+// Returns one message per page whose og:image or twitter:image is missing, is
+// unversioned, or carries a version that is not the hash of the deployed card.
+function versionFailures(pages, hash) {
+  const want = `${OG_BASE}?v=${hash}`;
+  const tags = [
+    { name: "og:image", re: /<meta[^>]*property="og:image"[^>]*content="([^"]*)"/ },
+    { name: "twitter:image", re: /<meta[^>]*name="twitter:image"[^>]*content="([^"]*)"/ },
+  ];
+  const failures = [];
+  for (const { rel, html } of pages) {
+    for (const { name, re } of tags) {
+      const got = html.match(re)?.[1];
+      if (got !== want) failures.push(`${rel}: ${name} is ${got ?? "(absent)"}, want ${want}`);
+    }
+  }
+  return failures;
+}
+
+function page(rel, og, tw = og) {
+  return {
+    rel,
+    html: `<meta property="og:image" content="${og}"/><meta name="twitter:image" content="${tw}"/>`,
+  };
+}
+
+test("versionFailures: a page with an unversioned og:image is reported by name (positive control)", () => {
+  const f = versionFailures(
+    [page("a/index.html", `${OG_BASE}?v=abc`), page("b/index.html", OG_BASE, `${OG_BASE}?v=abc`)],
+    "abc",
+  );
+  assert.equal(f.length, 1);
+  assert.match(f[0], /^b\/index\.html: og:image is https:\/\/okfctl\.dev\/og\.png,/);
+});
+
+test("versionFailures: a version that does not match the card's hash is reported (positive control)", () => {
+  const f = versionFailures([page("a/index.html", `${OG_BASE}?v=old`)], "new");
+  assert.deepEqual(f, [
+    `a/index.html: og:image is ${OG_BASE}?v=old, want ${OG_BASE}?v=new`,
+    `a/index.html: twitter:image is ${OG_BASE}?v=old, want ${OG_BASE}?v=new`,
+  ]);
+});
+
+test("versionFailures: pages carrying the current version pass (negative control)", () => {
+  assert.deepEqual(versionFailures([page("a/index.html", `${OG_BASE}?v=abc`)], "abc"), []);
+});
+
+test("every indexable page versions og:image and twitter:image by the hash of dist/og.png", async () => {
+  const hash = ogHash(await readFile(join(dist, "og.png")));
+  const pages = [];
+  for (const rel of (await walk(dist)).map((f) => relative(dist, f)).sort()) {
+    if (!rel.endsWith(".html")) continue;
+    const html = await readFile(join(dist, rel), "utf8");
+    if (isIndexable(rel, html)) pages.push({ rel, html });
+  }
+  assert.ok(pages.length > 0, "found no indexable pages in dist/");
+  const failures = versionFailures(pages, hash);
+  assert.deepEqual(failures, [], `\n${failures.join("\n")}\n`);
 });
 
 test("the starlight() config declares exactly one head key", async () => {

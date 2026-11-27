@@ -20,6 +20,11 @@ import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
 import { LEGACY_TO_CLEAN } from "./scripts/prepare-content.mjs";
 import { buildAnalyticsHeadTags } from "./src/lib/analytics.ts";
+import { ogImageUrl } from "./scripts/og-image.mjs";
+
+// The social card URL, versioned by og.png's content hash (see scripts/og-image.mjs)
+// so link previews refetch the card whenever it changes. Prebuild writes the hash.
+const ogImage = ogImageUrl();
 
 // The GA4 gate for the Starlight `head` render path. Unlike a .astro component,
 // astro.config.mjs is NOT part of Vite's transformed app graph, so Vite never
@@ -99,10 +104,11 @@ export default defineConfig({
         // Social share card. Starlight already emits og:title/description/url and
         // twitter:card=summary_large_image; it does NOT emit an image. Absolute
         // URLs are required so the card resolves when a link is unfurled off-site.
-        // The 1200x630 PNG is generated at build time from the brand tokens.
+        // The 1200x630 PNG is generated at build time from the brand tokens; its
+        // URL carries a ?v=<content hash> so a changed card is never served stale.
         {
           tag: "meta",
-          attrs: { property: "og:image", content: "https://okfctl.dev/og.png" },
+          attrs: { property: "og:image", content: ogImage },
         },
         {
           tag: "meta",
@@ -121,7 +127,7 @@ export default defineConfig({
         },
         {
           tag: "meta",
-          attrs: { name: "twitter:image", content: "https://okfctl.dev/og.png" },
+          attrs: { name: "twitter:image", content: ogImage },
         },
         // The bespoke web fonts (Newsreader/Inter/JetBrains Mono) load via <link>
         // in the docs <head> — the same proven path the standalone homepage uses
