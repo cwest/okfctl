@@ -44,7 +44,7 @@ func NewNode(root, relPath, typ, title string) (string, error) {
 // refusals apply. Returns the absolute path written.
 func NewNodeFromTemplate(root, relPath, typ, title string, t Template) (string, error) {
 	if strings.TrimSpace(typ) == "" {
-		return "", fmt.Errorf("type is required and must be non-empty (OKF §7)")
+		return "", fmt.Errorf("type is required and must be non-empty (OKF §4.1)")
 	}
 	if !strings.HasSuffix(relPath, ".md") {
 		relPath += ".md"

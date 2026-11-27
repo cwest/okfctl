@@ -39,7 +39,7 @@ protocol with `cwest/knowledge-base` so vectors are cross-verifiable.
   different model (rebuild with `index build`).
 - `okfctl-search related <node-path> [bundle-dir]`—a node's nearest neighbors
   (self excluded); the neighbor set `lint --semantic` consumes for its
-  similarity-driven checks (§8.6).
+  similarity-driven checks.
 - `--embedder hash` (default) is the offline, dependency-free embedder. It is
   deterministic and needs no model, but it's *lexical*—it matches tokens, not
   meaning.

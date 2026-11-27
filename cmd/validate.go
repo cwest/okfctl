@@ -35,9 +35,9 @@ func newValidateCmd() *cobra.Command {
 			"It also reports git drift: a node whose frontmatter `modified` contradicts " +
 			"its git last-commit date (read-only — it never rewrites the file, and " +
 			"degrades to nothing outside a git repo). With --templates it runs the opt-in " +
-			"team overlay (§9.4) as well, reporting template drift; templates may be " +
+			"team overlay (PRD §9.4) as well, reporting template drift; templates may be " +
 			"referenced from a separate bundle via the .okf `templates:` key or " +
-			"--templates-from (§9.2). All drift is " +
+			"--templates-from (PRD §9.2). All drift is " +
 			"advisory by default (exit 0); pass --strict to exit non-zero on any drift. " +
 			"Floor violations always fail regardless of --strict.",
 		Example: "  # Check the spec floor for the bundle in the current directory\n" +
@@ -136,7 +136,7 @@ func newValidateCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().BoolVar(&templates, "templates", false, "also run the opt-in type-template overlay (§9.4), reporting drift as warnings")
+	c.Flags().BoolVar(&templates, "templates", false, "also run the opt-in type-template overlay (PRD §9.4), reporting drift as warnings")
 	c.Flags().StringVar(&templatesFrom, "templates-from", "", templatesFromFlagUsage)
 	c.Flags().BoolVar(&strict, "strict", false, "exit non-zero on any drift (git drift and, with --templates, template drift); default: advisory, exit 0")
 	noIgnore = addNoIgnoreFlag(c)
