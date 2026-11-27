@@ -77,6 +77,13 @@ Blocks in one file share a working directory, so a later block sees what an
 earlier one made. If you change what a command prints, update the docs that
 show it, or this test fails and names the line.
 
+The okfctl.dev homepage (`site/src/pages/index.astro`) is held to the same
+rule. Each terminal panel there is a `<pre data-transcript>`; colored spans
+inside it are stripped before comparing. Put a directive just inside the
+panel's wrapper as an Astro comment, `{/* transcript: exit 1 okfctl validate mykb */}`,
+so it never reaches the built page. The "at scale" panel replays against a
+pinned copy of an upstream sample bundle in `testdata/transcripts/homepage/`.
+
 Write `<DATE>`, `<TIMESTAMP>`, `<SHA>`, or `<TMPDIR>` where a value changes
 from run to run. An HTML comment just above a block changes how it replays:
 
