@@ -88,12 +88,23 @@ jobs:
   # testdata/fuzz seed corpora (regression inputs for fixed crashers) are also
   # replayed by the plain `go test ./... -race` step in build-test, so a fixed
   # crasher can never silently regress even outside this job.
+  #
+  # This job pins go1.27.4, not the go.mod toolchain, on purpose. go1.26.11's
+  # fuzz coordinator has a race (golang/go#75804): when -fuzztime expires,
+  # internal/fuzz's stop() suppresses only the worker context's error, so if a
+  # worker exits before that context reads as cancelled, the parent's
+  # "context deadline exceeded" is returned as the run's failure. That turns a
+  # clean run red with no crasher, and it can also hide a real crasher behind
+  # the same timeout message. The fix shipped in go1.27.4 and is on
+  # release-branch.go1.26 for 1.26.12, which is not released yet. Move this back
+  # to the go.mod version once it is >= 1.26.12. build-test still replays the
+  # committed seed corpora under the go.mod toolchain.
   fuzz:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
-        with: { go-version: '1.26.11' }
+        with: { go-version: '1.27.4' }
       - name: fuzz untrusted-input parsers (negative control — normal input passes)
         run: |
           set -euo pipefail
@@ -317,6 +328,17 @@ jobs:
         # It runs from the checkout (the same file okfctl.dev serves from
         # site/public/) so a PR that changes the installer tests its own copy
         # rather than whatever was last deployed.
+        #
+        # GITHUB_TOKEN authenticates the installer's api.github.com fallback.
+        # The installer reads the latest tag from the github.com releases
+        # redirect first; when that page errors (it returns 5xx at times), the
+        # fallback is an unauthenticated API call that a shared runner IP can
+        # find rate-limited, and the job went red with "could not determine
+        # the latest version". The token is this run's read-only one
+        # (workflow permissions: contents: read), and the installer sends it
+        # only to api.github.com.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.local/bin"
