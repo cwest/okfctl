@@ -302,15 +302,23 @@ func TestBumpRootIndexMarker_Section8_1_CRLFAndNoOps(t *testing.T) {
 	if want := strings.Replace(crlf, "'0.1'", "\"0.2\"", 1); string(got) != want {
 		t.Fatalf("CRLF bump: got %q, want %q", got, want)
 	}
-	// Already at target, and no marker at all: both are byte-level no-ops.
-	for _, src := range []string{"---\ntitle:  Acme\nokf_version: '0.2'\n---\n", "---\ntitle:  Acme\n---\n"} {
-		writeFile(t, dir, "index.md", src)
-		if err := bumpRootIndexMarker(dir, "0.2"); err != nil {
-			t.Fatal(err)
-		}
-		if got, _ := os.ReadFile(filepath.Join(dir, "index.md")); string(got) != src {
-			t.Errorf("no-op bump changed the file: got %q, want %q", got, src)
-		}
+	// Already at target is a byte-level no-op.
+	src := "---\ntitle:  Acme\nokf_version: '0.2'\n---\n"
+	writeFile(t, dir, "index.md", src)
+	if err := bumpRootIndexMarker(dir, "0.2"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, "index.md")); string(got) != src {
+		t.Errorf("no-op bump changed the file: got %q, want %q", got, src)
+	}
+	// §8.1 SHOULD: a block with no marker gains one at its end; the other
+	// entries keep their bytes.
+	writeFile(t, dir, "index.md", "---\ntitle:  Acme\n---\n")
+	if err := bumpRootIndexMarker(dir, "0.2"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, "index.md")); string(got) != "---\ntitle:  Acme\nokf_version: \"0.2\"\n---\n" {
+		t.Errorf("marker not declared: got %q", got)
 	}
 }
 

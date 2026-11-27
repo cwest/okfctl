@@ -126,7 +126,7 @@ func TestRenderIndex_NoGeneratedByBoilerplate(t *testing.T) {
 	}
 }
 
-func TestScaffold_IndexHasNoFrontmatter(t *testing.T) {
+func TestScaffold_IndexDeclaresVersionOnly_Section8_1(t *testing.T) {
 	dir := t.TempDir()
 	if err := Scaffold(dir); err != nil {
 		t.Fatalf("Scaffold: %v", err)
@@ -135,10 +135,14 @@ func TestScaffold_IndexHasNoFrontmatter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, has := frontmatterBlock(string(raw)); has {
-		t.Errorf("scaffolded index.md must have NO frontmatter; got:\n%s", raw)
+	fm, has := frontmatterBlock(string(raw))
+	if !has || strings.TrimSpace(fm) != `okf_version: "`+SpecVersion+`"` {
+		t.Errorf("§8.1: scaffolded index.md frontmatter must be exactly a quoted okf_version; got:\n%s", raw)
 	}
 	if strings.Contains(string(raw), "type: Index") {
 		t.Errorf("scaffolded index.md must not seed `type: Index`; got:\n%s", raw)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".okf")); err == nil {
+		t.Errorf("Scaffold must not write the legacy .okf sidecar")
 	}
 }

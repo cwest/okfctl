@@ -8,9 +8,9 @@ A cold-start walkthrough: from an empty directory to a validated bundle.
 okfctl bundle init mykb
 ```
 
-This creates the two reserved files (`index.md`, `log.md`) and the bundle-root
-`.okf` sidecar. It does **not** create any concept nodes—a fresh bundle has
-zero nodes.
+This creates the two reserved files (`index.md`, `log.md`). The bundle-root
+`index.md` declares `okf_version: "0.3"` in its frontmatter (OKF v0.3 §8.1). It
+does **not** create any concept nodes—a fresh bundle has zero nodes.
 
 ## 2. Add a node
 
@@ -41,7 +41,7 @@ okfctl index check mykb      # confirm they are current
 ```sh
 okfctl log append mykb --message "added tannin node"
 okfctl validate mykb         # OK: bundle conforms to the OKF spec floor
-okfctl bundle info mykb      # nodes: 1, reserved: 3, okf_version: 0.2
+okfctl bundle info mykb      # nodes: 1, reserved: 3, okf_version: 0.3
 ```
 
 ## Moving and removing nodes

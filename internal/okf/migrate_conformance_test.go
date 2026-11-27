@@ -31,12 +31,12 @@ import (
 //   - §11:   additive-only — an unrecognized key is never dropped.
 //   - §5.1:  resource is REQUIRED, so a prose finding is never fabricated into a
 //     source; it becomes a judgment item instead.
-//   - §12:   an already-v0.2 bundle is a no-op (negative control).
+//   - §12:   an already-v0.3 bundle is a no-op (negative control).
 
-// TestConformance_MigrateV01ToV02ValidatesAndReadsBack is the load-bearing
+// TestConformance_MigrateV01ToV03ValidatesAndReadsBack is the load-bearing
 // closed loop: a v0.1 fixture, migrated, validates clean AND the v0.2 reader
 // reads back generated (§5.2/§13.1) and sources (§5.1/§13.1).
-func TestConformance_MigrateV01ToV02ValidatesAndReadsBack(t *testing.T) {
+func TestConformance_MigrateV01ToV03ValidatesAndReadsBack(t *testing.T) {
 	dir := mkMigrateBundle(t, map[string]string{
 		".okf":     "okf_version: 0.1\n",
 		"index.md": "---\nokf_version: \"0.1\"\n---\n\n# KB\n",
@@ -54,8 +54,8 @@ func TestConformance_MigrateV01ToV02ValidatesAndReadsBack(t *testing.T) {
 	}
 
 	b2 := loadMigrate(t, dir)
-	if b2.OkfVersion != "0.2" {
-		t.Fatalf("§12: bundle version = %q, want 0.2", b2.OkfVersion)
+	if b2.OkfVersion != "0.3" {
+		t.Fatalf("§12: bundle version = %q, want 0.3", b2.OkfVersion)
 	}
 	if f := Validate(b2); len(f) != 0 {
 		t.Fatalf("§11: migrated bundle has %d findings, want 0: %+v", len(f), f)
@@ -123,13 +123,13 @@ func TestConformance_MigrateNeverFabricatesResource_Section5_1(t *testing.T) {
 	}
 }
 
-// TestConformance_MigrateAlreadyV02IsNoop_Section12 is the negative control: a
-// bundle already at v0.2 is left byte-identical (§12: a consumer at the declared
+// TestConformance_MigrateAlreadyV03IsNoop_Section12 is the negative control: a
+// bundle already at v0.3 is left byte-identical (§12: a consumer at the declared
 // version has nothing to migrate).
-func TestConformance_MigrateAlreadyV02IsNoop_Section12(t *testing.T) {
+func TestConformance_MigrateAlreadyV03IsNoop_Section12(t *testing.T) {
 	dir := mkMigrateBundle(t, map[string]string{
-		".okf":     "okf_version: 0.2\n",
-		"index.md": "---\nokf_version: \"0.2\"\n---\n\n# KB\n",
+		".okf":     "okf_version: \"0.3\"\n",
+		"index.md": "---\nokf_version: \"0.3\"\n---\n\n# KB\n",
 		"log.md":   "# Log\n",
 		"a.md": "---\ntype: Metric\ngenerated: { by: human:casey, at: 2026-06-20T22:53:05Z }\n" +
 			"sources:\n  - resource: https://wiki.acme/x\n---\n\n# Def\n",
@@ -144,6 +144,6 @@ func TestConformance_MigrateAlreadyV02IsNoop_Section12(t *testing.T) {
 		t.Fatalf("MigrateApply: %v", err)
 	}
 	if treeHash(t, dir) != before {
-		t.Fatalf("§12: already-v0.2 bundle was changed (negative control failed)")
+		t.Fatalf("§12: already-v0.3 bundle was changed (negative control failed)")
 	}
 }

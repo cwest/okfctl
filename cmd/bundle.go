@@ -27,8 +27,8 @@ func newBundleCmd() *cobra.Command {
 		Use:   "init [dir]",
 		Short: "Scaffold a minimal conformant OKF bundle",
 		Long: "init scaffolds a minimal bundle that conforms to the OKF spec floor: the two " +
-			"reserved files (index.md and log.md, OKF §3.1) plus a bundle-root .okf sidecar " +
-			"whose okf_version marks the target version (§12). It doesn't create any concept " +
+			"reserved files (index.md and log.md, OKF §3.1). The bundle-root index.md declares " +
+			"okf_version \"0.3\" in its frontmatter (§8.1, §12). It doesn't create any concept " +
 			"nodes — a fresh bundle has zero nodes; use `okfctl node new` to add them. It refuses " +
 			"to overwrite an existing bundle.",
 		Example: "  # Scaffold a new bundle in the current directory\n" +
@@ -54,8 +54,8 @@ func newBundleCmd() *cobra.Command {
 		Long: "info prints a one-glance summary of a bundle: how many concept nodes it holds, " +
 			"how many reserved files (index.md/log.md, OKF §3.1) it carries, and its okf_version " +
 			"(§12). The version is read from the bundle-root index.md frontmatter (§8.1), falling " +
-			"back to the legacy .okf sidecar; a bundle that declares neither is reported as " +
-			"undeclared, with the version okfctl assumes for it. It's read-only and never " +
+			"back to the legacy .okf sidecar. A bundle that declares neither is reported as " +
+			"undeclared: per §12.1 it is read with the v0.2 fallbacks. It's read-only and never " +
 			"mutates the bundle. It doesn't validate conformance — use `okfctl validate` for that.",
 		Example: "  # Summarize the bundle in the current directory\n" +
 			"  okfctl bundle info\n\n" +
@@ -71,12 +71,12 @@ func newBundleCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			src := "undeclared; assumed"
+			version, src := "undeclared", "v0.2 fallbacks apply, §12.1"
 			if b.OkfVersionSource != okf.VersionUndeclared {
-				src = "declared in " + b.OkfVersionSource
+				version, src = b.DeclaredOkfVersion, "declared in "+b.OkfVersionSource
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "nodes: %d\nreserved: %d\nokf_version: %s (%s)\n",
-				len(b.Nodes), len(b.Reserved), b.OkfVersion, src)
+				len(b.Nodes), len(b.Reserved), version, src)
 			return nil
 		},
 	})

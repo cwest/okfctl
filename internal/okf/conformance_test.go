@@ -68,14 +68,15 @@ func TestConformance_ScaffoldValidatesClean(t *testing.T) {
 		t.Errorf("scaffolded bundle must validate clean; got findings: %v", f)
 	}
 
-	// §8: the scaffolded index carries no frontmatter.
+	// §8.1: the scaffolded root index declares only a quoted okf_version.
 	raw, err := os.ReadFile(filepath.Join(dir, "index.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.HasPrefix(string(raw), "---\n") {
-		t.Errorf("§8: scaffolded index.md must have no frontmatter; got:\n%s", raw)
+	if !strings.HasPrefix(string(raw), "---\nokf_version: \""+SpecVersion+"\"\n---\n\n# ") {
+		t.Errorf("§8.1: scaffolded index.md must open with an okf_version-only block; got:\n%s", raw)
 	}
+	assertGeneratedIndexSection8And12(t, dir)
 
 	// §9: the scaffolded log is well-formed.
 	logBody, err := ReadLog(dir)

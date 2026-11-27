@@ -13,6 +13,26 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ### Added
 
+- `migrate` upgrades a v0.2 bundle (or one that declares no version) to OKF
+  v0.3. A bare link or path field that resolves only from the bundle root (the
+  §12.1 fallback) is rewritten with a leading `/` so it resolves to the same
+  file under v0.3 (§6). A §5 timestamp that carries an offset but is not
+  RFC 3339 (`2026-06-20 10:00:00Z`) is respelled with the offset kept. A
+  date-time with no offset names no instant, so it becomes a new
+  `timestamp-no-offset` judgment item and is never guessed. The v0.1 renames
+  still apply in the same run, and a second run plans nothing.
+- `migrate` converts a v0.1 `# Citations` entry that names exactly one
+  follow-able resource (an absolute URL or a bundle path, anywhere in the entry,
+  across wrapped lines) into a §5.1 `sources` entry, with the entry text as its
+  `title`. An entry with no resource, or with two different ones, stays a
+  `prose-citation` judgment item. On the 356-node reference corpus this turns
+  2,506 of 3,796 citation entries into sources (2,411 external URLs); before, a
+  URL had to lead the entry, so 2,405 cited URLs stayed prose.
+- `migrate --force-declare` declares v0.3 even while `prose-citation` or
+  `missing-actor` items remain; the plan records `"force_declare": true`.
+- `migrate --apply --dry-run` prints the unified diff the real apply would
+  write, and both phases print a summary of edit and judgment counts by kind.
+
 - `lint` applies the OKF v0.3 §5 frontmatter semantics through three new
   advisory checks. `timestamp-form` reports a §5 timestamp key that is not an
   RFC 3339 date-time with an offset or a full-date. That includes a date-time
@@ -40,6 +60,27 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ### Changed
 
+- okfctl targets OKF v0.3 (`SpecVersion` is `0.3`). `bundle init` declares
+  `okf_version: "0.3"` in the bundle-root `index.md` frontmatter (§8.1) and no
+  longer writes a `.okf` sidecar. A bundle that declares no version keeps the
+  §12.1 fallbacks, which key on the declared version, and `bundle info` reports
+  it as `okf_version: undeclared (v0.2 fallbacks apply, §12.1)`.
+- `migrate --apply` declares the target version on the bundle-root `index.md`
+  even when the index had no `okf_version` (§8.1: producers SHOULD put one in
+  each bundle); before, it only rewrote an existing marker. An existing block
+  keeps every other byte. A legacy `.okf` sidecar is bumped with the value
+  quoted (§4).
+- `migrate` holds the v0.3 declaration while the plan leaves a `prose-citation`
+  or `missing-actor` item. Those items are readable only through the v0.1
+  fallbacks (Appendix B), which §12.1 grants only to a bundle that declares 0.2
+  or earlier, or nothing; declaring 0.3 first would make a v0.3 consumer drop
+  them. The plan carries `"version_action": "hold"`, the summary says why, and
+  apply writes the content edits but leaves the version markers alone.
+- `migrate` never rewrites a bundle that declares a later version, or one
+  okfctl does not recognize: the plan carries `"version_action": "keep"` and
+  no edits (§12: consume best-effort, never refuse, never downgrade). The plan
+  file gains `declared_version` and `version_action`; a plan without
+  `version_action` is read as a bump.
 - The trust tier counts only *current* verification events: an event whose
   `at` is equal to or later than `generated.at`, or any event when `generated`
   is absent (OKF v0.3 §5.3, a breaking change from v0.2). A human sign-off made
@@ -59,6 +100,11 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ### Fixed
 
+- Re-applying a `migrate` plan file to a tree it already migrated no longer
+  appends every `sources` entry a second time. Each frontmatter edit now
+  re-checks the current file first: a resource already listed is not added
+  again, and a `timestamp` already renamed to `generated` is left alone, so the
+  second apply changes nothing.
 - `node refresh`, `node edit`, and `migrate --apply` now splice the frontmatter
   entry they change instead of re-encoding the whole block (OKF v0.3 §4: a
   producer SHOULD NOT re-serialize values it did not change). A one-field

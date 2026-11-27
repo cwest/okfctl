@@ -19,8 +19,12 @@ import (
 	"path/filepath"
 )
 
-// SpecVersion is the OKF spec version this build targets.
-const SpecVersion = "0.2"
+// SpecVersion is the OKF spec version this build targets (OKF v0.3 §12). It is
+// what `bundle init` declares and what `migrate` upgrades a bundle to. A
+// bundle that declares no version is READ as this version for display, but
+// the §12.1 compatibility fallbacks key on the declared version
+// (Bundle.DeclaredOkfVersion), never on this constant.
+const SpecVersion = "0.3"
 
 // logHeader is the leading header of a reserved log.md; logPlaceholder is the
 // empty-log hint the scaffold writes beneath it. AppendLog reconciles against
@@ -32,22 +36,23 @@ const (
 )
 
 // Scaffold writes a minimal conformant bundle into dir: a reserved index.md and
-// log.md and an .okf spec pin. The result passes Validate with zero findings
-// (it has no concept nodes yet, so the type floor is vacuously satisfied).
+// log.md. The result passes Validate with zero findings (it has no concept
+// nodes yet, so the type floor is vacuously satisfied).
 //
-// The scaffolded index.md carries NO frontmatter (OKF §8). The bundle's
-// okf_version is pinned by the .okf sidecar; `okfctl index build` surfaces it as
-// an okf_version-only root frontmatter block (§8.1) once the index is
-// regenerated.
+// The scaffolded bundle-root index.md declares the bundle's version with a
+// quoted okf_version frontmatter key, the spec-defined declaration (OKF v0.3
+// §8.1: "Producers SHOULD put a bundle-root index.md with okf_version in each
+// bundle"; §4: quote number-like values). No .okf sidecar is written: it is a
+// legacy fallback read only when the root index.md declares nothing.
 func Scaffold(dir string) error {
 	// A scaffolded bundle dir holds shareable knowledge documents; 0o755 is intended.
 	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: shareable bundle content dir
 		return err
 	}
 	files := map[string]string{
-		"index.md": "# Knowledge Base\n\n_Progressive-disclosure entry point. Add \"start here\" links as nodes land._\n",
-		"log.md":   logHeader + logPlaceholder,
-		".okf":     "okf_version: " + SpecVersion + "\n",
+		"index.md": "---\nokf_version: \"" + SpecVersion + "\"\n---\n\n" +
+			"# Knowledge Base\n\n_Progressive-disclosure entry point. Add \"start here\" links as nodes land._\n",
+		"log.md": logHeader + logPlaceholder,
 	}
 	for name, body := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil { //nolint:gosec // G306: a scaffolded reserved file is shareable bundle content; 0o644 is intended

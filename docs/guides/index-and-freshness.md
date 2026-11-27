@@ -9,7 +9,8 @@ index carries frontmatter; every nested index carries none. The root block holds
 bundle metadata (OKF v0.3 §8.1): `okf_version`, `title`, `description`,
 `license`, and any extension keys such as `x-acme-owner`. `index build` keeps an
 existing root block byte-for-byte. When the root index has no block, `index
-build` emits an `okf_version`-only block from the `.okf` sidecar.
+build` emits an `okf_version`-only block from a legacy `.okf` sidecar, if there
+is one.
 
 - `okfctl index build [dir]` regenerates the reserved `index.md` files from the
   current bundle. Orphaned indexes left in a now-empty directory are pruned.

@@ -65,12 +65,13 @@ func TestConformance_Validate_Section12_VersionConflictWarnsNeverFails(t *testin
 	}
 }
 
-// bundle info exposes declared-vs-assumed: an undeclared bundle is reported as
-// such, distinct from a bundle that declares the same version.
+// bundle info exposes declared-vs-undeclared: an undeclared bundle is reported
+// as undeclared and read with the §12.1 v0.2 fallbacks, not as the build's
+// target version; a bundle that declares a version reports where it did.
 func TestConformance_BundleInfo_Section12_DeclaredVersusAssumed(t *testing.T) {
 	undeclared := writeTree(t, map[string]string{"index.md": "# KB\n"})
 	out, err := runOKF(t, "bundle", "info", undeclared)
-	if err != nil || !strings.Contains(out, "(undeclared; assumed)") {
+	if err != nil || !strings.Contains(out, "okf_version: undeclared (v0.2 fallbacks apply, §12.1)") {
 		t.Fatalf("undeclared bundle: got err=%v\n%s", err, out)
 	}
 	declared := writeTree(t, map[string]string{"index.md": "---\nokf_version: \"0.3\"\n---\n\n# KB\n"})

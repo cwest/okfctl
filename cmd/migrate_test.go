@@ -52,8 +52,8 @@ func TestMigrate_PlanWritesPlanFileOnly(t *testing.T) {
 	}
 	// The plan file exists and carries the deterministic + judgment split.
 	planJSON := readFileStr(t, planPath)
-	if !strings.Contains(planJSON, "\"target_version\": \"0.2\"") {
-		t.Fatalf("plan missing target_version 0.2:\n%s", planJSON)
+	if !strings.Contains(planJSON, "\"target_version\": \"0.3\"") {
+		t.Fatalf("plan missing target_version 0.3:\n%s", planJSON)
 	}
 	if !strings.Contains(planJSON, "fpa-handbook") {
 		t.Fatalf("plan missing the URL source:\n%s", planJSON)
@@ -64,8 +64,8 @@ func TestMigrate_PlanWritesPlanFileOnly(t *testing.T) {
 }
 
 // `migrate --apply` reads the plan back, applies it, and leaves a bundle that
-// validates clean AS v0.2; the unrecognized key survives (additive-only).
-func TestMigrate_ApplyProducesValidV02(t *testing.T) {
+// validates clean; the unrecognized key survives (additive-only).
+func TestMigrate_ApplyProducesValidV03(t *testing.T) {
 	dir := mkPromoteCLIBundle(t, migrateFixtureFiles())
 	planPath := filepath.Join(t.TempDir(), "migrate-plan.json")
 
@@ -76,7 +76,7 @@ func TestMigrate_ApplyProducesValidV02(t *testing.T) {
 		t.Fatalf("apply phase must exit 0: err=%v out=%q", err, out)
 	}
 
-	// validate exits 0 (bundle now reads as v0.2).
+	// validate exits 0 (bundle now reads as v0.3).
 	if out, err := runOKF(t, "validate", dir); err != nil {
 		t.Fatalf("validate must pass after migrate: err=%v out=%q", err, out)
 	}
@@ -93,10 +93,51 @@ func TestMigrate_ApplyProducesValidV02(t *testing.T) {
 	if !strings.Contains(node, "fpa-handbook") {
 		t.Errorf("a.md missing the migrated source:\n%s", node)
 	}
-	// .okf sidecar bumped to 0.2.
+	// §12.1: the fixture keeps a prose citation, so the declaration is held
+	// and the .okf sidecar still declares 0.1.
+	if okf := readFileStr(t, filepath.Join(dir, ".okf")); !strings.Contains(okf, "okf_version: 0.1") {
+		t.Errorf(".okf changed while the declaration was held:\n%s", okf)
+	}
+}
+
+// `migrate --force-declare` declares v0.3 even with the prose citation left,
+// and the plan summary says so.
+func TestMigrate_ForceDeclareBumpsMarkers_Section12_1(t *testing.T) {
+	dir := mkPromoteCLIBundle(t, migrateFixtureFiles())
+	planPath := filepath.Join(t.TempDir(), "migrate-plan.json")
+	out, err := runOKF(t, "migrate", dir, "--plan", planPath, "--generated-by", "human:casey", "--force-declare")
+	if err != nil {
+		t.Fatalf("plan: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "declare v0.3 (forced: 1 prose-citation/missing-actor item(s) lose the §12.1 fallback)") {
+		t.Fatalf("forced plan summary:\n%s", out)
+	}
+	if out, err := runOKF(t, "migrate", dir, "--apply", "--plan", planPath); err != nil {
+		t.Fatalf("apply: %v\n%s", err, out)
+	}
+	// .okf sidecar bumped to 0.3 (quoted, §4).
 	okf := readFileStr(t, filepath.Join(dir, ".okf"))
-	if !strings.Contains(okf, "0.2") {
-		t.Errorf(".okf not bumped to 0.2:\n%s", okf)
+	if !strings.Contains(okf, `okf_version: "0.3"`) {
+		t.Errorf(".okf not bumped to 0.3:\n%s", okf)
+	}
+}
+
+// Re-applying the same plan file after a real apply changes nothing (§12).
+func TestMigrate_ApplySamePlanTwiceIsNoop(t *testing.T) {
+	dir := mkPromoteCLIBundle(t, migrateFixtureFiles())
+	planPath := filepath.Join(t.TempDir(), "migrate-plan.json")
+	if out, err := runOKF(t, "migrate", dir, "--plan", planPath, "--generated-by", "human:casey"); err != nil {
+		t.Fatalf("plan: %v\n%s", err, out)
+	}
+	if out, err := runOKF(t, "migrate", dir, "--apply", "--plan", planPath); err != nil {
+		t.Fatalf("first apply: %v\n%s", err, out)
+	}
+	once := cliTreeHash(t, dir)
+	if out, err := runOKF(t, "migrate", dir, "--apply", "--plan", planPath); err != nil {
+		t.Fatalf("second apply: %v\n%s", err, out)
+	}
+	if cliTreeHash(t, dir) != once {
+		t.Fatalf("second apply of the same plan changed the tree:\n%s", readFileStr(t, filepath.Join(dir, "a.md")))
 	}
 }
 
@@ -161,11 +202,11 @@ func TestMigrate_Idempotent(t *testing.T) {
 	}
 }
 
-// Negative control: `migrate` against an already-v0.2 bundle changes nothing.
-func TestMigrate_AlreadyV02NoChange(t *testing.T) {
+// Negative control: `migrate` against an already-v0.3 bundle changes nothing.
+func TestMigrate_AlreadyV03NoChange(t *testing.T) {
 	dir := mkPromoteCLIBundle(t, map[string]string{
-		".okf":     "okf_version: 0.2\n",
-		"index.md": "---\nokf_version: \"0.2\"\n---\n\n# KB\n",
+		".okf":     "okf_version: \"0.3\"\n",
+		"index.md": "---\nokf_version: \"0.3\"\n---\n\n# KB\n",
 		"log.md":   "# Log\n",
 		"a.md": "---\ntype: Metric\nstatus: stable\ngenerated: { by: human:casey, at: 2026-06-20T22:53:05Z }\n" +
 			"sources:\n  - id: x\n    resource: https://wiki.acme/x\n---\n\n# Def\n",
@@ -179,7 +220,7 @@ func TestMigrate_AlreadyV02NoChange(t *testing.T) {
 		t.Fatalf("apply: %v", err)
 	}
 	if cliTreeHash(t, dir) != before {
-		t.Fatalf("migrate changed an already-v0.2 bundle (negative control failed)")
+		t.Fatalf("migrate changed an already-v0.3 bundle (negative control failed)")
 	}
 }
 

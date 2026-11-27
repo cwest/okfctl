@@ -364,14 +364,14 @@ func TestMigratePlan_BumpsVersionMarkers_Section8_12(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MigratePlan: %v", err)
 	}
-	if plan.TargetVersion != "0.2" {
-		t.Errorf("plan target version = %q, want 0.2", plan.TargetVersion)
+	if plan.TargetVersion != "0.3" {
+		t.Errorf("plan target version = %q, want 0.3", plan.TargetVersion)
 	}
 }
 
-// --- apply: turns a v0.1 fixture into a bundle valid as v0.2 -----------------
+// --- apply: turns a v0.1 fixture into a bundle valid as v0.3 -----------------
 
-func TestMigrateApply_ProducesValidV02Bundle(t *testing.T) {
+func TestMigrateApply_ProducesValidV03Bundle(t *testing.T) {
 	dir := mkMigrateBundle(t, map[string]string{
 		".okf":     "okf_version: 0.1\n",
 		"index.md": "---\nokf_version: \"0.1\"\n---\n\n# KB\n",
@@ -388,10 +388,10 @@ func TestMigrateApply_ProducesValidV02Bundle(t *testing.T) {
 		t.Fatalf("MigrateApply: %v", err)
 	}
 
-	// Reload and read via the v0.2 reader.
+	// Reload and read via the reader.
 	b2 := loadMigrate(t, dir)
-	if b2.OkfVersion != "0.2" {
-		t.Errorf("bundle okf_version = %q, want 0.2 after migrate", b2.OkfVersion)
+	if b2.OkfVersion != "0.3" {
+		t.Errorf("bundle okf_version = %q, want 0.3 after migrate", b2.OkfVersion)
 	}
 	n := b2.Nodes["a.md"]
 	if n == nil {
@@ -416,7 +416,7 @@ func TestMigrateApply_ProducesValidV02Bundle(t *testing.T) {
 	if n.Frontmatter["keep_me"] != "yes" {
 		t.Errorf("a.md dropped the unrecognized keep_me key: %+v", n.Frontmatter)
 	}
-	// Validate clean as v0.2.
+	// Validate clean as v0.3.
 	if f := Validate(b2); len(f) != 0 {
 		t.Errorf("validate after migrate: %d findings, want 0: %+v", len(f), f)
 	}
@@ -457,12 +457,12 @@ func TestMigrateApply_IsIdempotent(t *testing.T) {
 	}
 }
 
-// --- negative control: an already-v0.2 bundle is unchanged -------------------
+// --- negative control: an already-v0.3 bundle is unchanged -------------------
 
-func TestMigrateApply_AlreadyV02IsNoop(t *testing.T) {
+func TestMigrateApply_AlreadyV03IsNoop(t *testing.T) {
 	dir := mkMigrateBundle(t, map[string]string{
-		".okf":     "okf_version: 0.2\n",
-		"index.md": "---\nokf_version: \"0.2\"\n---\n\n# KB\n",
+		".okf":     "okf_version: \"0.3\"\n",
+		"index.md": "---\nokf_version: \"0.3\"\n---\n\n# KB\n",
 		"log.md":   "# Log\n",
 		"a.md": "---\ntype: Metric\nstatus: stable\ngenerated: { by: human:casey, at: 2026-06-20T22:53:05Z }\n" +
 			"sources:\n  - id: x\n    resource: https://wiki.acme/x\n---\n\n# Def\n",
@@ -477,6 +477,6 @@ func TestMigrateApply_AlreadyV02IsNoop(t *testing.T) {
 		t.Fatalf("MigrateApply: %v", err)
 	}
 	if after := treeHash(t, dir); before != after {
-		t.Fatalf("migrate changed an already-v0.2 bundle (negative control failed)")
+		t.Fatalf("migrate changed an already-v0.3 bundle (negative control failed)")
 	}
 }

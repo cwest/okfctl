@@ -23,43 +23,55 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newMigrateCmd builds `okfctl migrate`, the two-phase v0.1 -> v0.2 upgrade
-// path. It is deliberately consumer-agnostic and carries NO model, network, or
+// newMigrateCmd builds `okfctl migrate`, the two-phase upgrade path from
+// OKF v0.1 or v0.2 (or an undeclared version) to v0.3. It is deliberately consumer-agnostic and carries NO model, network, or
 // credential dependency on any path (the tool ships to strangers who have a
 // bundle and nothing else):
 //
 //	okfctl migrate <bundle> --plan migrate-plan.json --generated-by <actor>
-//	     phase 1 (default): PURE READ. Computes every deterministic §13.1 edit
-//	     and enumerates every judgment item, writing only the plan file.
+//	     phase 1 (default): PURE READ. Computes every deterministic edit and
+//	     enumerates every judgment item, writing only the plan file.
 //
 //	okfctl migrate <bundle> --apply --plan migrate-plan.json [--dry-run]
 //	     phase 2: reads the plan back, applies its deterministic edits
 //	     (order-preserving, additive-only), then re-validates. --dry-run writes
-//	     nothing and its outcome is byte-identical to the real apply.
+//	     nothing and prints the unified diff the real apply would write.
 //
 // The plan file is the review surface, for Casey and for a solo user alike. A
 // judgment item (a citation with no follow-able resource per §5.1, or a
 // timestamp rename with no actor per §7) is NEVER guessed — it stays in the plan
 // for its (unspecified) consumer to resolve.
 func newMigrateCmd() *cobra.Command {
-	var apply, dry bool
+	var apply, dry, force bool
 	var planPath, generatedBy string
 	c := &cobra.Command{
 		Use:   "migrate <bundle>",
-		Short: "Upgrade a bundle from OKF v0.1 to v0.2 (two-phase, consumer-agnostic)",
-		Long: "migrate is the supported v0.1 -> v0.2 upgrade path. It runs in two phases " +
-			"so it never acquires a model dependency. Phase 1 (default) is PURE READ: it " +
-			"computes every deterministic §13.1 edit (timestamp -> generated.at; body " +
-			"# Citations with a follow-able resource -> frontmatter sources) and enumerates " +
-			"every judgment item (a prose citation with no resource per §5.1; a timestamp " +
-			"rename with no actor per §7), writing only the plan file. Phase 2 (--apply) reads " +
-			"the plan back and applies its deterministic edits order-preserving and " +
-			"additive-only, then re-validates. --dry-run writes nothing and is byte-identical " +
-			"to the real apply. Judgment items are never guessed — they stay in the plan for " +
-			"its consumer (agent, colleague, shell loop, or a human) to resolve.",
+		Short: "Upgrade a bundle to OKF v0.3 from v0.1 or v0.2 (two-phase, consumer-agnostic)",
+		Long: "migrate is the supported upgrade path to OKF v0.3 for a bundle that declares " +
+			"v0.1, v0.2, or no version. It runs in two phases so it never acquires a model " +
+			"dependency. Phase 1 (default) is PURE READ: it computes every deterministic edit " +
+			"and enumerates every judgment item, writing only the plan file. The v0.1 renames " +
+			"(Appendix B): timestamp -> generated.at; a body # Citations entry that names exactly " +
+			"one follow-able resource -> a frontmatter sources entry (resource, with the entry " +
+			"text as title). The v0.2 -> v0.3 edits (§13.1): a bare link or " +
+			"path field that resolves only from the bundle root (the §12.1 fallback) is " +
+			"rewritten with a leading / so it resolves the same way under v0.3 (§6); a §5 " +
+			"timestamp that carries an offset but is not RFC 3339 is respelled. Judgment " +
+			"items: a citation entry with no resource or with two different ones (§5.1), a " +
+			"timestamp rename with no actor " +
+			"(§7), and a date-time with no offset (§5, §13.2: it names no instant). Phase 2 " +
+			"(--apply) applies the deterministic edits, declares okf_version \"0.3\" on the " +
+			"bundle-root index.md (§8.1), and re-validates. While a prose-citation or " +
+			"missing-actor item remains, the declaration is held: those items are readable " +
+			"only through the v0.1 fallbacks, which §12.1 grants only to a bundle declaring " +
+			"0.2 or earlier, or nothing. --force-declare overrides the hold. --dry-run writes nothing and prints " +
+			"the unified diff the real apply would write. A bundle that declares v0.3, a later " +
+			"version, or one okfctl does not know is never refused and never rewritten toward " +
+			"an older version (§12). Judgment items are never guessed — they stay in the plan " +
+			"for its consumer (agent, colleague, shell loop, or a human) to resolve.",
 		Example: "  # Phase 1 (default): compute the plan (pure read), writing only the plan file\n" +
 			"  okfctl migrate ./bundles/knowledge --plan migrate-plan.json --generated-by \"casey\"\n\n" +
-			"  # Phase 2: preview the apply without writing (byte-identical to the real apply)\n" +
+			"  # Phase 2: preview the apply as a unified diff, writing nothing\n" +
 			"  okfctl migrate ./bundles/knowledge --apply --plan migrate-plan.json --dry-run\n\n" +
 			"  # Phase 2: apply the plan's deterministic edits, then re-validate\n" +
 			"  okfctl migrate ./bundles/knowledge --apply --plan migrate-plan.json",
@@ -72,23 +84,24 @@ func newMigrateCmd() *cobra.Command {
 			if apply {
 				return runMigrateApply(cmd, dir, planPath, dry)
 			}
-			return runMigratePlan(cmd, dir, planPath, generatedBy)
+			return runMigratePlan(cmd, dir, planPath, okf.MigrateOptions{GeneratedBy: generatedBy, ForceDeclare: force})
 		},
 	}
 	c.Flags().BoolVar(&apply, "apply", false, "phase 2: read the plan and apply it (default is phase 1: plan only)")
-	c.Flags().BoolVar(&dry, "dry-run", false, "with --apply: write nothing; byte-identical to the real apply")
+	c.Flags().BoolVar(&dry, "dry-run", false, "with --apply: write nothing; print the diff the real apply would write")
 	c.Flags().StringVar(&planPath, "plan", "migrate-plan.json", "migration plan file (written in phase 1, read in phase 2)")
 	c.Flags().StringVar(&generatedBy, "generated-by", "", "actor (§7) recorded as generated.by for each timestamp rename")
+	c.Flags().BoolVar(&force, "force-declare", false, "phase 1: declare v0.3 even while prose-citation or missing-actor items remain (they lose the §12.1 fallback)")
 	return c
 }
 
 // runMigratePlan is phase 1: compute the plan (pure read) and write it to disk.
-func runMigratePlan(cmd *cobra.Command, dir, planPath, generatedBy string) error {
+func runMigratePlan(cmd *cobra.Command, dir, planPath string, opts okf.MigrateOptions) error {
 	b, err := okf.Load(dir)
 	if err != nil {
 		return fmt.Errorf("load bundle: %w", err)
 	}
-	plan, err := okf.PlanMigration(b, generatedBy)
+	plan, err := okf.PlanMigrationWith(b, opts)
 	if err != nil {
 		return err
 	}
@@ -103,13 +116,11 @@ func runMigratePlan(cmd *cobra.Command, dir, planPath, generatedBy string) error
 	out := cmd.OutOrStdout()
 	det := 0
 	for _, nm := range plan.Nodes {
-		if nm.Generated != nil {
-			det++
-		}
-		det += len(nm.Sources)
+		det += nm.EditCount()
 	}
-	fmt.Fprintf(out, "Wrote %s: %d node(s) with deterministic edits (%d edit(s)), %d judgment item(s).\n",
+	fmt.Fprintf(out, "Wrote %s: %d file(s) with deterministic edits (%d edit(s)), %d judgment item(s).\n",
 		planPath, len(plan.Nodes), det, len(plan.Judgment))
+	writeMigrateSummary(out, plan)
 	if len(plan.Judgment) > 0 {
 		fmt.Fprintf(out, "%d item(s) need a decision before they can migrate; see the plan file.\n", len(plan.Judgment))
 	}
@@ -133,18 +144,7 @@ func runMigrateApply(cmd *cobra.Command, dir, planPath string, dry bool) error {
 	}
 	out := cmd.OutOrStdout()
 	if dry {
-		for _, nm := range plan.Nodes {
-			if nm.Generated != nil {
-				fmt.Fprintf(out, "would rewrite %s: timestamp -> generated { by: %s, at: %s }\n",
-					nm.Path, nm.Generated.By, nm.Generated.At)
-			}
-			for _, s := range nm.Sources {
-				fmt.Fprintf(out, "would add %s: sources[].resource = %s\n", nm.Path, s.Resource)
-			}
-		}
-		fmt.Fprintf(out, "%d node(s) would be migrated to v%s (dry run; nothing written).\n",
-			len(plan.Nodes), plan.TargetVersion)
-		return nil
+		return printMigrateDryRun(out, dir, b, plan)
 	}
 	if err := okf.MigrateApply(dir, b, plan); err != nil {
 		return err
@@ -158,17 +158,40 @@ func runMigrateApply(cmd *cobra.Command, dir, planPath string, dry bool) error {
 	for _, nm := range plan.Nodes {
 		fmt.Fprintf(out, "migrated %s\n", nm.Path)
 	}
-	fmt.Fprintf(out, "%d node(s) migrated to v%s.\n", len(plan.Nodes), plan.TargetVersion)
+	version := plan.TargetVersion
+	switch plan.VersionAction {
+	case okf.VersionKeep:
+		version = b2.OkfVersion // §12: left at the version it declares
+	case okf.VersionHold:
+		version = b2.DeclaredOkfVersion
+	}
+	if plan.VersionAction == okf.VersionHold {
+		fmt.Fprintf(out, "%d file(s) migrated; okf_version declaration held: %s.\n", len(plan.Nodes), heldVersionLabel(version))
+	} else {
+		fmt.Fprintf(out, "%d file(s) migrated; bundle declares v%s.\n", len(plan.Nodes), version)
+	}
 	if len(findings) != 0 {
 		for _, f := range findings {
 			fmt.Fprintf(out, "%s: %s\n", f.Path, f.Message)
 		}
 		return fmt.Errorf("%d validation finding(s) after migrate", len(findings))
 	}
-	fmt.Fprintln(out, "bundle valid as v"+plan.TargetVersion)
+	if plan.VersionAction == okf.VersionHold {
+		fmt.Fprintln(out, "bundle valid")
+	} else {
+		fmt.Fprintln(out, "bundle valid as v"+version)
+	}
 	if len(plan.Judgment) > 0 {
 		fmt.Fprintf(out, "note: %d judgment item(s) were not applied (they need a decision; see the plan file).\n",
 			len(plan.Judgment))
 	}
 	return nil
+}
+
+// heldVersionLabel names the version a held bundle still declares.
+func heldVersionLabel(declared string) string {
+	if declared == "" {
+		return "bundle is still undeclared (v0.2 fallbacks apply, §12.1)"
+	}
+	return "bundle still declares v" + declared + " (v0.2 fallbacks apply, §12.1)"
 }

@@ -44,7 +44,7 @@ okfctl index build mykb                                              # generate 
 okfctl index check mykb                                              # confirm the index is current
 okfctl log append mykb --message "added tannin node"                # record the change
 okfctl validate mykb                                                 # check against the OKF spec floor
-okfctl bundle info mykb                                              # nodes: 1, reserved: 3, okf_version: 0.2
+okfctl bundle info mykb                                              # nodes: 1, reserved: 3, okf_version: 0.3
 ```
 
 From here, `okfctl search "tannin" mykb` finds nodes lexically, `okfctl graph
@@ -116,7 +116,7 @@ runnable example, or read the [command reference](docs/commands/README.md).
 **Extend**—templates, migration, remotes, and the rest:
 
 - [`template`](docs/commands/README.md#okfctl-template)—list (`list`) and show (`show`) the type-templates a bundle declares.
-- [`migrate`](docs/commands/README.md#okfctl-migrate)—upgrade a bundle from OKF v0.1 to v0.2 (two-phase, consumer-agnostic).
+- [`migrate`](docs/commands/README.md#okfctl-migrate)—upgrade a v0.1 or v0.2 bundle to OKF v0.3 (two-phase, consumer-agnostic).
 - [`registry`](docs/commands/README.md#okfctl-registry)—manage named remote bundle sources: `git remote` for OKF bundles.
 - [`connect`](docs/commands/README.md#okfctl-connect)—clone or fast-forward a remote bundle source into a local directory.
 - [`plugin`](docs/commands/README.md#okfctl-plugin)—discover (`list`) and install (`install`) `okfctl-<name>` plugins on `PATH`.
@@ -162,16 +162,16 @@ version is the release tag, reported by `okfctl version`.
   - [Keeping `index.md` current and fixing freshness drift](docs/guides/index-and-freshness.md)—covers `.okf-drift-ignore-revs`.
   - [Curation health: `lint`, `analyze`, and `--strict` in CI](docs/guides/curation-health.md)—covers the semantic-lint checks and the vendored/derived skip policy.
   - [Search: core lexical/graph and the `okfctl-search` semantic plugin](docs/guides/search.md)—covers model2vec setup.
-  - [Migrating a v0.1 bundle to v0.2](docs/guides/migrating.md)
+  - [Migrating a bundle to OKF v0.3](docs/guides/migrating.md)
   - [Remote sources: `registry` and `connect`](docs/guides/remote-sources.md)
   - [Extending okfctl with plugins](docs/guides/plugins.md)
 - **Per-command help**—`okfctl <cmd> --help` is authoritative and always
   matches the binary.
 - **The spec**—the authoritative
   [OKF v0.3 specification](https://github.com/open-knowledge-format/open-knowledge-format/blob/main/SPEC.md).
-  okfctl still targets v0.2; the
-  [v0.3 gap analysis](docs/specs/2026-11-26-okf-v0.3-gap-analysis.md) maps what
-  changes.
+  okfctl targets v0.3; the
+  [v0.3 gap analysis](docs/specs/2026-11-26-okf-v0.3-gap-analysis.md) records
+  how each v0.3 change landed.
 - **For contributors**—[`docs/PRD.md`](docs/PRD.md), the
   [ADRs](docs/adr/README.md), and the dated
   [plans](docs/plans/2026-07-22-roadmap.md)/[specs](docs/specs/) that record how

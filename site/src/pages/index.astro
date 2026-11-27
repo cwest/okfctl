@@ -481,7 +481,7 @@ const goInstallCmd = version.tag
 <span class="cm"># a real corpus, not a fixture</span>
 <span class="p">$</span> <span class="c">okfctl bundle info</span> <span class="f">bundles/knowledge</span>
 <span class="o">nodes: hundreds</span>
-<span class="o">okf_version: 0.2</span>
+<span class="o">okf_version: 0.3 (declared in index.md)</span>
 
 <span class="p">$</span> <span class="c">okfctl validate</span> <span class="f">bundles/knowledge</span>
 <span class="ok">OK: bundle conforms to the OKF spec floor</span>
@@ -588,7 +588,7 @@ const goInstallCmd = version.tag
                 <li><a href="/guides/curation-health/">Curation health and <code>--strict</code> in CI<span class="arrow">→</span></a></li>
                 <li><a href="/guides/search/">Search: lexical, graph, semantic<span class="arrow">→</span></a></li>
                 <li><a href="/guides/remote-sources/">Remote sources<span class="arrow">→</span></a></li>
-                <li><a href="/guides/migrating/">Migrating v0.1 → v0.2<span class="arrow">→</span></a></li>
+                <li><a href="/guides/migrating/">Migrating to v0.3<span class="arrow">→</span></a></li>
                 <li><a href="/guides/plugins/">Extending with plugins<span class="arrow">→</span></a></li>
               </ul>
             </div>
@@ -621,7 +621,7 @@ const goInstallCmd = version.tag
                 <tr><td><b>okfctl</b> graph</td><td>Export the concept-node link graph (<code class="mono">--format json|dot</code>).</td></tr>
                 <tr><td><b>okfctl</b> serve</td><td>Serve an interactive web visualization of the bundle graph.</td></tr>
                 <tr><td><b>okfctl</b> template</td><td>List and show the type-templates a bundle declares.</td></tr>
-                <tr><td><b>okfctl</b> migrate</td><td>Upgrade a bundle from OKF v0.1 to v0.2—two-phase, consumer-agnostic.</td></tr>
+                <tr><td><b>okfctl</b> migrate</td><td>Upgrade a v0.1 or v0.2 bundle to OKF v0.3—two-phase, consumer-agnostic.</td></tr>
                 <tr><td><b>okfctl</b> registry</td><td>Manage named remote bundle sources—<code class="mono">git remote</code> for OKF bundles.</td></tr>
                 <tr><td><b>okfctl</b> connect</td><td>Clone or fast-forward a remote bundle source into a local directory.</td></tr>
                 <tr><td><b>okfctl</b> plugin</td><td>Discover and install <code class="mono">okfctl-&lt;name&gt;</code> plugins on <code class="mono">PATH</code>.</td></tr>
