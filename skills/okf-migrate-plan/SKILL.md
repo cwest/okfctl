@@ -46,14 +46,11 @@ leading `/`). Judgment items are the ones it won't guess at. Neither
 resource. Since those three items still lean on v0.1 fallbacks, the version
 stays at 0.1 for now (more on that below).
 
-`okfctl migrate` works offline on the files in front of it. You don't have to
-give it a model, a network connection, or an API key.
-
 ## When to Use
 
 - Your bundle is on v0.1 or v0.2 (or has no version) and you want v0.3.
 - You've got a `migrate-plan.json` with judgment items to resolve.
-- You're handing judgment items to an agent, a colleague, or a script.
+- You're handing judgment items to an agent, colleague, or script.
 
 For creating or relocating nodes, see `okf-authoring`. Lint findings after the
 migration go to `okf-curation-health`.
@@ -116,17 +113,17 @@ $ cat migrate-plan.json
 }
 ```
 
-`nodes[]` lists the edits per file, which you can leave as is. `judgment[]` has
-one entry per refusal, each with the node `path`, the `kind`, and the `context`
+`nodes[]` lists the edits per file, and you needn't touch them. `judgment[]`
+has one entry per refusal, with the node `path`, its `kind`, and the `context`
 you need to make the call (the timestamp value or the citation line as
 written).
 `version_action` is `hold` while any `missing-actor` or `prose-citation` item
 is left and `bump` when none are. You'll see `keep` when the bundle declares
-v0.3 or a version the tool doesn't know.
+v0.3, or some version the tool doesn't know.
 
 ### 2. Supply the actor
 
-`--generated-by` turns each `missing-actor` item into a `timestamp` to
+Pass `--generated-by` and each `missing-actor` item becomes a `timestamp` to
 `generated` rename:
 
 ```text
@@ -138,9 +135,9 @@ judgment: 1 item(s); prose-citation 1
 1 item(s) need a decision before they can migrate; see the plan file.
 ```
 
-The tool writes the actor string as is into `generated.by` (§7), which is why
-it has to be one you can stand behind: `human:<name>`, a tool name, or a team
-handle.
+The tool writes the actor string as is into `generated.by` (§7). That's why
+it has to be one you can stand behind: `human:<name>`, the name of a tool, or
+a team handle.
 
 ### 3. Dry-run, then apply
 
@@ -195,8 +192,8 @@ note: 1 judgment item(s) were not applied (they need a decision; see the plan fi
 ```
 
 With the version held, `index.md` and `.okf` don't show up in the diff at all.
-Look at the body `# Citations` list: it stays put. Migration adds frontmatter
-`sources` and deletes nothing. Keys the tool doesn't recognize come through
+The body `# Citations` list stays put. Migration adds frontmatter `sources` and
+deletes nothing. Keys the tool doesn't recognize come through
 byte for byte (§11), and apply validates the bundle when it's done.
 
 Commit or copy the bundle ahead of a real apply if you want to diff it
@@ -235,14 +232,14 @@ judgment: 0 item(s); none
 
 The apply added `okf_version: "0.3"` to the root `index.md` frontmatter (§8.1)
 and bumped `.okf` to match. The last plan finds nothing to do. Applying an old
-plan to a bundle it has migrated changes nothing either; each edit checks the
+plan to a bundle it has migrated changes nothing either. Each edit checks the
 file first.
 
 ## What migrate changes, and what it hands back
 
 Migrate does the v0.1 renames (OKF v0.3 Appendix B) along with the v0.2 to v0.3
-edits (§13.1). Here's when each case turns into an edit, and when it comes
-back to you as a judgment item:
+edits (§13.1). This table says when each case turns into an edit and when it
+comes back to you as a judgment item:
 
 | Old form | v0.3 form | Edit when | Judgment item when |
 |---|---|---|---|
@@ -279,13 +276,13 @@ judgment: 1 item(s); prose-citation 1
 1 item(s) need a decision before they can migrate; see the plan file.
 ```
 
-Bundles that declare v0.3, something later, or a version the tool doesn't
+Bundles that declare v0.3, something later, or any version the tool doesn't
 recognize never get rewritten to an older one (§12). For those the plan says
 `keep`.
 
 ### Why the tool refuses
 
-Under §5.1, each `sources` entry needs a `resource`. The tasting note with no
+§5.1 says each `sources` entry needs a `resource`. The tasting note with no
 public source doesn't have one, and putting it in `sources` would mean making
 one up. Nor will the tool guess who generated a node (§7). And a date-time with no offset (say, `2026-06-20T10:00:00`)
 doesn't name a single instant (§5, §13.2). Only the author knows if they meant
@@ -300,7 +297,7 @@ list. An item goes away when the node stops producing it.
   `- Winemaker interview, 2026. https://example.org/interviews/winemaker-2026`.
   The next plan makes it a `sources` entry with the text as `title`.
 - **A citation with no resource.** Move the claim out of `# Citations`, into
-  the body or a §5.2 `verified` event. Or delete it.
+  the body or some §5.2 `verified` event. Or delete it.
 - **A citation with two URLs.** Split it into one entry per resource. The tool
   won't pick one or split it for you.
 - **A timestamp with no offset.** Add the offset the author meant.
@@ -320,24 +317,24 @@ the rule, never "find a source":
 
 > Here is a `prose-citation` item from an OKF migration plan:
 > `{ "path": "wine/tannin.md", "kind": "prose-citation", "context": "- Tasting notes from the 2025 Montalcino trip, no link." }`
-> §5.1 requires a real `resource` for each source. Answer one of: (a) a real
-> URL or bundle path that this cites; (b) "no citable source," so it stays out
-> of `sources`; (c) "unsure." Do not invent a URL.
+> §5.1 says each source needs a real `resource`. Answer one of: (a) a real
+> URL or bundle path that this cites, (b) "no citable source," and it stays out
+> of `sources`, or (c) "unsure." Do not invent a URL.
 
 If the agent comes back with a URL that you can't open and check, throw it
 out the way the tool would.
 
 ## Common Pitfalls
 
-1. Judgment items aren't failures. The tool did all it could safely do. Now
-   it's up to you to resolve the item or leave it.
-2. Never invent a `resource` to clear a `prose-citation`. Preventing that harm
-   is why the design has two phases.
+1. Judgment items aren't failures. The tool stopped where it would have had to
+   guess, and you can resolve the item or leave it.
+2. Don't make up a `resource` to clear a `prose-citation`. The plan has two
+   phases so you never have to.
 3. Don't pass a placeholder to `--generated-by`. Whatever you pass lands in
    provenance as is.
-4. Run `--dry-run` and take a snapshot. The dry run shows the real diff.
-   Commit or copy ahead of any apply.
-5. Apply won't delete `# Citations`. Migration only adds; pruning the old list
+4. Look at the real diff with `--dry-run`, and commit or copy the bundle ahead
+   of any apply.
+5. Apply won't delete `# Citations`. Migration only adds. Pruning the old list
    is a separate edit.
 6. `--force-declare` won't give you a clean plan. It turns off the only way
    consumers can still read the items you haven't resolved.
