@@ -249,10 +249,11 @@ func citationSourceFrom(entry string) (src SourceEdit, ok, fromIdentifier bool) 
 	if len(resources) == 0 {
 		// No URL or bundle path: a DOI, arXiv id, PubMed id or valid ISBN in
 		// the entry still names one document, and its resolver URL is the
-		// resource. The entry text is not copied as the title: a title is
-		// the work's name, never the full citation.
+		// resource. Its title is the work's name (citationName), as for any
+		// other entry, never the full citation.
 		if res, ok := identifierResource(rest); ok {
-			return SourceEdit{Resource: res}, true, true
+			title, _ := citationName(text)
+			return SourceEdit{Resource: res, Title: title}, true, true
 		}
 	}
 	if len(resources) != 1 {
