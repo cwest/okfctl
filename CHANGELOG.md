@@ -11,6 +11,13 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-27
+
+This release fixes a data-loss bug: `index build` and the node verbs no longer
+delete or overwrite an `index.md` that a person wrote. `migrate` now gives the
+sources it converts ids, footnote definitions, and footnote references, and
+builds links from DOI, arXiv, PubMed, and ISBN identifiers.
+
 ### Added
 
 - `migrate` gives each source it converts from a `# Citations` entry a §5.1
@@ -40,9 +47,35 @@ tagged release, goreleaser generates the release notes from the commit log
   too. When the entry's resource is already in `sources` (a DOI matched in any
   spelling), an untitled source gets the name, and a source with a different
   title keeps it and reports `source-title-conflict`.
+- Every command's `--help` now opens with a real run, and the corrections
+  it makes are checked against the binary (for example, `node rm` no longer
+  claims `lint` reports links to the removed node). The generated command
+  reference, `docs/commands/README.md`, carries the same examples, and CI
+  replays them. (#243, #246, #251)
+- The README, install guide, concepts page, guides, shipped skills, plugin
+  description, and `llms.txt` are rewritten to show a real run before they
+  explain it. CI replays every `$ okfctl` transcript in `README.md` and
+  `docs/` against the built binary, so shown output can't drift. (#236, #237,
+  #241, #242, #244, #245, #249)
 
 ### Fixed
 
+- `index build`, and every node verb that rebuilds the index, no longer
+  rewrites or deletes a hand-written `index.md`. Before, a curator's text in an
+  `index.md` was destroyed with exit 0 and no message. okfctl now rewrites or
+  prunes an `index.md` only when every line is one okfctl writes (§8), and
+  keeps anything else byte for byte. `index build` names each kept file on
+  stderr and exits 1; `--overwrite-hand-written` replaces them and still keeps
+  the bundle-root frontmatter and H1 (§8.1). The node verbs keep the file,
+  print the same warning, and still succeed. `index check` notes when the file
+  it reports is hand-written. (#253)
+- A bare CR before a line ending in frontmatter (`0: 0\r\r\n 0`) now counts as
+  its own line break. The frontmatter splitter fused the CR and the CRLF into
+  one break, so the value read as `"0 0"`; YAML 1.2 §5.4 counts two breaks,
+  which makes it `"0\n0"`. Parsing and the frontmatter editor now agree on
+  such a file. (#254)
+- okfctl.dev publishes the install page, which returned 404, and the
+  link-preview card no longer claims okfctl is a single binary. (#247, #250)
 - `migrate` and `analyze` no longer split a `# Citations` entry at a
   hard-wrapped line that begins with a back-reference (`[9]: C4 provides …`,
   `[4]).`, `[21].`) or a bracket tag. The split wrote a fragment as a §5.1
@@ -503,7 +536,8 @@ Open Knowledge Format (OKF) bundles, targeting OKF v0.1.
   (`okf-authoring`, `okf-curation-health`, `okf-semantic-search`), and a
   spec-conformance suite proving okfctl's output validates clean.
 
-[Unreleased]: https://github.com/cwest/okfctl/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/cwest/okfctl/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/cwest/okfctl/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/cwest/okfctl/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/cwest/okfctl/releases/tag/v0.4.0
 [0.3.1]: https://github.com/cwest/okfctl/releases/tag/v0.3.1

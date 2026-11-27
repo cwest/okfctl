@@ -22,12 +22,14 @@ The script picked the archive for the machine's OS and CPU and checked it
 against the release's `checksums.txt`. Then it copied the two programs into
 `/usr/local/bin` and ran `okfctl version` to print the last line you see.
 `okfctl plugin list` shows that okfctl found the search plugin next to it.
+This run was recorded at v0.5.0. The script installs whichever release is
+latest, so your version line names that one.
 
 The script runs on macOS and Linux. When it can't write to `/usr/local/bin`,
 it tries `sudo`, and with no `sudo` it falls back to `~/.local/bin`. Set
-`OKFCTL_BIN_DIR` to pick the directory yourself, or `OKFCTL_VERSION=v0.5.0` to
-pin a release other than the latest. On a checksum mismatch the script quits
-and installs nothing.
+`OKFCTL_BIN_DIR` to pick the directory yourself, or `OKFCTL_VERSION` to a tag
+such as `v0.5.0` to pin a release other than the latest. On a checksum
+mismatch the script quits and installs nothing.
 
 ## Homebrew
 
@@ -51,7 +53,8 @@ okfctl v0.5.0 (commit none, built unknown)
 ```
 
 `go install` doesn't stamp a commit or build date. The output says
-`none` and `unknown`. The version comes from the module tag. The programs land
+`none` and `unknown`. The version comes from the module tag, so `@latest`
+prints the newest release, not the v0.5.0 shown here. The programs land
 in `$(go env GOPATH)/bin`. Put that directory on your `PATH`.
 
 ## Prebuilt archives
@@ -59,8 +62,9 @@ in `$(go env GOPATH)/bin`. Put that directory on your `PATH`.
 The [releases page](https://github.com/cwest/okfctl/releases) has amd64 and
 arm64 archives for Windows (as a `.zip`) and for macOS and Linux (as a
 `.tar.gz`). Each one has `okfctl` and `okfctl-search` in it, plus the
-license and the README. Pull
-out the two programs and move them onto your `PATH`:
+license and the README. Each file name carries its release version; the
+commands on this page use 0.5.0 as an example, so put in the version you
+downloaded. Pull out the two programs and move them onto your `PATH`:
 
 ```sh
 tar -xzf okfctl_0.5.0_darwin_arm64.tar.gz okfctl okfctl-search
