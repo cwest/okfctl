@@ -148,6 +148,12 @@ func TestMatchLine_Placeholders(t *testing.T) {
 		{"wrote <TMPDIR>/kb", "wrote /tmp/y/kb", false},
 		{"regex chars stay literal: a.b*", "regex chars stay literal: aXbbb", false},
 		{"<unknown> stays literal", "<unknown> stays literal", true},
+		// Markdown hooks strip trailing whitespace, so a diff context line
+		// shown as " " in the doc reaches the matcher as "".
+		{"", " ", true},
+		{"ctx", "ctx  ", true},
+		{"## <DATE>", "## 2026-11-27 ", true},
+		{" lead", "lead", false},
 	}
 	for _, c := range cases {
 		if got := matchLine(c.want, c.got, vars); got != c.ok {
