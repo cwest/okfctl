@@ -11,6 +11,23 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+### Added
+
+- `lint` has a `footnote-definition` check (§4.2). It reports a footnote
+  label defined more than once in a node (labels match case-insensitively)
+  and a definition with no text, so `lint --strict` fails on both. Run on the
+  knowledge base at `79b4af6`, it reports nothing.
+
+### Fixed
+
+- `migrate` no longer rewrites a body `[k]` that opens a line and is followed
+  by a colon. Rewritten, `[^k]:` is a footnote definition, not a reference, so
+  the node got a second, empty definition for `k`, and the next plan reported
+  the entry as a prose citation again. Such a reference is now a
+  `citation-ref-unclear` item and stays as written. On the knowledge base,
+  ecosystem-watch's GKE landscape baseline `[24]:` is the one new item, and
+  its entry now converts and stays converted.
+
 ## [0.10.1] - 2026-11-28
 
 Three `migrate` fixes read more of a `# Citations` list. The counts below come
