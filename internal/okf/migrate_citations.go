@@ -62,12 +62,25 @@ func headingLevel(s string) int {
 }
 
 // endsCitations reports whether line ends a Citations section whose heading
-// has level: a `#` line of the same or a higher level (fewer `#`). A deeper
+// has level: a heading of the same or a higher level (fewer `#`). A deeper
 // heading (`## Tier 1` under `# Citations`) is a group label inside the list,
-// so its entries stay citation entries (Appendix B, §12.1, §5.1).
+// so its entries stay citation entries (Appendix B, §12.1, §5.1). line may run
+// on past its first newline; only its first line is read.
 func endsCitations(line string, level int) bool {
-	t := strings.TrimLeft(line, " \t")
-	return strings.HasPrefix(t, "#") && headingLevel(t) <= level
+	return isHeadingLine(line) && headingLevel(strings.TrimLeft(line, " \t")) <= level
+}
+
+// isHeadingLine reports whether the first line of s is an ATX heading: 1 to 6
+// `#` followed by a space, a tab, or the end of the line (CommonMark). A
+// hard-wrapped line that merely opens with `#` (`#4765 shipped`, `#a855f7`,
+// `#team-eng`, `#######`) is text, so it continues the entry above it.
+func isHeadingLine(s string) bool {
+	t := strings.TrimLeft(s, " \t")
+	h := headingLevel(t)
+	if h < 1 || h > 6 {
+		return false
+	}
+	return h == len(t) || strings.ContainsRune(" \t\r\n", rune(t[h]))
 }
 
 // citationEntries returns the entries under a `# Citations` heading in body
@@ -144,7 +157,7 @@ func citationSection(body string) (out, other []string) {
 		case endsCitations(line, level):
 			flush()
 			return out, other // a same- or higher-level heading ends the section
-		case strings.HasPrefix(trimmed, "#"):
+		case isHeadingLine(trimmed):
 			// A deeper heading groups entries; it is not itself an entry.
 			flush()
 			other = append(other, trimmed)

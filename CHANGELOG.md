@@ -11,6 +11,33 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+### Fixed
+
+- `migrate` no longer reads a wrapped line that opens with `#` as a heading
+  (§5.1, Appendix B). A line such as `#4765 suspend/resume ...`, `#a855f7`,
+  or `#team-eng` in the middle of a `# Citations` entry ended the whole
+  section, because `#4765` looked like a level-1 heading. The entry was cut
+  there, its URL was never read, and every entry after it was dropped. Now
+  only 1 to 6 `#` followed by a space, a tab, or the end of the line make a
+  heading, as in CommonMark. On the knowledge base, 5 nodes now read their
+  lists in full. For example, openshell entry [8] keeps its issue URL, and
+  entries [9]–[25] are read for the first time.
+- `migrate` splits a multi-resource `# Citations` entry whose resource a link
+  reference definition (`[t]: https://...`) also names (§5.1). The definition
+  is the target of a `[text][t]` link, not a citation, and it gets no id. It
+  used to own the resource anyway. The entry then stayed a `prose-citation`
+  item, and resolving it gave one source for all of its resources. A
+  single-resource entry listed after such a definition used to be a
+  `citation-unattached` item, and it now takes the id.
+
+Planning the knowledge base at `ec1f4c5` with 0.10.0 and then with both fixes:
+edits went from 0 files to 4 (8 source ids, 8 footnote definitions, 19 body
+references). `prose-citation` rose from 541 to 549 and `source-title-unnamed`
+from 1853 to 1863, because entries that were never read are now reported.
+`source-id-collision` rose from 0 to 2. That refusal is not new: it appears
+where an entry already converted by hand is now read for the first time, and
+0.10.0 refuses the same layout.
+
 ## [0.10.0] - 2026-11-28
 
 You can now hand `migrate` the resource for a `prose-citation` entry: write

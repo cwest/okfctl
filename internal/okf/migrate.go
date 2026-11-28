@@ -352,6 +352,12 @@ func planMigration(b *Bundle, generatedBy string, resolutions []JudgmentItem) (M
 		var retitle []retitleCandidate
 		deferred := map[string][]titleCall{}
 		attach := func(i int, res string) {
+			if linkRefDefRe.MatchString(entries[i]) {
+				// A link reference definition is no citation: it
+				// takes no id (planSourceIDs), so it must not hold
+				// the resource against the entry that cites it.
+				return
+			}
 			k := canonicalResource(res)
 			if attached[k] {
 				att[i] = entryAttachment{resource: res, duplicate: true}

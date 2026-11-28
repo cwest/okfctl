@@ -264,54 +264,59 @@ func TestConformance_MigrateSplitShared_Section12_RerunPlansZeroEdits(t *testing
 	}
 }
 
-// Regression: [1] is a link reference definition, so its resource gets no id
-// (planSourceIDs) and no entry may borrow it. [2] names that resource, so it
-// cannot split, and it must not claim its other part either: [3] then owns
-// b.example itself instead of citing an id no source carries (§5.1 one id
-// per source; §4.2 every footnote reference has a definition).
-func TestConformance_MigrateSplitShared_Section5_1_RejectedSplitClaimsNoPart(t *testing.T) {
+// Regression: [1] is a link reference definition, the target of a
+// `[text][1]` link, so it takes no id (planSourceIDs) and owns nothing. [2]
+// is the first citation of a.example, so it owns it and splits; [3] borrows
+// the b.example part [2] owns and owns c.example. No reference cites an id no
+// source carries (§5.1 one id per source; §4.2 every footnote reference has a
+// definition).
+func TestConformance_MigrateSplitShared_Section5_1_RefDefOwnsNoPart(t *testing.T) {
 	node := "---\ntype: Concept\n---\n\n# Def\n\nOne [2]. Two [3].\n\n# Citations\n\n" +
 		"[1]: https://a.example/\n" +
 		"[2] VERIFIED — https://a.example/ and https://b.example/\n" +
 		"[3] VERIFIED — https://b.example/ and https://c.example/\n"
 	dir, plan := migrateOnce(t, kb(node))
 	out := readRel(t, dir, "a.md")
-	if strings.Contains(out, "[^2]") {
-		t.Errorf("§5.1: [2] borrows a no-id resource and must not convert:\n%s", out)
-	}
 	nm := findNodeMigration(t, plan, "a.md")
-	got := map[string]bool{}
+	got := map[string]string{}
 	for _, s := range nm.Sources {
-		got[s.Resource] = true
+		got[s.Resource] = s.ID
 	}
-	if !got["https://b.example/"] || !got["https://c.example/"] {
-		t.Errorf("§5.1: [3] owns b.example and c.example, got %+v", nm.Sources)
+	for res, id := range map[string]string{
+		"https://a.example/": "2", "https://b.example/": "2-2", "https://c.example/": "3",
+	} {
+		if got[res] != id {
+			t.Errorf("§5.1: source %s id = %q, want %q (sources %+v)", res, got[res], id, nm.Sources)
+		}
 	}
-	wantIn(t, out, "One [2].", "Two [^3]")
+	wantIn(t, out, "One [^2][^2-2].", "Two [^3][^2-2].", "[^2-2]: https://b.example/")
 	mustValidate(t, dir)
+	assertReplanQuiet(t, dir)
 }
 
-// Regression, the r.part >= 1 shape: [2] would own b.example as its second
-// claimed part before being rejected; [3] borrowing it must not index a part
-// list [2] never got.
-func TestConformance_MigrateSplitShared_Section5_1_RejectedSplitLaterPartNotBorrowed(t *testing.T) {
+// Regression, the r.part >= 1 shape: with the definition owning nothing, [2]
+// owns every part it names, a.example last, and [3] borrows [2]'s b.example
+// part (part index 1) rather than a part list [2] never got.
+func TestConformance_MigrateSplitShared_Section5_1_RefDefLaterPartBorrowed(t *testing.T) {
 	node := "---\ntype: Concept\n---\n\n# Def\n\nOne [2]. Two [3].\n\n# Citations\n\n" +
 		"[1]: https://a.example/\n" +
 		"[2] VERIFIED — https://x.example/ and https://b.example/ and https://a.example/\n" +
 		"[3] VERIFIED — https://b.example/ and https://c.example/\n"
 	dir, _ := migrateOnce(t, kb(node))
 	out := readRel(t, dir, "a.md")
-	if strings.Contains(out, "[^2]") {
-		t.Errorf("§5.1: [2] must not convert:\n%s", out)
-	}
-	wantIn(t, out, "Two [^3]", "[^3]: VERIFIED — https://b.example/ and https://c.example/")
+	wantIn(t, out, "One [^2][^2-2][^2-3].", "Two [^3][^2-2].",
+		"[^3]: VERIFIED — https://b.example/ and https://c.example/")
 	splits := planCitationSplits(strings.Split(strings.TrimSpace(node[strings.Index(node, "[1]:"):]), "\n"),
 		func(s string) string { return s })
-	if splits[1] != nil {
-		t.Errorf("§5.1: [2] must not split: %+v", splits[1])
+	if splits[0] != nil {
+		t.Errorf("§5.1: a link reference definition never splits: %+v", splits[0])
 	}
-	if s := splits[2]; s == nil || len(s.parts) != 2 || len(s.borrowed) != 0 {
-		t.Errorf("§5.1: [3] owns both its parts and borrows none, got %+v", s)
+	if s := splits[1]; s == nil || len(s.parts) != 3 || len(s.borrowed) != 0 {
+		t.Errorf("§5.1: [2] owns all three parts and borrows none, got %+v", s)
+	}
+	if s := splits[2]; s == nil || len(s.parts) != 1 || len(s.borrowed) != 1 || s.borrowed[0] != (partRef{entry: 1, part: 1}) {
+		t.Errorf("§5.1: [3] owns c.example and borrows [2]'s b.example part, got %+v", s)
 	}
 	mustValidate(t, dir)
+	assertReplanQuiet(t, dir)
 }
