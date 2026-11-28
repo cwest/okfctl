@@ -37,8 +37,8 @@ on main.
 
 On the knowledge base, `citation-ref-unclear` goes from 412 to 413. The new
 item is `[24]:` in `ecosystem-watch/google-kubernetes-gke-cncf-landscape-baseline.md`.
-`prose-citation` stays at 395 and no other count moves. We then resolved that
-node's `[24]` entry and applied it with each build. 0.10.1 wrote two `[^24]`
+`prose-citation` stays at 395 and no other count moves. With that node's `[24]`
+entry resolved and applied by each build, 0.10.1 wrote two `[^24]`
 definitions, one empty. Planning again brought back the prose citation (395)
 plus a `source-id-collision`. The build on main wrote one definition, and
 planning again gave 0 edits and 394 prose citations. The new check flags both
