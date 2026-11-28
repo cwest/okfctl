@@ -489,6 +489,7 @@ func maskBody(body string) string {
 		blank(loc[0], loc[1])
 	}
 	if loc := citationsHeadRe.FindIndex(b); loc != nil {
+		level := headingLevel(body[loc[0]:loc[1]])
 		end := len(b)
 		for off := loc[1]; off < len(b); {
 			nl := strings.IndexByte(body[off:], '\n')
@@ -496,7 +497,7 @@ func maskBody(body string) string {
 				break
 			}
 			off += nl + 1
-			if off < len(b) && strings.HasPrefix(strings.TrimLeft(body[off:], " "), "#") {
+			if off < len(b) && endsCitations(body[off:], level) {
 				end = off
 				break
 			}
