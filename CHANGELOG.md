@@ -11,6 +11,25 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-27
+
+`migrate` turns more `# Citations` entries into sources. It reads the
+entries under a sub-heading in the list, splits one that shares a link with
+another, and holds back fewer `[k]` references.
+
+### Fixed
+
+- `migrate` no longer skips entries under a sub-heading in `# Citations`
+  (§4.2, §5.1, §12.1, Appendix B). Any `#` line used to end the list, so in
+  one grouped as `## Tier 1`, `## Tier 2` the grouped entries got no source
+  and no `prose-citation` item, and a bundle could lose its §12.1 fallback
+  with no warning. Now only a heading at the Citations heading's level or
+  above ends the list. A deeper one is a group label: the list stays, flagged
+  `citations-kept`. On a real knowledge base that 0.8.0 had already
+  migrated, 70 more entries became sources, where 0.8.0 found none, and
+  `prose-citation` rose from 693 to 720 as the skipped entries turned
+  up. (#264)
+
 ### Changed
 
 - `migrate` now splits a `# Citations` entry when one of its resources is
@@ -24,7 +43,7 @@ tagged release, goreleaser generates the release notes from the commit log
   stays a `prose-citation` item. On a real knowledge base, `prose-citation`
   fell from 720 to 669 and 110 more sources were added (180, up from 70).
   Nothing was lost: no source removed, every URL, link, and entry text still
-  in its node. A re-plan makes 0 edits.
+  in its node. A re-plan makes 0 edits. (#266)
 - `migrate` holds back fewer body `[k]` references as `citation-ref-unclear`
   (§4.2, §5.1). The words that may point at another document's list
   ("brief", "citation", "node", or a link) now count only in the reference's
@@ -33,7 +52,7 @@ tagged release, goreleaser generates the release notes from the commit log
   "inode", "node2vec", "briefing", and "elicitation" no longer do. On a real
   knowledge base this rewrote 141 more references to footnotes and
   removed 7 more `# Citations` lists, with nothing lost: `citation-ref-unclear`
-  went from 567 to 396 and `citations-kept` from 324 to 317.
+  went from 567 to 396 and `citations-kept` from 324 to 317. (#265)
 
 ## [0.8.0] - 2026-11-27
 
@@ -640,7 +659,8 @@ Open Knowledge Format (OKF) bundles, targeting OKF v0.1.
   (`okf-authoring`, `okf-curation-health`, `okf-semantic-search`), and a
   spec-conformance suite proving okfctl's output validates clean.
 
-[Unreleased]: https://github.com/cwest/okfctl/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/cwest/okfctl/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/cwest/okfctl/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/cwest/okfctl/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/cwest/okfctl/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/cwest/okfctl/compare/v0.5.0...v0.6.0
