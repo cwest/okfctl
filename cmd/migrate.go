@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/cwest/okfctl/internal/okf"
 	"github.com/spf13/cobra"
@@ -43,7 +44,7 @@ import (
 // for its (unspecified) consumer to resolve.
 func newMigrateCmd() *cobra.Command {
 	var apply, dry, force bool
-	var planPath, generatedBy string
+	var planPath, generatedBy, resolvePath string
 	c := &cobra.Command{
 		Use:   "migrate <bundle>",
 		Short: "Upgrade a v0.1 or v0.2 bundle to OKF v0.3: plan, preview, apply",
@@ -94,7 +95,11 @@ func newMigrateCmd() *cobra.Command {
 			"source-id-collision a node whose ids would collide. citations-kept marks a " +
 			"# Citations list that removing would lose something from, and names each entry " +
 			"and what it would lose. " +
-			"All of them wait for you to decide them. While a prose-citation or missing-actor " +
+			"All of them wait for you to decide them. To resolve a prose-citation item, write a " +
+			"\"resource\" (an absolute URL, a bundle path, or a plain-words scope descriptor, §5.1), " +
+			"and optionally a \"title\", on the item in the plan file, and plan again with " +
+			"--resolve <that plan>: the entry converts like any other. Apply refuses a plan whose " +
+			"items carry a resource it has not planned. While a prose-citation or missing-actor " +
 			"item is left, apply holds the version: those items need the v0.1 " +
 			"fallbacks §12.1 grants only to bundles declaring 0.2 or older (or nothing). " +
 			"--force-declare on the first run overrides the hold.\n\n" +
@@ -106,7 +111,9 @@ func newMigrateCmd() *cobra.Command {
 			"  # See the diff the apply would write, without writing it\n" +
 			"  okfctl migrate ./mykb --apply --plan migrate-plan.json --dry-run\n\n" +
 			"  # Apply the plan, declare v0.3 if nothing is held, and validate\n" +
-			"  okfctl migrate ./mykb --apply --plan migrate-plan.json",
+			"  okfctl migrate ./mykb --apply --plan migrate-plan.json\n\n" +
+			"  # After writing a resource on prose-citation items in the plan, plan them\n" +
+			"  okfctl migrate ./mykb --plan migrate-plan.json --resolve migrate-plan.json",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := args[0]
@@ -114,15 +121,27 @@ func newMigrateCmd() *cobra.Command {
 				return fmt.Errorf("--plan <path> is required (the migration plan file)")
 			}
 			if apply {
+				if resolvePath != "" {
+					return fmt.Errorf("--resolve plans; it does not go with --apply (plan with --resolve first, then apply that plan)")
+				}
 				return runMigrateApply(cmd, dir, planPath, dry)
 			}
-			return runMigratePlan(cmd, dir, planPath, okf.MigrateOptions{GeneratedBy: generatedBy, ForceDeclare: force})
+			opts := okf.MigrateOptions{GeneratedBy: generatedBy, ForceDeclare: force}
+			if resolvePath != "" {
+				rs, err := readResolutions(resolvePath)
+				if err != nil {
+					return err
+				}
+				opts.Resolutions = rs
+			}
+			return runMigratePlan(cmd, dir, planPath, opts)
 		},
 	}
 	c.Flags().BoolVar(&apply, "apply", false, "phase 2: read the plan and apply it (default is phase 1: plan only)")
 	c.Flags().BoolVar(&dry, "dry-run", false, "with --apply: write nothing; print the diff the real apply would write")
 	c.Flags().StringVar(&planPath, "plan", "migrate-plan.json", "migration plan file (written in phase 1, read in phase 2)")
 	c.Flags().StringVar(&generatedBy, "generated-by", "", "actor (§7) recorded as generated.by for each timestamp rename")
+	c.Flags().StringVar(&resolvePath, "resolve", "", "phase 1: plan file whose prose-citation items carry a resource (and optional title) to convert those entries with; may be the --plan file itself")
 	c.Flags().BoolVar(&force, "force-declare", false, "phase 1: declare v0.3 even while prose-citation or missing-actor items remain (they lose the §12.1 fallback)")
 	return c
 }
@@ -152,6 +171,9 @@ func runMigratePlan(cmd *cobra.Command, dir, planPath string, opts okf.MigrateOp
 	}
 	fmt.Fprintf(out, "Wrote %s: %d file(s) with deterministic edits (%d edit(s)), %d judgment item(s).\n",
 		planPath, len(plan.Nodes), det, len(plan.Judgment))
+	if plan.Resolved > 0 {
+		fmt.Fprintf(out, "resolved: %d prose-citation item(s) from --resolve, planned as sources.\n", plan.Resolved)
+	}
 	writeMigrateSummary(out, plan)
 	if len(plan.Judgment) > 0 {
 		fmt.Fprintf(out, "%d item(s) need a decision before they can migrate; see the plan file.\n", len(plan.Judgment))
@@ -169,6 +191,13 @@ func runMigrateApply(cmd *cobra.Command, dir, planPath string, dry bool) error {
 	var plan okf.MigratePlan
 	if err := json.Unmarshal(planData, &plan); err != nil {
 		return fmt.Errorf("parse plan %s: %w", planPath, err)
+	}
+	// Apply only writes what a plan planned. A resource written on a
+	// judgment item is a resolution no plan has made into edits yet;
+	// applying past it would drop it without a word.
+	if n := countResolutions(plan.Judgment); n > 0 {
+		return fmt.Errorf("%s: %d judgment item(s) carry a resource that is not planned yet; "+
+			"plan them first: okfctl migrate %s --plan %s --resolve %s", planPath, n, dir, planPath, planPath)
 	}
 	b, err := okf.Load(dir)
 	if err != nil {
@@ -230,4 +259,29 @@ func heldVersionLabel(declared string) string {
 		return "bundle is still undeclared (v0.2 fallbacks apply, §12.1)"
 	}
 	return "bundle still declares v" + declared + " (v0.2 fallbacks apply, §12.1)"
+}
+
+// readResolutions reads the judgment items of the plan file at path: the
+// prose-citation items a person resolved by writing a resource on them.
+func readResolutions(path string) ([]okf.JudgmentItem, error) {
+	data, err := os.ReadFile(path) //nolint:gosec // G304: reading the migration plan the user named is intended
+	if err != nil {
+		return nil, fmt.Errorf("read --resolve %s: %w", path, err)
+	}
+	var plan okf.MigratePlan
+	if err := json.Unmarshal(data, &plan); err != nil {
+		return nil, fmt.Errorf("parse --resolve %s: %w", path, err)
+	}
+	return plan.Judgment, nil
+}
+
+// countResolutions counts the items that carry a resource.
+func countResolutions(items []okf.JudgmentItem) int {
+	n := 0
+	for _, j := range items {
+		if strings.TrimSpace(j.Resource) != "" {
+			n++
+		}
+	}
+	return n
 }

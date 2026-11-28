@@ -245,6 +245,86 @@ edits: 0 file(s); timestamp->generated 0, citations->sources 0, citation titles-
 judgment: 0 item(s); none
 ```
 
+### Resolving a citation with no public source
+
+Some citations have nothing a reader can follow: notes you kept, a probe you
+ran, a private tool. §5.1 still lets them be sources, because a `resource` can
+be a scope descriptor, a few plain words a consumer reads but can't open. The
+tool never writes one for you. You write it on the `prose-citation` item in the
+plan file, and the next plan, run with `--resolve`, converts the entry the way
+it converts any other: a source with that resource and an id, the entry's full
+text as its footnote, and each body `[k]` rewritten to `[^id]`.
+
+Start again from the bundle in step 3, the Montalcino line still in place.
+Open `migrate-plan.json` and add a `resource` (and, if you like, a `title`) to
+the `prose-citation` item:
+
+```json
+{
+  "path": "wine/tannin.md",
+  "kind": "prose-citation",
+  "context": "- Tasting notes from the 2025 Montalcino trip, no link.",
+  "resource": "tasting notes kept by the author, 2025 Montalcino trip (not published)"
+}
+```
+
+Apply (and its `--dry-run`) refuses a plan that carries a resource it hasn't
+planned, so the resolution is never dropped by accident. Plan it with `--resolve`, then apply:
+
+<!-- transcript: setup
+$ cp -R "$TRANSCRIPT_FIXTURES/migrating/mykb" notes-kb
+$ okfctl migrate notes-kb --plan migrate-plan.json --generated-by human:casey
+$ okfctl migrate notes-kb --apply --plan migrate-plan.json
+$ okfctl migrate notes-kb --plan migrate-plan.json --generated-by human:casey
+$ sed 's|"context": "- Tasting notes from the 2025 Montalcino trip, no link."|&, "resource": "tasting notes kept by the author, 2025 Montalcino trip (not published)"|' migrate-plan.json > plan.tmp
+$ mv plan.tmp migrate-plan.json
+-->
+<!-- transcript: exit 1 okfctl migrate notes-kb --apply --plan migrate-plan.json --dry-run -->
+```text
+$ okfctl migrate notes-kb --apply --plan migrate-plan.json --dry-run
+okfctl: migrate-plan.json: 1 judgment item(s) carry a resource that is not planned yet; plan them first: okfctl migrate notes-kb --plan migrate-plan.json --resolve migrate-plan.json
+$ okfctl migrate notes-kb --plan migrate-plan.json --resolve migrate-plan.json --generated-by human:casey
+Wrote migrate-plan.json: 1 file(s) with deterministic edits (3 edit(s)), 1 judgment item(s).
+resolved: 1 prose-citation item(s) from --resolve, planned as sources.
+version: 0.1 -> declare v0.3
+edits: 1 file(s); timestamp->generated 0, citations->sources 1, citation titles->sources 0, root-relative links->/ 0, root-relative path fields->/ 0, timestamps->RFC 3339 0
+attribution: source ids 1, footnote definitions 1, body references->footnotes 0
+citation lists: removed 1, kept 0
+judgment: 1 item(s); source-title-unnamed 1
+1 item(s) need a decision before they can migrate; see the plan file.
+$ okfctl migrate notes-kb --apply --plan migrate-plan.json
+migrated wine/tannin.md
+1 file(s) migrated; bundle declares v0.3.
+hint: after committing, list that commit's SHA in .okf-drift-ignore-revs so strict drift skips the mechanical edits (like git blame --ignore-revs-file).
+bundle valid as v0.3
+note: 1 judgment item(s) were not applied (they need a decision; see the plan file).
+```
+
+`wine/tannin.md` now lists the descriptor as source `cite-2`, and the entry's
+text is its footnote:
+
+```markdown
+sources:
+  - id: cite-1
+    resource: "https://en.wikipedia.org/wiki/Tannin"
+  - id: cite-2
+    resource: "tasting notes kept by the author, 2025 Montalcino trip (not published)"
+...
+[^cite-2]: Tasting notes from the 2025 Montalcino trip, no link.
+```
+
+The `source-title-unnamed` item asks for the work's name: put a `title` on the
+resolution, or set one on the source afterwards. `--resolve` can name the
+`--plan` file itself, as here, or an older plan. A resolution whose path and
+`context` match no `prose-citation` item (the entry was edited since, say)
+fails the plan and leaves the plan file as it was. Once applied, the
+resolution lives in the node: a later plan sees the entry's text in the
+footnote of a source with an id, so it never reports the entry again, even
+while the `# Citations` list it came from stays. Running the same `--resolve`
+again is a no-op, whether the list stayed or went. A resolution that names a
+different resource for an entry a source already holds fails and names the
+resource that source has; change it on the source in frontmatter instead.
+
 ## What `migrate` changes
 
 From v0.1 (v0.3 Appendix B), two renames:

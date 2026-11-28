@@ -207,13 +207,20 @@ func citationListLoss(b *Bundle, rel string, raw []byte) (lost []string, has boo
 				}
 			}
 		}
+		// An entry the person resolved (migrate_citation_resolve.go) need
+		// not name its resource: its text in the footnote of any source
+		// with an id holds it. Every resource it does name is still
+		// checked below.
+		if !held {
+			_, held = heldSource(srcs, defs, entry)
+		}
 		src, found := matchSource(first)
 		def, defined := defs[strings.ToLower(src.id)]
 		switch {
-		case first == "":
-			lost = append(lost, name+": names no resource, so no source holds it")
 		case held:
 			// The text opens the footnote of one of the entry's sources.
+		case first == "":
+			lost = append(lost, name+": names no resource, so no source holds it")
 		case !found:
 			lost = append(lost, fmt.Sprintf("%s: %s is not a source's resource", name, first))
 		case src.id == "":

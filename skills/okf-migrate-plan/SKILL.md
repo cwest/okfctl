@@ -386,8 +386,15 @@ list. An item goes away when the node stops producing it.
 - **A title that differs from the citation (`source-title-conflict`).** The
   tool didn't touch the old `title`. Decide which name is right and edit the
   source.
-- **A citation with no resource.** Move the claim out of `# Citations` and into
-  the body, or into a §5.2 `verified` event. Or delete it.
+- **A citation with no resource.** If nothing public backs it (your notes, a
+  probe you ran, a private tool), write a §5.1 scope descriptor on the item in
+  the plan file, `"resource": "tasting notes kept by the author, 2025 trip (not
+  published)"` (plus `"title"` if it names a work), and plan again with
+  `--resolve <that plan>`. The entry converts like one with a URL: a source, an
+  id, its text as the footnote, `[k]` → `[^id]`. `--apply` refuses a plan whose
+  items carry a resource it hasn't planned, and a resolution whose `context` no
+  longer matches the entry fails the plan. Otherwise move the claim out of
+  `# Citations` and into the body, or into a §5.2 `verified` event. Or delete it.
 - **A citation with two URLs.** Split it into one entry per resource. The tool
   won't pick one or split it for you.
 - **A timestamp with no offset.** Add the offset the author meant.
@@ -397,7 +404,8 @@ list. An item goes away when the node stops producing it.
 
 Adding a `resource` straight to a node's entry under `nodes[]` and applying it
 does work. But the prose line is still in `# Citations` afterward. The next
-plan lists it again and holds the version again.
+plan lists it again and holds the version again. Put it on the
+`prose-citation` item and use `--resolve` instead.
 
 It's fine to leave an item unresolved. You get the edits, the bundle holds its
 declared version, and v0.3 consumers still read the prose list through the
@@ -421,8 +429,9 @@ out the way the tool would.
 
 1. Judgment items aren't failures. The tool stopped where it would have had to
    guess, and you can resolve the item or leave it.
-2. Don't make up a `resource` to clear a `prose-citation`. The plan has two
-   phases so you never have to.
+2. Don't make up a `resource` to clear a `prose-citation`. A descriptor written
+   through `--resolve` says honestly what the source was ("probe run on the
+   authoring host"); a placeholder URL is a fabrication.
 3. Don't pass a placeholder to `--generated-by`. Whatever you pass lands in
    provenance as is.
 4. Look at the real diff with `--dry-run`, and commit or copy the bundle ahead

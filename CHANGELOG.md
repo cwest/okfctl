@@ -11,6 +11,22 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+### Added
+
+- `migrate --resolve <plan>` converts a `prose-citation` entry with a resource
+  you supply (§5.1). Write `resource` (an absolute URL, a bundle path, or a
+  plain-words scope descriptor) and optionally `title` on the item in the plan
+  file, then plan again with `--resolve` naming that file. The entry gets a
+  source, an id, its full text as the footnote, and its body `[k]` rewritten
+  to `[^id]`, as a URL entry does. A resolution whose path and context match
+  no `prose-citation` item fails the plan, and `--apply` refuses a plan whose
+  items carry a resource no plan has made into edits. After the apply, a later
+  plan reads an entry with no resource as converted when the footnote of a
+  source with an id holds its text, so the entry is not reported again even
+  while its `# Citations` list stays. On a copy of a real knowledge base,
+  resolving five entries to descriptors took `prose-citation` from 669 to 664,
+  with 0 edits on re-plan and every other count unchanged.
+
 ### Fixed
 
 - `migrate` no longer reads a wrapped line in `# Citations` that opens with
