@@ -330,9 +330,17 @@ func planSourceIDs(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, en
 	for _, m := range footnoteDefRe.FindAllStringSubmatch(n.Body, -1) {
 		defined[strings.ToLower(m[1])] = true
 	}
+	// A label equal to an id a `sources` entry already carries is that
+	// source's footnote (§4.2), even when no list entry attaches to it (a
+	// hand-written descriptor source, §5.1). No new id can equal it: the
+	// claims above refuse that first.
+	existing := map[string]bool{}
+	for _, id := range allIDs {
+		existing[strings.ToLower(id)] = true
+	}
 	for _, m := range footnoteLabelRe.FindAllStringSubmatch(n.Body, -1) {
 		l := strings.ToLower(m[1])
-		if set.Has(l) && !held[l] && !ownLabel(final, partIDs, att, srcIDs, l) {
+		if set.Has(l) && !held[l] && !existing[l] && !ownLabel(final, partIDs, att, srcIDs, l) {
 			refuse(fmt.Errorf("footnote label [^%s] is already in the body", m[1]))
 			return nil
 		}
