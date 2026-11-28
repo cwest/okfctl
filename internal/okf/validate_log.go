@@ -34,8 +34,9 @@ const legacyBulletDatePrefixLen = len("- 2006-01-02 ")
 //   - every `## ` heading must be a valid YYYY-MM-DD date (§9's one MUST);
 //   - consecutive date headings must be non-increasing (newest first, §9);
 //   - a log with entry content must have at least one date heading (§9);
-//   - legacy `- YYYY-MM-DD — msg` bullets before the first date heading are not
-//     date-grouped and must be regrouped (the shape AppendLog wrote pre-fix).
+//   - legacy `- YYYY-MM-DD — msg` bullets (the shape AppendLog wrote pre-fix)
+//     are not date-grouped and must be regrouped, whether they sit before the
+//     first date heading or inside a date group.
 //
 // An empty log, a title-only log, and the `bundle init` scaffold (title +
 // placeholder line) are all well-formed and stay silent, so a fresh bundle never
@@ -89,6 +90,15 @@ func validateReservedLog(path string, n *Node) []Finding {
 				if isLegacyDatedBullet(line) {
 					sawLegacy = true
 				}
+			} else if legacyDatedBulletRe.MatchString(line) {
+				// §9: a legacy `- YYYY-MM-DD — msg` bullet under a heading
+				// carries its own date, so it is not grouped by that heading
+				// (a merge can leave one inside the wrong date's group). Only
+				// the exact em-dash shape counts here: it is what AppendLog
+				// lifts into its date group, so validate never rejects a log
+				// AppendLog produced, and an ordinary prose entry that merely
+				// starts with a date stays legal (§9 entries are prose).
+				sawLegacy = true
 			}
 		}
 	}
@@ -100,7 +110,7 @@ func validateReservedLog(path string, n *Node) []Finding {
 		}
 	}
 
-	// §9: legacy dated bullets before the first heading are not date-grouped.
+	// §9: legacy dated bullets, before or after a heading, are not date-grouped.
 	if sawLegacy {
 		out = append(out, Finding{Path: path, Message: "log has legacy dated bullets not grouped under date headings (§9); run `okfctl log append` to regroup"})
 	}

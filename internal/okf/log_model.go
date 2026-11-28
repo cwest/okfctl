@@ -38,8 +38,9 @@ type logModel struct {
 	// groups are the date-grouped sections in file order. AppendLog sorts them
 	// newest-first before rendering.
 	groups []*logGroup
-	// legacy holds `- YYYY-MM-DD — msg` bullets found in the preamble, in file
-	// order, to be folded into groups on the next write.
+	// legacy holds `- YYYY-MM-DD — msg` bullets found in the preamble or inside
+	// a date group, in file order, to be folded into their own date's group on
+	// the next write.
 	legacy []legacyEntry
 }
 
@@ -159,8 +160,26 @@ func parseLog(content string) *logModel {
 			lg.preamble = append(lg.preamble, line)
 			continue
 		}
-		// Inside a group. A top-level bullet starts a new entry; everything else
-		// (blank lines, indented tables/lists, prose) continues the current one.
+		// Inside a group. A legacy `- YYYY-MM-DD — msg` bullet here (a merge can
+		// leave one under the wrong date) is lifted out with its continuation
+		// block, exactly like a preamble one, so the fold files it under its
+		// own date rather than the heading it happens to sit beneath (§9).
+		if m := legacyDatedBulletRe.FindStringSubmatch(line); m != nil {
+			flush()
+			flushLegacy()
+			legacyDate = m[1]
+			pendingLegacy = []string{"* " + m[2]}
+			continue
+		}
+		if len(pendingLegacy) > 0 {
+			if !isTopLevelBullet(line) {
+				pendingLegacy = append(pendingLegacy, line)
+				continue
+			}
+			flushLegacy()
+		}
+		// A top-level bullet starts a new entry; everything else (blank lines,
+		// indented tables/lists, prose) continues the current one.
 		if isTopLevelBullet(line) {
 			flush()
 			pending = []string{line}

@@ -59,3 +59,31 @@ func TestNodeCommands_ProduceSection9Log(t *testing.T) {
 		t.Fatalf("AC-A4: validate must pass a node-maintained bundle; err=%v out=%q", err, out)
 	}
 }
+
+// §9 end to end: a legacy `- YYYY-MM-DD — msg` bullet left inside a date group
+// fails `validate --strict`; `log append` regroups it under its own date, after
+// which `validate --strict` passes.
+func TestValidateStrict_Section9_LegacyBulletInsideGroupThenLogAppend(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := runOKF(t, "bundle", "init", dir); err != nil {
+		t.Fatalf("bundle init: %v", err)
+	}
+	seed := "# Change Log\n\n## 2026-11-27\n* **Update**: migrated.\n\n## 2026-11-26\n* **Sweep**: grouped.\n- 2026-11-27 — misplaced sweep\n"
+	if err := os.WriteFile(filepath.Join(dir, "log.md"), []byte(seed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runOKF(t, "validate", "--strict", dir)
+	if err == nil {
+		t.Fatalf("§9: validate --strict must fail on a legacy bullet inside a date group; out=%q", out)
+	}
+	if !strings.Contains(out, "FAIL log.md: log has legacy dated bullets not grouped under date headings (§9)") {
+		t.Errorf("§9: expected the legacy-bullet finding; out=%q", out)
+	}
+
+	if _, err := runOKF(t, "log", "append", "--message", "regrouped", dir); err != nil {
+		t.Fatalf("log append: %v", err)
+	}
+	if out, err := runOKF(t, "validate", "--strict", dir); err != nil {
+		t.Fatalf("§9: validate --strict must pass after log append regroups; err=%v out=%q", err, out)
+	}
+}

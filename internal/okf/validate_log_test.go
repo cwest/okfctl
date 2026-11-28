@@ -299,3 +299,64 @@ func TestValidate_Issue176ReproBundle(t *testing.T) {
 		t.Errorf("V7: expected §9 findings in output:\n%s", joined)
 	}
 }
+
+// --- AC-V5b: legacy dated bullets AFTER a date heading -----------------------
+//
+// A legacy `- YYYY-MM-DD — msg` bullet carries its own inline date, so one that
+// sits under a `## ` heading is not grouped by that heading (§9 groups entries
+// under ISO 8601 date headings). The real corpus case: a merge left two
+// `- 2026-11-27 — …` bullets inside `## 2026-11-26`, and validate passed it.
+
+const legacyBulletsMsg = "log has legacy dated bullets not grouped under date headings (§9); run `okfctl log append` to regroup"
+
+func TestValidate_Section9_LegacyBulletAfterHeadingFails(t *testing.T) {
+	dir := t.TempDir()
+	writeValidBundleShell(t, dir)
+	writeFile(t, dir, "log.md", strings.Join([]string{
+		"# Change Log",
+		"",
+		"## 2026-11-27",
+		"* **Update**: migrated.",
+		"",
+		"## 2026-11-26",
+		"* **Sweep**: grouped entry.",
+		"- 2026-11-27 — **Sweep** that belongs under 2026-11-27.",
+		"",
+		"  **Ledger:** continuation prose.",
+		"- 2026-11-26 — legacy entry under its own date.",
+		"",
+	}, "\n"))
+	f := validateBundleAt(t, dir)
+	if !hasFindingMessage(f, "log.md", legacyBulletsMsg) {
+		t.Errorf("§9: a legacy dated bullet under a date heading must be flagged; got %v", findingMessagesFor(f, "log.md"))
+	}
+	// One finding per log, not one per bullet.
+	if n := len(findingMessagesFor(f, "log.md")); n != 1 {
+		t.Errorf("§9: want exactly 1 log.md finding, got %d: %v", n, findingMessagesFor(f, "log.md"))
+	}
+}
+
+// Control: properly grouped headings with `* ` and `- ` bullets — including a
+// `- ` bullet whose prose merely mentions a date, and an indented dated
+// sub-bullet inside a rich entry — stay silent.
+func TestValidate_Section9_GroupedBulletsAfterHeadingSilent(t *testing.T) {
+	dir := t.TempDir()
+	writeValidBundleShell(t, dir)
+	writeFile(t, dir, "log.md", strings.Join([]string{
+		"# Change Log",
+		"",
+		"## 2026-11-27",
+		"* **Update**: star bullet.",
+		"- **Creation**: dash bullet, no inline date.",
+		"- Released v2 on 2026-11-27 — prose that mentions a date.",
+		"* **Sweep**: rich entry with nested content:",
+		"  - 2026-11-20 — an indented sub-bullet is continuation, not an entry.",
+		"",
+		"## 2026-11-26",
+		"- **Init**: dash bullet.",
+		"",
+	}, "\n"))
+	if f := validateBundleAt(t, dir); len(findingMessagesFor(f, "log.md")) != 0 {
+		t.Errorf("§9 control: a grouped log must be silent; got %v", findingMessagesFor(f, "log.md"))
+	}
+}
