@@ -85,7 +85,10 @@ func endsCitations(line string, level int) bool {
 // Two shapes still start an entry with no blank line before them: the next
 // key of a tight list (`[2]` after `[1]`, `[1b]` after `[1a]`; see
 // bracketKeyContinues), and a link reference definition (`[label]: url`)
-// right after another, each its own entry as CommonMark reads it.
+// right after another, each its own entry as CommonMark reads it. A bracket
+// line right after any non-blank line, an open entry or a prose note, starts
+// an entry only when its token has the shape of a key (citationKeyShapeRe):
+// `[3]–[5].` wrapped out of a note is prose, not an entry.
 //
 // A bullet line starts an entry only at the open entry's indent or
 // shallower; a marker indented deeper is wrapped text inside that entry. An
@@ -129,8 +132,11 @@ func citationSection(body string) (out, other []string) {
 		curRefDef = citationRefDefRe.MatchString(line)
 		curIndent = len(line) - len(strings.TrimLeft(line, " \t"))
 	}
+	afterText := false // the previous line is non-blank: this one may be a lazy continuation
 	for _, line := range strings.Split(body[loc[1]:], "\n") {
 		trimmed := strings.TrimSpace(line)
+		lazy := afterText
+		afterText = trimmed != ""
 		switch {
 		case endsCitations(line, level):
 			flush()
@@ -156,6 +162,7 @@ func citationSection(body string) (out, other []string) {
 		case citationBulletRe.MatchString(line) && markerStarts(line, cur != nil, true, curOrdered, curIndent):
 			start(line, false)
 		case citationEntryRe.MatchString(line) && !citationBulletRe.MatchString(line) &&
+			(!lazy || citationKeyShapeRe.MatchString(line)) &&
 			(cur == nil || curRefDef && citationRefDefRe.MatchString(line) ||
 				bracketKeyContinues(cur[0], line, curOrdered, curIndent)):
 			start(line, false)
@@ -170,6 +177,15 @@ func citationSection(body string) (out, other []string) {
 	flush()
 	return out, other
 }
+
+// citationKeyShapeRe matches a line whose leading bracket token has the shape
+// of an entry key: followed by whitespace, a colon, or the end of the line
+// (`[3] VERIFIED ...`, `**[3]** ...`, `[label]: url`). A token followed by a
+// dash or punctuation (`[3]–[5].`, `[4]).`, `**[2]**, [3].`) is a reference
+// in wrapped prose. The shape is required only of a line that directly
+// follows a non-blank line, where it may be a lazy continuation; a bracket
+// line at a paragraph start is an entry whatever follows its token.
+var citationKeyShapeRe = regexp.MustCompile(`^\s*(?:\*\*)?\[[^\]\n]+\](?:\*\*)?(?:[\s:]|$)`)
 
 // bracketKeyContinues reports whether an unbulleted bracket-key line starts
 // the next entry of a tight list (no blank line between entries) while an
