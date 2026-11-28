@@ -27,7 +27,7 @@ import (
 // the source, id, footnote and reference edits any converted entry gets.
 
 const descriptorNode = "---\ntype: Concept\n---\n\n# Def\n\nPick by occasion [5]. The law is strict [1].\n\n# Citations\n\n" +
-	"[1] VERIFIED — the disciplinare https://rules.example/brunello\n\n" +
+	"[1] VERIFIED — the production rules https://rules.example/brunello\n\n" +
 	"[5] VERIFIED (internal) — the `brunello-selection` skill in this system, drawn on for the list section.\n"
 
 const descriptorEntry = "[5] VERIFIED (internal) — the `brunello-selection` skill in this system, drawn on for the list section."
