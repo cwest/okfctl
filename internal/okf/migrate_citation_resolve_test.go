@@ -219,3 +219,85 @@ func TestConformance_MigrateResolve_Section12_ReplayedResolutionIsNoop(t *testin
 		t.Errorf("a resolution that disagrees with the held source must fail the plan")
 	}
 }
+
+// §12.1: a resolution to a root-relative bundle path is written `/`-rooted
+// when the node sits below the root (the form its body link would be
+// rewritten to). The list is kept, so the entry stays in it. Replaying the
+// resolution after the apply matches the source it made, whether another
+// prose-citation still holds the declaration (the fallback still applies) or
+// the bundle now declares v0.3 (it no longer does). The replay is a no-op,
+// not a stale-resolution failure.
+func TestConformance_MigrateResolve_Section12_ReplayedRootRelativePathIsNoop(t *testing.T) {
+	const entry = "[5] VERIFIED (internal) — the spec page in this bundle."
+	const other = "[7] VERIFIED — said on a call, not written down anywhere."
+	const nodeDoc = "---\ntype: Concept\n---\n\n# Def\n\nThe rule holds [5].\n\n# Citations\n\n" +
+		"Status key: VERIFIED = read against the source.\n\n" + entry + "\n"
+	for name, held := range map[string]bool{"declaration held": true, "declared v0.3": false} {
+		t.Run(name, func(t *testing.T) {
+			doc := nodeDoc
+			if held {
+				doc += "\n" + other + "\n"
+			}
+			dir := mkMigrateBundle(t, map[string]string{
+				"index.md": "# KB\n", "log.md": "# Log\n",
+				"refs/spec.md": "---\ntype: Concept\n---\n\n# Spec\n\nText.\n",
+				"sub/a.md":     doc,
+			})
+			resolve := func() (*Bundle, MigratePlan, error) {
+				b := loadMigrate(t, dir)
+				plan, err := PlanMigrationWith(b, MigrateOptions{Resolutions: []JudgmentItem{
+					{Path: "sub/a.md", Kind: JudgmentProseCitation, Context: entry, Resource: "refs/spec.md"},
+				}})
+				return b, plan, err
+			}
+			b, plan, err := resolve()
+			if err != nil {
+				t.Fatalf("PlanMigrationWith: %v", err)
+			}
+			if got, ok := sourceByID(findNodeMigration(t, plan, "sub/a.md"), "5"); !ok || got.Resource != "/refs/spec.md" {
+				t.Fatalf("§12.1: source 5 = %+v (found %v), want the /-rooted path", got, ok)
+			}
+			if err := MigrateApply(dir, b, plan); err != nil {
+				t.Fatalf("apply: %v", err)
+			}
+			if declared := loadMigrate(t, dir).DeclaredOkfVersion; held == sameVersion(declared, TargetOkfVersion) {
+				t.Fatalf("fixture: held=%v but the bundle declares %q", held, declared)
+			}
+			wantIn(t, readRel(t, dir, "sub/a.md"), "# Citations", entry)
+			_, again, err := resolve()
+			if err != nil {
+				t.Fatalf("§12: replaying the resolution after apply must not fail: %v", err)
+			}
+			if nm := planNodeMigration(again, "sub/a.md"); nm != nil {
+				t.Errorf("§12: a replayed resolution plans no edits, got %+v", *nm)
+			}
+			if again.Resolved != 0 {
+				t.Errorf("a replayed resolution converts nothing new: Resolved = %d", again.Resolved)
+			}
+		})
+	}
+}
+
+// MigratePlan.Resolved counts the entries this plan converts from a
+// resolution: one for a fresh resolution even when the same item is listed
+// twice, none on a replay after the apply.
+func TestConformance_MigrateResolve_Section5_1_ResolvedCountsConvertedEntries(t *testing.T) {
+	node := strings.Replace(descriptorNode, "# Citations\n\n", "# Citations\n\nStatus key: VERIFIED = read against the source.\n\n", 1)
+	dir := mkMigrateBundle(t, kb(node))
+	b := loadMigrate(t, dir)
+	r := JudgmentItem{Path: "a.md", Kind: JudgmentProseCitation, Context: descriptorEntry, Resource: brunelloDescriptor}
+	plan, err := PlanMigrationWith(b, MigrateOptions{Resolutions: []JudgmentItem{r, r}})
+	if err != nil {
+		t.Fatalf("PlanMigrationWith: %v", err)
+	}
+	if plan.Resolved != 1 {
+		t.Errorf("one entry resolved (listed twice): Resolved = %d, want 1", plan.Resolved)
+	}
+	if err := MigrateApply(dir, b, plan); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	_, again := resolvedPlan(t, dir, descriptorEntry, brunelloDescriptor)
+	if again.Resolved != 0 {
+		t.Errorf("a replay converts nothing: Resolved = %d, want 0", again.Resolved)
+	}
+}

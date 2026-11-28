@@ -16,6 +16,7 @@ package okf
 
 import (
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 )
@@ -68,6 +69,30 @@ func resolutionIndex(rs []JudgmentItem) (map[resolutionKey]JudgmentItem, error) 
 		out[k] = r
 	}
 	return out, nil
+}
+
+// resolutionWrote reports whether have, the resource of the source holding a
+// resolved entry, is what the resolution want writes. A root-relative bundle
+// path is written `/`-rooted when the §12.1 fallback reads it from the root
+// (rooted). Once the bundle declares v0.3 the fallback no longer applies and
+// rooted leaves want as it is, so the `/`-rooted form of want is matched too.
+func resolutionWrote(rooted func(string) string, want, have string) bool {
+	if have == want || have == rooted(want) {
+		return true
+	}
+	if !strings.HasPrefix(have, "/") || strings.HasPrefix(want, "/") ||
+		strings.ContainsAny(want, " \t\r\n") || hasURIScheme(want) {
+		return false
+	}
+	p := want
+	if i := strings.IndexAny(p, "#?"); i >= 0 {
+		p = p[:i]
+	}
+	if dec, err := url.PathUnescape(p); err == nil {
+		p = dec
+	}
+	rootRel, escaped := joinWithin("", p)
+	return !escaped && rootedURL(want, rootRel) == have
 }
 
 // unmatchedResolutions is an error naming every resolution the plan did not

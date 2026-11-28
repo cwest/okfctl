@@ -193,6 +193,10 @@ type MigratePlan struct {
 	ForceDeclare bool            `json:"force_declare,omitempty"`
 	Nodes        []NodeMigration `json:"nodes"`
 	Judgment     []JudgmentItem  `json:"judgment"`
+	// Resolved counts the prose-citation entries this plan converts from
+	// MigrateOptions.Resolutions. A resolution replayed after its apply
+	// converts nothing and is not counted. The plan file does not carry it.
+	Resolved int `json:"-"`
 }
 
 // DeclaresTarget reports whether applying the plan declares TargetVersion.
@@ -399,7 +403,7 @@ func planMigration(b *Bundle, generatedBy string, resolutions []JudgmentItem) (M
 					// A resolution replayed after its apply agrees
 					// with the source; one that names another resource
 					// stays unused and fails the plan.
-					if r, isResolved := resolved[k]; isResolved && r.Resource == s.resource {
+					if r, isResolved := resolved[k]; isResolved && resolutionWrote(rooted, r.Resource, s.resource) {
 						usedResolution[k] = true
 					}
 					src, ok = SourceEdit{Resource: s.resource}, true
@@ -408,6 +412,7 @@ func planMigration(b *Bundle, generatedBy string, resolutions []JudgmentItem) (M
 					}
 				} else if r, isResolved := resolved[k]; isResolved {
 					usedResolution[k] = true
+					plan.Resolved++
 					src, ok = SourceEdit{Resource: r.Resource, Title: r.Title}, true
 					if src.Title == "" {
 						src.Title, _ = citationName(entryText(item))

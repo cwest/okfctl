@@ -171,8 +171,8 @@ func runMigratePlan(cmd *cobra.Command, dir, planPath string, opts okf.MigrateOp
 	}
 	fmt.Fprintf(out, "Wrote %s: %d file(s) with deterministic edits (%d edit(s)), %d judgment item(s).\n",
 		planPath, len(plan.Nodes), det, len(plan.Judgment))
-	if n := countResolutions(opts.Resolutions); n > 0 {
-		fmt.Fprintf(out, "resolved: %d prose-citation item(s) from --resolve, planned as sources.\n", n)
+	if plan.Resolved > 0 {
+		fmt.Fprintf(out, "resolved: %d prose-citation item(s) from --resolve, planned as sources.\n", plan.Resolved)
 	}
 	writeMigrateSummary(out, plan)
 	if len(plan.Judgment) > 0 {

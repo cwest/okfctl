@@ -145,3 +145,38 @@ func TestMigrate_ResolveStaleItemFails_Section5_1(t *testing.T) {
 		t.Errorf("a failed plan must not overwrite the resolved plan file")
 	}
 }
+
+// The resolved line reports what the plan converted. A replay after the
+// apply converts nothing, so it prints no resolved line beside its
+// 0-edit summary.
+func TestMigrate_ResolveReplayReportsNothingResolved_Section5_1(t *testing.T) {
+	files := migrateFixtureFiles()
+	files["a.md"] = strings.Replace(files["a.md"], "# Citations\n", "# Citations\nStatus key: VERIFIED = read against the source.\n\n", 1)
+	dir := mkPromoteCLIBundle(t, files)
+	planPath := filepath.Join(t.TempDir(), "migrate-plan.json")
+	if out, err := runOKF(t, "migrate", dir, "--plan", planPath, "--generated-by", "human:casey"); err != nil {
+		t.Fatalf("plan: %v\n%s", err, out)
+	}
+	resolvePlanFile(t, planPath, resolveDescriptor)
+	resolutions := filepath.Join(t.TempDir(), "resolutions.json")
+	if err := os.WriteFile(resolutions, []byte(readFileStr(t, planPath)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := runOKF(t, "migrate", dir, "--plan", planPath, "--resolve", resolutions, "--generated-by", "human:casey"); err != nil {
+		t.Fatalf("plan --resolve: %v\n%s", err, out)
+	}
+	if out, err := runOKF(t, "migrate", dir, "--apply", "--plan", planPath); err != nil {
+		t.Fatalf("apply: %v\n%s", err, out)
+	}
+	again := filepath.Join(t.TempDir(), "again.json")
+	out, err := runOKF(t, "migrate", dir, "--plan", again, "--resolve", resolutions, "--generated-by", "human:casey")
+	if err != nil {
+		t.Fatalf("replay: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "0 file(s) with deterministic edits") {
+		t.Errorf("fixture: the replay should plan no edits:\n%s", out)
+	}
+	if strings.Contains(out, "resolved:") {
+		t.Errorf("a no-op replay resolves nothing, so it prints no resolved line:\n%s", out)
+	}
+}
