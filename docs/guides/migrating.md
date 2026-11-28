@@ -352,9 +352,12 @@ present, is bumped too.
   definition with the source's `id` holds that text (`source-title-unpreserved`).
   The title stays, so the text is never lost.
 - a body `[k]` that names an entry of the node but sits within 60 characters
-  of "brief", "citation", "node", or a link, or is the label of an undefined
-  `[text][k]` reference (`citation-ref-unclear`). It may point at another
-  document's list, so it stays as written.
+  of the word "brief", "citation", or "node" (plurals too, not "inode" or
+  "briefing"), or of a link, in the same paragraph, list item, or table row; or
+  is the label of an undefined `[text][k]` reference (`citation-ref-unclear`).
+  It may point at another document's list, so it stays as written. A heading
+  or the next paragraph doesn't count, and a `[k]` in code is never a
+  reference.
 - a second citation entry for a resource another entry already holds
   (`citation-unattached`). A source carries one `id`, so this entry gets no
   footnote and its body references stay as written.
