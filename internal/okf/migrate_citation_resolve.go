@@ -211,3 +211,28 @@ func heldSource(srcs []noteSource, defs map[string]string, entry string) (noteSo
 	}
 	return noteSource{}, false
 }
+
+// convertedSource is heldSource, widened for an entry an earlier run read only
+// in part: the source whose id is the entry's own id, when that source's
+// footnote holds the start of the entry's text, up to a word boundary. A line
+// that used to end the entry (a wrapped `#` line read as a heading) cut it
+// there, and the footnote holds what was read. The entry is still that
+// source's, so a later plan that reads it in full must not convert it again.
+func convertedSource(srcs []noteSource, defs map[string]string, entry, id string) (noteSource, bool) {
+	if s, ok := heldSource(srcs, defs, entry); ok {
+		return s, true
+	}
+	d, ok := defs[strings.ToLower(id)]
+	if !ok || d == "" {
+		return noteSource{}, false
+	}
+	for _, s := range srcs {
+		if s.resource == "" || !strings.EqualFold(s.id, id) {
+			continue
+		}
+		if strings.HasPrefix(collapse(footnoteText(entry, s.id))+" ", d+" ") {
+			return s, true
+		}
+	}
+	return noteSource{}, false
+}

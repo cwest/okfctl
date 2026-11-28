@@ -29,14 +29,25 @@ tagged release, goreleaser generates the release notes from the commit log
   item, and resolving it gave one source for all of its resources. A
   single-resource entry listed after such a definition used to be a
   `citation-unattached` item, and it now takes the id.
+- `migrate` leaves an entry alone when an earlier run already converted it
+  (§12), even when the entry now names another resource. That happens
+  whenever the two fixes above read more of an entry than before. One case is
+  an entry that was cut at a `#` line and resolved by hand, whose URL is now
+  visible. The other is a multi-resource entry resolved to one resource while
+  a link reference definition owned the rest, which would now split. The
+  entry counts as converted when the footnote `[^k]` of the source with
+  `id: k` holds its text, or holds the part of it an earlier run read, up to a
+  word boundary. Without this check, the plan converted it a second time, and
+  the second source's id collided with the first, so the whole node was
+  refused as a `source-id-collision`.
 
-Planning the knowledge base at `ec1f4c5` with 0.10.0 and then with both fixes:
-edits went from 0 files to 4 (8 source ids, 8 footnote definitions, 19 body
-references). `prose-citation` rose from 541 to 549 and `source-title-unnamed`
-from 1853 to 1863, because entries that were never read are now reported.
-`source-id-collision` rose from 0 to 2. That refusal is not new: it appears
-where an entry already converted by hand is now read for the first time, and
-0.10.0 refuses the same layout.
+Planning the knowledge base at `ec1f4c5` with 0.10.0 and then with these
+fixes: edits went from 0 files to 4 (26 sources with ids, 26 footnote
+definitions, 49 body references). `prose-citation` rose from 541 to 549,
+`source-title-unnamed` from 1853 to 1864, and `citation-ref-unclear` from 405
+to 412, because entries that were never read are now reported.
+`source-id-collision` stays at 0. Planning again after the apply gives 0
+edits.
 
 ## [0.10.0] - 2026-11-28
 
