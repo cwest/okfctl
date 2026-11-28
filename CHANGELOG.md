@@ -11,6 +11,12 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-28
+
+Three `migrate` fixes read more of a `# Citations` list. The counts below come
+from planning one copy of the knowledge base at `df6f324`, first with 0.10.0,
+then with the build on main.
+
 ### Fixed
 
 - `migrate` no longer reads a wrapped line that opens with `#` as a heading
@@ -21,14 +27,14 @@ tagged release, goreleaser generates the release notes from the commit log
   only 1 to 6 `#` followed by a space, a tab, or the end of the line make a
   heading, as in CommonMark. On the knowledge base, 5 nodes now read their
   lists in full. For example, openshell entry [8] keeps its issue URL, and
-  entries [9]–[25] are read for the first time.
+  entries [9]–[25] are read for the first time. (#273)
 - `migrate` splits a multi-resource `# Citations` entry whose resource a link
   reference definition (`[t]: https://...`) also names (§5.1). The definition
   is the target of a `[text][t]` link, not a citation, and it gets no id. It
   used to own the resource anyway. The entry then stayed a `prose-citation`
   item, and resolving it gave one source for all of its resources. A
   single-resource entry listed after such a definition used to be a
-  `citation-unattached` item, and it now takes the id.
+  `citation-unattached` item, and it now takes the id. (#273)
 - `migrate` leaves an entry alone when an earlier run already converted it
   (§12), even when the entry now names another resource. That happens
   whenever the two fixes above read more of an entry than before. One case is
@@ -39,15 +45,15 @@ tagged release, goreleaser generates the release notes from the commit log
   `id: k` holds its text, or holds the part of it an earlier run read, up to a
   word boundary. Without this check, the plan converted it a second time, and
   the second source's id collided with the first, so the whole node was
-  refused as a `source-id-collision`.
+  refused as a `source-id-collision`. (#273)
 
-Planning the knowledge base at `ec1f4c5` with 0.10.0 and then with these
-fixes: edits went from 0 files to 4 (26 sources with ids, 26 footnote
-definitions, 49 body references). `prose-citation` rose from 541 to 549,
-`source-title-unnamed` from 1853 to 1864, and `citation-ref-unclear` from 405
-to 412, because entries that were never read are now reported.
-`source-id-collision` stays at 0. Planning again after the apply gives 0
-edits.
+Edits went from 0 files to 4 (101 edits: 26 sources with ids, 26 footnote
+definitions, 49 body references). `prose-citation` rose from 476 to 484,
+`source-title-unnamed` from 1829 to 1840, and `citation-ref-unclear` from 405
+to 412, because entries that were never read are now reported. One
+`prose-citation` entry converts, and 9 appear for the first time.
+`source-id-collision` stays at 0. The apply loses no URL from the 4 files, and
+planning again after it gives 0 edits.
 
 ## [0.10.0] - 2026-11-28
 
@@ -751,7 +757,8 @@ Open Knowledge Format (OKF) bundles, targeting OKF v0.1.
   (`okf-authoring`, `okf-curation-health`, `okf-semantic-search`), and a
   spec-conformance suite proving okfctl's output validates clean.
 
-[Unreleased]: https://github.com/cwest/okfctl/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/cwest/okfctl/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/cwest/okfctl/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/cwest/okfctl/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/cwest/okfctl/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/cwest/okfctl/compare/v0.7.0...v0.8.0
