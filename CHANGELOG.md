@@ -11,22 +11,38 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-28
+
+`lint` gains a check, so a bundle that passed `lint --strict` on 0.10.1 can
+fail on this release. The counts below come from one copy of the knowledge
+base at `79b4af6`, planned and linted first with 0.10.1, then with the build
+on main.
+
 ### Added
 
 - `lint` has a `footnote-definition` check (§4.2). It reports a footnote
-  label defined more than once in a node (labels match case-insensitively)
-  and a definition with no text, so `lint --strict` fails on both. Run on the
-  knowledge base at `79b4af6`, it reports nothing.
+  label defined twice in one node (labels match case-insensitively), and a
+  definition with no text. `lint --strict` fails on either. A definition
+  whose text starts on the next line, indented four spaces or a tab, has
+  text. Lines in a fenced code block aren't definitions. On the knowledge
+  base it reports nothing. (#275)
 
 ### Fixed
 
-- `migrate` no longer rewrites a body `[k]` that opens a line and is followed
-  by a colon. Rewritten, `[^k]:` is a footnote definition, not a reference, so
-  the node got a second, empty definition for `k`, and the next plan reported
-  the entry as a prose citation again. Such a reference is now a
-  `citation-ref-unclear` item and stays as written. On the knowledge base,
-  ecosystem-watch's GKE landscape baseline `[24]:` is the one new item, and
-  its entry now converts and stays converted.
+- `migrate` used to turn a body `[k]` at the start of a line, right before a
+  colon, into `[^k]:`. GFM reads that as a footnote definition. The node got
+  a second, empty definition for `k`. The next plan listed the entry as a
+  prose citation again. Now the reference stays put, after a block quote or
+  list marker too, and the plan lists it as `citation-ref-unclear`. (#275)
+
+On the knowledge base, `citation-ref-unclear` goes from 412 to 413. The new
+item is `[24]:` in `ecosystem-watch/google-kubernetes-gke-cncf-landscape-baseline.md`.
+`prose-citation` stays at 395 and no other count moves. We then resolved that
+node's `[24]` entry and applied it with each build. 0.10.1 wrote two `[^24]`
+definitions, one empty. Planning again brought back the prose citation (395)
+plus a `source-id-collision`. The build on main wrote one definition, and
+planning again gave 0 edits and 394 prose citations. The new check flags both
+of the definitions 0.10.1 wrote and finds nothing in the tree main wrote.
 
 ## [0.10.1] - 2026-11-28
 
@@ -774,7 +790,8 @@ Open Knowledge Format (OKF) bundles, targeting OKF v0.1.
   (`okf-authoring`, `okf-curation-health`, `okf-semantic-search`), and a
   spec-conformance suite proving okfctl's output validates clean.
 
-[Unreleased]: https://github.com/cwest/okfctl/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/cwest/okfctl/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/cwest/okfctl/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/cwest/okfctl/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/cwest/okfctl/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/cwest/okfctl/compare/v0.8.0...v0.9.0
