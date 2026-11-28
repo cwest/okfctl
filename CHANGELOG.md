@@ -11,6 +11,19 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+### Fixed
+
+- `migrate` no longer reads a wrapped line in `# Citations` that opens with
+  a bracket key range, such as `[3]–[5].` at the end of a prose note, as a
+  citation entry (§5.1, Appendix B). The line became a `prose-citation`
+  item, which held the version, and the key it opened with (`[3]`) kept
+  that node's body `[3]` references from being rewritten to their existing
+  footnote. A bracket line right after a non-blank line now starts an entry
+  only when its key is followed by a space, a colon, or the end of the line.
+  On a real knowledge base, 3 false `prose-citation` items went away and 10
+  more body references became footnotes. The only other change was the
+  `citations-kept` wording for those 3 nodes.
+
 ## [0.9.0] - 2026-11-27
 
 `migrate` turns more `# Citations` entries into sources. It reads the
