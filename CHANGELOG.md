@@ -11,6 +11,14 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-28
+
+You can now hand `migrate` the resource for a `prose-citation` entry: write
+it in the plan file. Three fixes also get more `# Citations` entries read
+right. The counts below come from planning one copy of the knowledge base at
+`8d75433`, first with 0.9.0, then with each build on main in the order they
+merged.
+
 ### Added
 
 - `migrate --resolve <plan>` converts a `prose-citation` entry with a resource
@@ -23,12 +31,23 @@ tagged release, goreleaser generates the release notes from the commit log
   items carry a resource no plan has made into edits. After the apply, a later
   plan reads an entry with no resource as converted when the footnote of a
   source with an id holds its text, so the entry is not reported again even
-  while its `# Citations` list stays. On a copy of a real knowledge base,
-  resolving five entries to descriptors took `prose-citation` from 669 to 664,
-  with 0 edits on re-plan and every other count unchanged.
+  while its `# Citations` list stays. On the knowledge base, resolving
+  four entries (one to a URL, three to descriptors) took `prose-citation`
+  from 601 to 597. After the apply, a fresh plan had 0 edits and the same
+  counts. (#271)
 
 ### Fixed
 
+- `migrate` used to refuse a node with `source-id-collision` when a body
+  footnote label was the id of a source already in `sources` (§4.2, §5.1).
+  That happens with a source whose resource is a scope in plain words. Its
+  text lives in footnote `[^k]`, with no `# Citations` entry. A re-plan
+  counted only list entries as owners of a label, so `[^k]` looked taken. Now
+  a label that matches an id in `sources` (ignoring case) is just that
+  source's footnote. A label with no matching id still refuses the node. On
+  the knowledge base, `source-id-collision` dropped from 14 to 0. Those 14
+  nodes now show their other items too, so `citation-ref-unclear` went from
+  387 to 405 and `citation-unattached` from 42 to 46. (#268)
 - `migrate` no longer reads a wrapped line in `# Citations` that opens with
   a bracket key range, such as `[3]–[5].` at the end of a prose note, as a
   citation entry (§5.1, Appendix B). The line became a `prose-citation`
@@ -36,16 +55,15 @@ tagged release, goreleaser generates the release notes from the commit log
   that node's body `[3]` references from being rewritten to their existing
   footnote. A bracket line right after a non-blank line now starts an entry
   only when its key is followed by a space, a colon, or the end of the line.
-  On a real knowledge base, 3 false `prose-citation` items went away and 10
-  more body references became footnotes. The only other change was the
-  `citations-kept` wording for those 3 nodes.
+  On the knowledge base, `prose-citation` fell from 608 to 606 and 7
+  body references in one node became footnotes. (#270)
 - `migrate` converts a `# Citations` entry whose only resources are full URLs
   written in code spans (`` `https://a.example/docs` and `https://a.example/api` ``).
   Two or more such spans used to leave the entry a `prose-citation` item; now
   each becomes its own source, as an autolink would (§5.1). A bare host, a
   command, or a template with a placeholder (`…`, `{id}`, `<term>`) in a code
-  span still names no source. On a real knowledge base, 16 entries became
-  sources and `prose-citation` fell from 669 to 653.
+  span still names no source. On the knowledge base, 5 entries in 4
+  nodes became 9 sources and `prose-citation` fell from 606 to 601. (#269)
 
 ## [0.9.0] - 2026-11-27
 
@@ -695,7 +713,8 @@ Open Knowledge Format (OKF) bundles, targeting OKF v0.1.
   (`okf-authoring`, `okf-curation-health`, `okf-semantic-search`), and a
   spec-conformance suite proving okfctl's output validates clean.
 
-[Unreleased]: https://github.com/cwest/okfctl/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/cwest/okfctl/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/cwest/okfctl/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/cwest/okfctl/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/cwest/okfctl/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/cwest/okfctl/compare/v0.6.0...v0.7.0
