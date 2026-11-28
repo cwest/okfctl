@@ -51,12 +51,14 @@ import (
 const JudgmentCitationsKept JudgmentKind = "citations-kept"
 
 // citationSectionSpan returns the byte span of body's `# Citations` section:
-// from its heading to the next heading, or to the end of body.
+// from its heading to the next heading of the same or a higher level
+// (endsCitations), or to the end of body.
 func citationSectionSpan(body string) (start, end int, ok bool) {
 	loc := citationsHeadRe.FindStringIndex(body)
 	if loc == nil {
 		return 0, 0, false
 	}
+	level := headingLevel(body[loc[0]:loc[1]])
 	end = len(body)
 	for off := loc[1]; off < len(body); {
 		nl := strings.IndexByte(body[off:], '\n')
@@ -64,7 +66,7 @@ func citationSectionSpan(body string) (start, end int, ok bool) {
 			break
 		}
 		off += nl + 1
-		if strings.HasPrefix(strings.TrimLeft(body[off:], " 	"), "#") {
+		if endsCitations(body[off:], level) {
 			end = off
 			break
 		}

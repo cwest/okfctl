@@ -53,13 +53,29 @@ var (
 	citationRefDefRe = regexp.MustCompile(`^ {0,3}\[[^\]\n]+\]:[ \t]*<?[^\s<>]+>?(?:[ \t]+(?:"[^"]*"|'[^']*'|\([^)]*\)))?[ \t]*$`)
 )
 
+// headingLevel is the number of leading `#` on s.
+func headingLevel(s string) int {
+	return len(s) - len(strings.TrimLeft(s, "#"))
+}
+
+// endsCitations reports whether line ends a Citations section whose heading
+// has level: a `#` line of the same or a higher level (fewer `#`). A deeper
+// heading (`## Tier 1` under `# Citations`) is a group label inside the list,
+// so its entries stay citation entries (Appendix B, §12.1, §5.1).
+func endsCitations(line string, level int) bool {
+	t := strings.TrimLeft(line, " \t")
+	return strings.HasPrefix(t, "#") && headingLevel(t) <= level
+}
+
 // citationEntries returns the entries under a `# Citations` heading in body
 // order, each as one line: an entry line plus the wrapped lines that follow it
 // are joined with single spaces. An entry starts at a bracket-key or bullet
 // line; it ends at a blank line, a legend line, the next entry, or the next
-// heading. An unbulleted line that opens with a markdown link is wrapped text,
-// never an entry start. Lines outside any entry (a status-key paragraph) are
-// skipped.
+// heading. The section itself ends only at a heading of the same or a higher
+// level than `# Citations` (endsCitations); a deeper heading is a group label,
+// and the entries under it are still entries. An unbulleted line that opens
+// with a markdown link is wrapped text, never an entry start. Lines outside
+// any entry (a status-key paragraph) are skipped.
 //
 // An unbulleted bracket-key line always starts an entry at a paragraph start:
 // the first line of the section, or the first after a blank or legend line.
@@ -93,6 +109,7 @@ func citationSection(body string) (out, other []string) {
 	if loc == nil {
 		return nil, nil
 	}
+	level := headingLevel(body[loc[0]:loc[1]])
 	var cur []string
 	curOrdered := false // the open entry is an ordered-list item
 	curRefDef := false  // the open entry is a link reference definition
@@ -115,9 +132,13 @@ func citationSection(body string) (out, other []string) {
 	for _, line := range strings.Split(body[loc[1]:], "\n") {
 		trimmed := strings.TrimSpace(line)
 		switch {
-		case strings.HasPrefix(trimmed, "#"):
+		case endsCitations(line, level):
 			flush()
-			return out, other // the next heading ends the Citations section
+			return out, other // a same- or higher-level heading ends the section
+		case strings.HasPrefix(trimmed, "#"):
+			// A deeper heading groups entries; it is not itself an entry.
+			flush()
+			other = append(other, trimmed)
 		case trimmed == "":
 			flush()
 		case citationLegendRe.MatchString(line):
