@@ -48,6 +48,9 @@ var (
 	citationLinkSpanRe = regexp.MustCompile(`!?\[([^\]\n]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)`)
 	// citationURLRe matches a bare or <angle-wrapped> absolute http(s) URL.
 	citationURLRe = regexp.MustCompile("https?://[^\\s<>\"`\\]]+")
+	// codeTemplateRe matches a placeholder in a code span (`…`, `...`,
+	// `{id}`, `<term>`): the span is a URL template, not a document.
+	codeTemplateRe = regexp.MustCompile(`…|\.\.\.|[{}<>]`)
 	// citationRefDefRe matches a whole-line markdown link reference definition
 	// (`[label]: dest "title"`).
 	citationRefDefRe = regexp.MustCompile(`^ {0,3}\[[^\]\n]+\]:[ \t]*<?[^\s<>]+>?(?:[ \t]+(?:"[^"]*"|'[^']*'|\([^)]*\)))?[ \t]*$`)
@@ -330,9 +333,11 @@ type citationPart struct {
 // A URL inside a code span is an example, a command, or a template
 // (`curl https://...`, `https://host/v0/servers?search=<term>`), not a source,
 // so it is never counted next to a resource outside code. Only when the
-// entry has no resource outside code does a code span count, and then only a
-// lone one: `VERIFIED — Docs, `https://docs.example/`: ...` keeps the single
-// source it always had, and two code-span URLs stay for judgment.
+// entry has no resource outside code does a code span count: a lone one
+// (`VERIFIED — Docs, `https://docs.example/`: ...` keeps the single source it
+// always had), or two or more spans that are each a whole URL and nothing
+// else, which split one source per URL. Any other mix of code-span URLs (a
+// URL inside a command, next to a second one) stays for judgment.
 func citationResources(text string) (parts []citationPart, rest string, fromCode bool) {
 	masked := []byte(text)
 	for _, loc := range inlineCodeSpanRe.FindAllStringIndex(text, -1) {
@@ -368,8 +373,8 @@ func citationResources(text string) (parts []citationPart, rest string, fromCode
 		all = append(all, found{loc[0], citationPart{resource: trimURL(text[loc[0]:loc[1]])}})
 	}
 	if len(all) == 0 {
-		var code []string
-		seen := map[string]bool{}
+		var code, whole []string
+		seen, seenWhole := map[string]bool{}, map[string]bool{}
 		for _, span := range inlineCodeSpanRe.FindAllString(text, -1) {
 			for _, u := range citationURLRe.FindAllString(span, -1) {
 				if k := canonicalResource(trimURL(u)); !seen[k] {
@@ -377,6 +382,25 @@ func citationResources(text string) (parts []citationPart, rest string, fromCode
 					code = append(code, trimURL(u))
 				}
 			}
+			// A template (`?client_id=…`, `/v1/{id}`) names no document.
+			u := strings.TrimSpace(strings.Trim(span, "`"))
+			if u != "" && citationURLRe.FindString(u) == u && !codeTemplateRe.MatchString(u) {
+				if k := canonicalResource(u); !seenWhole[k] {
+					seenWhole[k] = true
+					whole = append(whole, u)
+				}
+			}
+		}
+		if len(whole) > 0 {
+			// A code span that is a full URL and nothing else is written
+			// out as plainly as an autolink, so each is a resource (§5.1,
+			// one per source), and, as next to an autolink, a URL inside a
+			// command, a template, or a bare host is not counted.
+			out := make([]citationPart, len(whole))
+			for i, u := range whole {
+				out[i] = citationPart{resource: u}
+			}
+			return out, string(restB), false
 		}
 		if len(code) == 1 {
 			return []citationPart{{resource: code[0]}}, string(restB), true
