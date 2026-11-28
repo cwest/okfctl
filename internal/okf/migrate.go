@@ -84,6 +84,12 @@ type JudgmentItem struct {
 	Path    string       `json:"path"`
 	Kind    JudgmentKind `json:"kind"`
 	Context string       `json:"context"`
+	// Resource and Title are the resolution of a prose-citation item: the
+	// §5.1 resource (an absolute URL, a bundle path, or a scope descriptor)
+	// and the optional title its person supplies. The tool never fills
+	// them; a plan read back as MigrateOptions.Resolutions honors them.
+	Resource string `json:"resource,omitempty"`
+	Title    string `json:"title,omitempty"`
 }
 
 // GeneratedEdit is the planned §13.1 `timestamp` → `generated { by, at }`
@@ -216,6 +222,11 @@ type MigrateOptions struct {
 	// remain. Those items then lose the §12.1 fallback that still carries
 	// them; the plan records the choice.
 	ForceDeclare bool
+	// Resolutions are prose-citation items with a Resource filled in,
+	// usually read back from an earlier plan file. Each entry they name
+	// converts with that resource (migrate_citation_resolve.go). One that
+	// matches no prose-citation item fails the plan.
+	Resolutions []JudgmentItem
 }
 
 // PlanMigration computes the migration plan to TargetOkfVersion for a loaded
@@ -239,7 +250,7 @@ func PlanMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 // bundle that declares 0.2 or earlier, or nothing, so declaring 0.3 first
 // would make a consumer drop those items.
 func PlanMigrationWith(b *Bundle, opts MigrateOptions) (MigratePlan, error) {
-	plan, err := planMigration(b, opts.GeneratedBy)
+	plan, err := planMigration(b, opts.GeneratedBy, opts.Resolutions)
 	if err != nil {
 		return plan, err
 	}
@@ -253,7 +264,12 @@ func PlanMigrationWith(b *Bundle, opts MigrateOptions) (MigratePlan, error) {
 	return plan, nil
 }
 
-func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
+func planMigration(b *Bundle, generatedBy string, resolutions []JudgmentItem) (MigratePlan, error) {
+	resolved, err := resolutionIndex(resolutions)
+	if err != nil {
+		return MigratePlan{}, err
+	}
+	usedResolution := map[resolutionKey]bool{}
 	plan := MigratePlan{
 		TargetVersion:   TargetOkfVersion,
 		DeclaredVersion: b.DeclaredOkfVersion,
@@ -350,6 +366,7 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 			return res
 		}
 		splits := planCitationSplits(entries, rooted)
+		var held func(string) (noteSource, bool)
 		for i, item := range entries {
 			src, ok, fromID := citationSourceFrom(item)
 			res := src.Resource
@@ -367,6 +384,36 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 					attached[canonicalResource(r)] = true
 				}
 				continue
+			}
+			if !ok {
+				// An entry whose text a source's footnote already holds
+				// was resolved on an earlier run; one the person resolves
+				// now takes the resource they wrote. Anything else stays
+				// for judgment (migrate_citation_resolve.go).
+				if held == nil {
+					srcs, defs := frontmatterSources(n.Frontmatter), footnoteDefsOutsideCitations(n.Body)
+					held = func(e string) (noteSource, bool) { return heldSource(srcs, defs, e) }
+				}
+				k := resolutionKey{rel, item}
+				if s, isHeld := held(item); isHeld {
+					// A resolution replayed after its apply agrees
+					// with the source; one that names another resource
+					// stays unused and fails the plan.
+					if r, isResolved := resolved[k]; isResolved && r.Resource == s.resource {
+						usedResolution[k] = true
+					}
+					src, ok = SourceEdit{Resource: s.resource}, true
+					if t, has := lookupSourceTitle(existing, s.resource); has && t.has {
+						src.Title = t.title
+					}
+				} else if r, isResolved := resolved[k]; isResolved {
+					usedResolution[k] = true
+					src, ok = SourceEdit{Resource: r.Resource, Title: r.Title}, true
+					if src.Title == "" {
+						src.Title, _ = citationName(entryText(item))
+					}
+				}
+				res = src.Resource
 			}
 			if !ok {
 				plan.Judgment = append(plan.Judgment, JudgmentItem{
@@ -416,6 +463,9 @@ func planMigration(b *Bundle, generatedBy string) (MigratePlan, error) {
 			planRetitles(&plan, nm, n, rel, entries, ids, retitle)
 		}
 		replayTitleCalls(&plan, nm, existing, rel, deferred)
+	}
+	if err := unmatchedResolutions(resolved, usedResolution); err != nil {
+		return MigratePlan{}, err
 	}
 
 	// v0.3 §6/§12.1 and §5 edits. Links are rewritten in every Markdown file
