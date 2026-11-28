@@ -23,6 +23,13 @@ tagged release, goreleaser generates the release notes from the commit log
   On a real knowledge base, 3 false `prose-citation` items went away and 10
   more body references became footnotes. The only other change was the
   `citations-kept` wording for those 3 nodes.
+- `migrate` converts a `# Citations` entry whose only resources are full URLs
+  written in code spans (`` `https://a.example/docs` and `https://a.example/api` ``).
+  Two or more such spans used to leave the entry a `prose-citation` item; now
+  each becomes its own source, as an autolink would (§5.1). A bare host, a
+  command, or a template with a placeholder (`…`, `{id}`, `<term>`) in a code
+  span still names no source. On a real knowledge base, 16 entries became
+  sources and `prose-citation` fell from 669 to 653.
 
 ## [0.9.0] - 2026-11-27
 

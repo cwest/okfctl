@@ -143,11 +143,13 @@ func TestConformance_MigrateSplit_Section5_1_SingleURLEntryUntouched(t *testing.
 	}
 }
 
-// Negative control: a URL inside a code span is an example or a template, not
-// a source. It neither adds a part to a split entry nor turns a one-URL entry
-// into a two-URL one. An entry whose only URL sits in a code span keeps the
-// single-source conversion it had before, and one whose several URLs all sit
-// in code spans stays a judgment item.
+// Negative control: a URL inside a code span is an example, a command, or a
+// template, not a source. It neither adds a part to a split entry nor turns a
+// one-URL entry into a two-URL one. A code span that is a full URL and
+// nothing else names a resource as an autolink does, so several of them split
+// (§5.1); a span holding a bare host, a command, or a template placeholder
+// (`…`, `{id}`, `<term>`) never does, and an entry whose only URLs are in
+// such spans stays a judgment item.
 func TestConformance_MigrateSplit_Section5_1_CodeSpanURLIsNotASource(t *testing.T) {
 	cases := []struct {
 		entry string
@@ -159,7 +161,17 @@ func TestConformance_MigrateSplit_Section5_1_CodeSpanURLIsNotASource(t *testing.
 			[]string{"https://reg.example/docs"}},
 		{"[9] VERIFIED — OpenTable docs, `https://docs.opentable.example/`: partners only.",
 			[]string{"https://docs.opentable.example/"}},
-		{"[10] Connector, `https://claude.example/resy`: \"`https://apigw.example/mcp`\".", nil},
+		{"[10] Connector, `https://claude.example/resy`: \"`https://apigw.example/mcp`\".",
+			[]string{"https://claude.example/resy", "https://apigw.example/mcp"}},
+		{"[11] Run `curl https://a.example/v1` then `curl https://b.example/v2`.", nil},
+		{"[12] VERIFIED — SSO surface `five-api.libsyn.example` and `api.libsyn.example`.", nil},
+		{"[13] Login links on `https://libsyn.example/` point to `https://sso.libsyn.example/auth?client_id=…&state=…`.",
+			[]string{"https://libsyn.example/"}},
+		{"[14] Feed `https://a.example/feed.json`; fetch with `curl https://b.example/raw`.",
+			[]string{"https://a.example/feed.json"}},
+		{"[15] Docs `https://a.example/docs`, `https://a.example/api`; template `https://a.example/oauth?client_id=…`.",
+			[]string{"https://a.example/docs", "https://a.example/api"}},
+		{"[16] Endpoints `https://a.example/v1/{id}` and `https://a.example/v2/{id}`.", nil},
 	}
 	for _, c := range cases {
 		var got []string
@@ -282,5 +294,34 @@ func TestConformance_MigrateSplit_Section12_RerunPlansZeroEdits(t *testing.T) {
 	}
 	if treeHash(t, dir) != once {
 		t.Fatalf("§12: re-applying the same plan changed the tree:\n%s", readRel(t, dir, "a.md"))
+	}
+}
+
+// An entry whose only resources are two or more full URLs, each a whole code
+// span, names them as plainly as autolinks: it splits one source per URL
+// (§5.1, one resource per source) instead of falling to prose-citation. Real
+// corpus shape (a Libsyn API citation), wrapped lines as written.
+func TestConformance_MigrateSplit_Section5_1_WholeCodeSpanURLsSplit(t *testing.T) {
+	node := "---\ntype: Concept\n---\n\n# Def\n\nThe token lives an hour [1].\n\n# Citations\n\n" +
+		"[1] VERIFIED — Libsyn Public API v1 documentation (the OAuth flow). Retrieved 2026-06-25 from\n" +
+		"`https://api.libsyn.example/apigility/documentation` (page title \"Libsyn API\n" +
+		"Documentation\"). Token POST to `https://api.libsyn.example/oauth` with `grant_type:\"authorization_code\"`;\n" +
+		"welcome page `https://api.libsyn.example/` self-describes \"Public API v1\".\n"
+	dir, plan := migrateOnce(t, kb(node))
+	if hasJudgment(plan, "a.md", JudgmentProseCitation) {
+		t.Fatalf("§5.1: whole-code-span URLs must convert, got prose-citation: %+v", plan.Judgment)
+	}
+	nm := findNodeMigration(t, plan, "a.md")
+	var got []string
+	for _, s := range nm.Sources {
+		got = append(got, s.Resource)
+	}
+	want := []string{"https://api.libsyn.example/apigility/documentation", "https://api.libsyn.example/oauth", "https://api.libsyn.example/"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("§5.1: sources %q, want %q", got, want)
+	}
+	out := readRel(t, dir, "a.md")
+	if !strings.Contains(out, "[^1]") || !strings.Contains(out, "[^1-2]") || !strings.Contains(out, "[^1-3]") {
+		t.Fatalf("each part gets a footnote:\n%s", out)
 	}
 }

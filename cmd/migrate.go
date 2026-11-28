@@ -66,7 +66,8 @@ func newMigrateCmd() *cobra.Command {
 			"names none, once that footnote holds the text. A title that opens with the " +
 			"entry's [key] but was annotated past the entry's text has that text added " +
 			"to the footnote first, then is cut the same way. An entry that names " +
-			"two or more resources (code spans aside) is split into one source per resource, " +
+			"two or more resources is split into one source per resource (a code-span URL " +
+			"counts only when the entry names no resource outside code and the span is that URL alone), " +
 			"with ids <id>, <id>-2, <id>-3; the first holds the full entry text as its " +
 			"footnote, a later one its link text or resource, and each body [k] becomes " +
 			"[^id][^id-2]... A resource that two entries name stays one source: the first " +

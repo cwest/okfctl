@@ -380,7 +380,11 @@ and a body that cites it as `[12]`, migrate writes `id: "12"`
 `[^12][^12-2]`, and defines `[^12]:` as the full entry text and `[^12-2]:` as
 `https://b.example/mirror`. A later part is titled only when the entry names
 it with a link. A URL inside a code span (`curl https://…`, a URL template) is
-not a resource and is never split off.
+not a resource and is never split off. When an entry names no resource outside
+code, a code span that holds a full URL and nothing else is read like an
+autolink: `` `https://a.example/docs` and `https://a.example/api` `` become two
+sources. A bare host (`` `api.example.com` ``), a command, or a template with a
+placeholder (`…`, `{id}`, `<term>`) in a code span still names no source.
 
 ## Bundles `migrate` leaves alone
 
