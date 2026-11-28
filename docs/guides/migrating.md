@@ -320,7 +320,10 @@ resolution, or set one on the source afterwards. `--resolve` can name the
 fails the plan and leaves the plan file as it was. Once applied, the
 resolution lives in the node: a later plan sees the entry's text in the
 footnote of a source with an id, so it never reports the entry again, even
-while the `# Citations` list it came from stays.
+while the `# Citations` list it came from stays. Running the same `--resolve`
+again is a no-op, whether the list stayed or went. A resolution that names a
+different resource for an entry a source already holds fails and names the
+resource that source has; change it on the source in frontmatter instead.
 
 ## What `migrate` changes
 

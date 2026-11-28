@@ -95,21 +95,80 @@ func resolutionWrote(rooted func(string) string, want, have string) bool {
 	return !escaped && rootedURL(want, rootRel) == have
 }
 
-// unmatchedResolutions is an error naming every resolution the plan did not
-// use, or nil when it used them all.
-func unmatchedResolutions(idx map[resolutionKey]JudgmentItem, used map[resolutionKey]bool) error {
-	var miss []string
-	for k := range idx {
-		if !used[k] {
-			miss = append(miss, fmt.Sprintf("%s: %q", k.path, k.context))
+// rootedIn returns the §6.2/§12.1 rewrite for a resource named in node rel:
+// a bare resource that resolves only from the bundle root is written
+// `/`-rooted, the form its body link is rewritten to, so it resolves in the
+// v0.3 bundle and a re-plan finds it. Anything else is returned unchanged.
+func rootedIn(b *Bundle, rel string) func(string) string {
+	return func(res string) string {
+		if r := b.ResolvePathField(rel, res); r.Kind == RefBundle && r.Form == FormRootFallback {
+			return rootedURL(res, r.Path)
 		}
+		return res
 	}
-	if len(miss) == 0 {
+}
+
+// replayedResolutions settles the resolutions the citation pass did not use
+// against the sources their nodes already hold. An applied resolution whose
+// entry is held may no longer sit in any list: the apply removes a list once
+// every entry in it is held. When the source holding the entry carries the
+// resource the resolution writes, the resolution is a replay and is marked
+// used. When it carries another, the returned map records that resource, so
+// the error can say the entry is already resolved rather than missing.
+func replayedResolutions(b *Bundle, idx map[resolutionKey]JudgmentItem, used map[resolutionKey]bool) map[resolutionKey]string {
+	conflicts := map[resolutionKey]string{}
+	for k, r := range idx {
+		if used[k] {
+			continue
+		}
+		n := b.Nodes[k.path]
+		if n == nil || n.Frontmatter == nil {
+			continue
+		}
+		s, held := heldSource(frontmatterSources(n.Frontmatter), footnoteDefsOutsideCitations(n.Body), k.context)
+		if !held {
+			continue
+		}
+		if resolutionWrote(rootedIn(b, k.path), r.Resource, s.resource) {
+			used[k] = true
+			continue
+		}
+		conflicts[k] = s.resource
+	}
+	return conflicts
+}
+
+// unmatchedResolutions is an error naming every resolution the plan did not
+// use, or nil when it used them all. A resolution whose entry is already held
+// by a source with another resource (conflicts) says so; any other matches no
+// item.
+func unmatchedResolutions(idx map[resolutionKey]JudgmentItem, used map[resolutionKey]bool, conflicts map[resolutionKey]string) error {
+	var miss, clash []string
+	for k, r := range idx {
+		if used[k] {
+			continue
+		}
+		if have, ok := conflicts[k]; ok {
+			clash = append(clash, fmt.Sprintf("%s: %q is already resolved to %q, not %q", k.path, k.context, have, r.Resource))
+			continue
+		}
+		miss = append(miss, fmt.Sprintf("%s: %q", k.path, k.context))
+	}
+	var errs []string
+	if len(clash) > 0 {
+		sort.Strings(clash)
+		errs = append(errs, fmt.Sprintf("%d resolution(s) name a different resource than the source already holding the entry (edit the source in frontmatter to change it): %s",
+			len(clash), strings.Join(clash, "; ")))
+	}
+	if len(miss) > 0 {
+		sort.Strings(miss)
+		errs = append(errs, fmt.Sprintf("%d resolution(s) match no %s item in the bundle (the entry changed, or the path is wrong): %s",
+			len(miss), JudgmentProseCitation, strings.Join(miss, "; ")))
+	}
+	if len(errs) == 0 {
 		return nil
 	}
-	sort.Strings(miss)
-	return fmt.Errorf("%d resolution(s) match no %s item in the bundle (the entry changed, or the path is wrong): %s",
-		len(miss), JudgmentProseCitation, strings.Join(miss, "; "))
+	return fmt.Errorf("%s", strings.Join(errs, "; and "))
 }
 
 // footnoteDefs maps each footnote label in text (folded) to its definition's

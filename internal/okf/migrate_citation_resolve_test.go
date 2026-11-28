@@ -217,6 +217,8 @@ func TestConformance_MigrateResolve_Section12_ReplayedResolutionIsNoop(t *testin
 		{Path: "a.md", Kind: JudgmentProseCitation, Context: descriptorEntry, Resource: "some other descriptor"},
 	}}); err == nil {
 		t.Errorf("a resolution that disagrees with the held source must fail the plan")
+	} else if !strings.Contains(err.Error(), "already resolved") || !strings.Contains(err.Error(), brunelloDescriptor) {
+		t.Errorf("the error names the resource the entry already has, got: %v", err)
 	}
 }
 
@@ -297,6 +299,84 @@ func TestConformance_MigrateResolve_Section5_1_ResolvedCountsConvertedEntries(t 
 		t.Fatalf("apply: %v", err)
 	}
 	_, again := resolvedPlan(t, dir, descriptorEntry, brunelloDescriptor)
+	if again.Resolved != 0 {
+		t.Errorf("a replay converts nothing: Resolved = %d, want 0", again.Resolved)
+	}
+}
+
+// §12: when every entry is held, the apply removes the `# Citations` list, so
+// the entry a resolution names is no longer in any list. Replaying the same
+// resolution finds it in the footnote of the source it made and is a no-op.
+// One naming a different resource fails, and the error names the resource
+// the entry already has.
+func TestConformance_MigrateResolve_Section12_ReplayOnRemovedListIsNoop(t *testing.T) {
+	dir := mkMigrateBundle(t, kb(descriptorNode))
+	b, plan := resolvedPlan(t, dir, descriptorEntry, brunelloDescriptor)
+	if err := MigrateApply(dir, b, plan); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if out := readRel(t, dir, "a.md"); strings.Contains(out, "# Citations") {
+		t.Fatalf("fixture: every entry is held, so the list goes:\n%s", out)
+	}
+	b = loadMigrate(t, dir)
+	again, err := PlanMigrationWith(b, MigrateOptions{Resolutions: []JudgmentItem{
+		{Path: "a.md", Kind: JudgmentProseCitation, Context: descriptorEntry, Resource: brunelloDescriptor},
+	}})
+	if err != nil {
+		t.Fatalf("§12: replaying the resolution after the list is removed must not fail: %v", err)
+	}
+	if nm := planNodeMigration(again, "a.md"); nm != nil {
+		t.Errorf("§12: a replayed resolution plans no edits, got %+v", *nm)
+	}
+	if again.Resolved != 0 {
+		t.Errorf("a replay converts nothing: Resolved = %d, want 0", again.Resolved)
+	}
+	_, err = PlanMigrationWith(b, MigrateOptions{Resolutions: []JudgmentItem{
+		{Path: "a.md", Kind: JudgmentProseCitation, Context: descriptorEntry, Resource: "some other descriptor"},
+	}})
+	if err == nil {
+		t.Fatalf("a resolution that disagrees with the held source must fail the plan")
+	}
+	if !strings.Contains(err.Error(), "already resolved") || !strings.Contains(err.Error(), brunelloDescriptor) {
+		t.Errorf("the error names the resource the entry already has, got: %v", err)
+	}
+}
+
+// §12.1: the same replay on a removed list, resolved to a root-relative
+// bundle path from a node below the root, matches the `/`-rooted source.
+func TestConformance_MigrateResolve_Section12_ReplayedPathOnRemovedListIsNoop(t *testing.T) {
+	const entry = "[5] VERIFIED (internal) — the spec page in this bundle."
+	dir := mkMigrateBundle(t, map[string]string{
+		"index.md": "# KB\n", "log.md": "# Log\n",
+		"refs/spec.md": "---\ntype: Concept\n---\n\n# Spec\n\nText.\n",
+		"sub/a.md":     "---\ntype: Concept\n---\n\n# Def\n\nThe rule holds [5].\n\n# Citations\n\n" + entry + "\n",
+	})
+	resolve := func() (*Bundle, MigratePlan, error) {
+		b := loadMigrate(t, dir)
+		plan, err := PlanMigrationWith(b, MigrateOptions{Resolutions: []JudgmentItem{
+			{Path: "sub/a.md", Kind: JudgmentProseCitation, Context: entry, Resource: "refs/spec.md"},
+		}})
+		return b, plan, err
+	}
+	b, plan, err := resolve()
+	if err != nil {
+		t.Fatalf("PlanMigrationWith: %v", err)
+	}
+	if err := MigrateApply(dir, b, plan); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	out := readRel(t, dir, "sub/a.md")
+	if strings.Contains(out, "# Citations") {
+		t.Fatalf("fixture: every entry is held, so the list goes:\n%s", out)
+	}
+	wantIn(t, out, "resource: /refs/spec.md")
+	_, again, err := resolve()
+	if err != nil {
+		t.Fatalf("§12: replaying the resolution after the list is removed must not fail: %v", err)
+	}
+	if nm := planNodeMigration(again, "sub/a.md"); nm != nil {
+		t.Errorf("§12: a replayed resolution plans no edits, got %+v", *nm)
+	}
 	if again.Resolved != 0 {
 		t.Errorf("a replay converts nothing: Resolved = %d, want 0", again.Resolved)
 	}

@@ -363,12 +363,7 @@ func planMigration(b *Bundle, generatedBy string, resolutions []JudgmentItem) (M
 		// §6.2/§12.1: a bare resource that resolves only from the bundle
 		// root is written `/`-rooted, the form its body link is rewritten
 		// to, so it resolves in the v0.3 bundle and a re-plan finds it.
-		rooted := func(res string) string {
-			if r := b.ResolvePathField(rel, res); r.Kind == RefBundle && r.Form == FormRootFallback {
-				return rootedURL(res, r.Path)
-			}
-			return res
-		}
+		rooted := rootedIn(b, rel)
 		splits := planCitationSplits(entries, rooted)
 		var held func(string) (noteSource, bool)
 		for i, item := range entries {
@@ -469,7 +464,8 @@ func planMigration(b *Bundle, generatedBy string, resolutions []JudgmentItem) (M
 		}
 		replayTitleCalls(&plan, nm, existing, rel, deferred)
 	}
-	if err := unmatchedResolutions(resolved, usedResolution); err != nil {
+	conflicts := replayedResolutions(b, resolved, usedResolution)
+	if err := unmatchedResolutions(resolved, usedResolution, conflicts); err != nil {
 		return MigratePlan{}, err
 	}
 
