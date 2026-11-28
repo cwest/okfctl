@@ -131,9 +131,11 @@ func planSplitEntry(plan *MigratePlan, nm *NodeMigration, rel, item string, spli
 }
 
 // planCitationSplits returns, for each entry, the split it becomes, or nil
-// when it is not split: it names fewer than two resources outside code, it
-// owns none of them, or it borrows a part from an entry that carries no id
-// (a link reference definition). rooted maps a bare bundle path to the
+// when it is not split: it names fewer than two resources outside code, or it
+// owns none of them. A link reference definition (`[label]: url`) is the
+// target of a `[text][label]` link, not a citation: it gets no id
+// (planSourceIDs) and owns no resource, so an entry that names its resource
+// still owns it and splits. rooted maps a bare bundle path to the
 // `/`-rooted form it is written in (§6.2, §12.1).
 func planCitationSplits(entries []string, rooted func(string) string) []*citationSplit {
 	out := make([]*citationSplit, len(entries))
@@ -141,22 +143,23 @@ func planCitationSplits(entries []string, rooted func(string) string) []*citatio
 	for i, e := range entries {
 		names[i] = citationNames(e)
 	}
-	type owner struct {
-		entry, part int
-		noID        bool
-	}
-	owners := map[string]owner{}
+	// owners maps a resource to the entry and part that own it.
+	owners := map[string]partRef{}
 	// A single-resource entry that converts owns its resource. An
 	// identifier another entry also names is a cross-reference, not the
-	// entry's own document (planMigration), so it owns nothing.
+	// entry's own document (planMigration), so it owns nothing; nor does a
+	// link reference definition.
 	for i, e := range entries {
+		if linkRefDefRe.MatchString(e) {
+			continue
+		}
 		src, ok, fromID := citationSourceFrom(e)
 		if !ok || fromID && citedElsewhere(names, i, canonicalResource(src.Resource)) {
 			continue
 		}
 		k := canonicalResource(rooted(src.Resource))
 		if _, taken := owners[k]; !taken {
-			owners[k] = owner{entry: i, noID: linkRefDefRe.MatchString(e)}
+			owners[k] = partRef{entry: i}
 		}
 	}
 	all := make([][]SourceEdit, len(entries))
@@ -172,18 +175,7 @@ func planCitationSplits(entries []string, rooted func(string) string) []*citatio
 	// owns.
 	own := make([][]SourceEdit, len(entries))
 	for i, parts := range all {
-		// An entry that names a link reference definition's resource
-		// cannot cite it (that source carries no id, §5.1), so it does not
-		// split. It is rejected before it claims a part: a part it claimed
-		// would be borrowed by a later entry from an entry that never
-		// converts, citing an id no source carries.
-		for _, p := range parts {
-			if o, taken := owners[canonicalResource(rooted(p.Resource))]; taken && o.noID {
-				all[i] = nil
-				break
-			}
-		}
-		for j, p := range all[i] {
+		for j, p := range parts {
 			p.Resource = rooted(p.Resource)
 			k := canonicalResource(p.Resource)
 			if _, taken := owners[k]; taken {
@@ -198,7 +190,7 @@ func planCitationSplits(entries []string, rooted func(string) string) []*citatio
 					p.Title, _ = citationName(l)
 				}
 			}
-			owners[k] = owner{entry: i, part: len(own[i])}
+			owners[k] = partRef{entry: i, part: len(own[i])}
 			own[i] = append(own[i], p)
 		}
 	}
@@ -212,7 +204,7 @@ func planCitationSplits(entries []string, rooted func(string) string) []*citatio
 			if o.entry == i {
 				continue
 			}
-			split.borrowed = append(split.borrowed, partRef{entry: o.entry, part: o.part})
+			split.borrowed = append(split.borrowed, o)
 		}
 		out[i] = split
 	}

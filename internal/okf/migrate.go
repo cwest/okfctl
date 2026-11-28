@@ -352,6 +352,12 @@ func planMigration(b *Bundle, generatedBy string, resolutions []JudgmentItem) (M
 		var retitle []retitleCandidate
 		deferred := map[string][]titleCall{}
 		attach := func(i int, res string) {
+			if linkRefDefRe.MatchString(entries[i]) {
+				// A link reference definition is no citation: it
+				// takes no id (planSourceIDs), so it must not hold
+				// the resource against the entry that cites it.
+				return
+			}
 			k := canonicalResource(res)
 			if attached[k] {
 				att[i] = entryAttachment{resource: res, duplicate: true}
@@ -365,7 +371,7 @@ func planMigration(b *Bundle, generatedBy string, resolutions []JudgmentItem) (M
 		// to, so it resolves in the v0.3 bundle and a re-plan finds it.
 		rooted := rootedIn(b, rel)
 		splits := planCitationSplits(entries, rooted)
-		var held func(string) (noteSource, bool)
+		var held func(int) (noteSource, bool)
 		for i, item := range entries {
 			src, ok, fromID := citationSourceFrom(item)
 			res := src.Resource
@@ -376,6 +382,33 @@ func planMigration(b *Bundle, generatedBy string, resolutions []JudgmentItem) (M
 			// judgment. Read from the body only, so a re-plan agrees.
 			if ok && fromID && citedElsewhere(names, i, canonicalResource(res)) {
 				ok = false
+			}
+			if held == nil {
+				srcs, defs := frontmatterSources(n.Frontmatter), footnoteDefsOutsideCitations(n.Body)
+				entryIDs := CitationEntryIDs(entries)
+				held = func(j int) (noteSource, bool) {
+					if linkRefDefRe.MatchString(entries[j]) {
+						return noteSource{}, false
+					}
+					return convertedSource(srcs, defs, entries[j], entryIDs[j].ID)
+				}
+			}
+			// §12: an entry a source's footnote already holds was
+			// converted on an earlier run. When that source carries
+			// another resource than the one this plan would attach (a
+			// URL now read past a line that used to cut the entry, or
+			// the first part of a split that used to be refused), the
+			// earlier conversion stands: converting again would hand a
+			// second source the same id.
+			if ok || splits[i] != nil {
+				own := rooted(res)
+				if !ok {
+					own = splits[i].parts[0].Resource
+				}
+				if s, isHeld := held(i); isHeld && canonicalResource(own) != canonicalResource(s.resource) && !resolutionWrote(rooted, own, s.resource) {
+					ok = false
+					splits[i] = nil
+				}
 			}
 			if !ok && splits[i] != nil {
 				att[i] = planSplitEntry(&plan, nm, rel, item, splits[i], existing, srcIDs, added)
@@ -389,12 +422,8 @@ func planMigration(b *Bundle, generatedBy string, resolutions []JudgmentItem) (M
 				// was resolved on an earlier run; one the person resolves
 				// now takes the resource they wrote. Anything else stays
 				// for judgment (migrate_citation_resolve.go).
-				if held == nil {
-					srcs, defs := frontmatterSources(n.Frontmatter), footnoteDefsOutsideCitations(n.Body)
-					held = func(e string) (noteSource, bool) { return heldSource(srcs, defs, e) }
-				}
 				k := resolutionKey{rel, item}
-				if s, isHeld := held(item); isHeld {
+				if s, isHeld := held(i); isHeld {
 					// A resolution replayed after its apply agrees
 					// with the source; one that names another resource
 					// stays unused and fails the plan.
