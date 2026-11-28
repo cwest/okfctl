@@ -143,10 +143,8 @@ func planCitationSplits(entries []string, rooted func(string) string) []*citatio
 	for i, e := range entries {
 		names[i] = citationNames(e)
 	}
-	type owner struct {
-		entry, part int
-	}
-	owners := map[string]owner{}
+	// owners maps a resource to the entry and part that own it.
+	owners := map[string]partRef{}
 	// A single-resource entry that converts owns its resource. An
 	// identifier another entry also names is a cross-reference, not the
 	// entry's own document (planMigration), so it owns nothing; nor does a
@@ -161,7 +159,7 @@ func planCitationSplits(entries []string, rooted func(string) string) []*citatio
 		}
 		k := canonicalResource(rooted(src.Resource))
 		if _, taken := owners[k]; !taken {
-			owners[k] = owner{entry: i}
+			owners[k] = partRef{entry: i}
 		}
 	}
 	all := make([][]SourceEdit, len(entries))
@@ -192,7 +190,7 @@ func planCitationSplits(entries []string, rooted func(string) string) []*citatio
 					p.Title, _ = citationName(l)
 				}
 			}
-			owners[k] = owner{entry: i, part: len(own[i])}
+			owners[k] = partRef{entry: i, part: len(own[i])}
 			own[i] = append(own[i], p)
 		}
 	}
@@ -206,7 +204,7 @@ func planCitationSplits(entries []string, rooted func(string) string) []*citatio
 			if o.entry == i {
 				continue
 			}
-			split.borrowed = append(split.borrowed, partRef{entry: o.entry, part: o.part})
+			split.borrowed = append(split.borrowed, o)
 		}
 		out[i] = split
 	}
