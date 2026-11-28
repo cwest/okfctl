@@ -32,9 +32,9 @@ import (
 // An entry with no URL or path but exactly one DOI, arXiv id, PubMed id or
 // valid ISBN gets its resource built from that identifier (identifierResource).
 // An entry with no resource is a judgment item. An entry with two or more is
-// split into one source per resource (citationSourcesFrom,
-// planCitationSplits), unless one of its resources is also named by another
-// entry, which keeps it for judgment.
+// split into one source per resource it owns (citationSourcesFrom,
+// planCitationSplits); a resource another entry also names stays one source,
+// and an entry that owns none of its resources stays for judgment.
 
 var (
 	// citationBulletRe matches a plain bullet entry (`- ...` / `* ...`); the

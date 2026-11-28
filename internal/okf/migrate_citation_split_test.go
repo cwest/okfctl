@@ -210,25 +210,27 @@ func TestConformance_MigrateSplit_Section5_1_ExcerptIsNoPartTitle(t *testing.T) 
 	}
 }
 
-// Negative control: a part whose resource another entry in the node already
-// holds would need two ids on one source, so the entry stays a prose-citation
-// item and nothing is split; the body reference stays as written.
+// Negative control: an entry whose every resource another entry owns names no
+// work of its own, so it gets no source: it stays a prose-citation item and
+// its body reference stays as written. (An entry that also owns a part splits
+// and cites the owner for the shared one; see migrate_citation_shared_test.go.)
 func TestConformance_MigrateSplit_Section5_1_PartSharedWithAnotherEntryStaysJudgment(t *testing.T) {
-	node := "---\ntype: Concept\n---\n\n# Def\n\nFirst [1]. Second [2].\n\n# Citations\n\n" +
+	node := "---\ntype: Concept\n---\n\n# Def\n\nFirst [1]. Other [2]. Third [3].\n\n# Citations\n\n" +
 		"[1] VERIFIED — page https://same.example/\n" +
-		"[2] VERIFIED — same page https://same.example/ and https://other.example/\n"
+		"[2] VERIFIED — other https://other.example/\n" +
+		"[3] VERIFIED — same page https://same.example/ and https://other.example/\n"
 	dir := mkMigrateBundle(t, kb(node))
 	b, plan := planFor(t, dir, "", false)
 	j := findJudgment(t, plan, "a.md", JudgmentProseCitation)
-	if !strings.Contains(j.Context, "[2]") {
+	if !strings.Contains(j.Context, "[3]") {
 		t.Fatalf("the entry sharing a part must be the judgment item, got %q", j.Context)
 	}
 	if err := MigrateApply(dir, b, plan); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 	out := readRel(t, dir, "a.md")
-	if !strings.Contains(out, "First [^1]. Second [2].") || strings.Contains(out, "other.example/\n    ") {
-		t.Fatalf("only entry 1 converts; entry 2 is left whole:\n%s", out)
+	if !strings.Contains(out, "First [^1]. Other [^2]. Third [3].") || strings.Contains(out, "[^3]") {
+		t.Fatalf("entries 1 and 2 convert; entry 3 is left whole:\n%s", out)
 	}
 }
 

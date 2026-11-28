@@ -263,3 +263,25 @@ func TestConformance_MigrateRemoveCitations_Section5_1_FootnoteWithAppendedTextR
 		t.Fatalf("§4.2: entry text plus appended text must allow removal: %+v / %+v", nm, plan.Judgment)
 	}
 }
+
+// Regression: the entry's text is held by the footnote of its second part, but
+// its first resource is no source's resource. Removing the list would lose
+// that resource, so the report names it (§5.1).
+func TestConformance_MigrateRemoveCitations_Section5_1_HeldByLaterPartStillChecksFirst(t *testing.T) {
+	node := "---\ntype: Concept\nsources:\n" +
+		"  - id: \"1\"\n    resource: \"https://b.example/\"\n" +
+		"---\n\n# Def\n\nA claim [^1].\n\n" +
+		"[^1]: VERIFIED — https://a.example/ and https://b.example/\n\n" +
+		"# Citations\n\n" +
+		"- [1] VERIFIED — https://a.example/ and https://b.example/\n"
+	dir := mkMigrateBundle(t, kb(node))
+	b := loadMigrate(t, dir)
+	lost, has := citationListLoss(b, "a.md", []byte(node))
+	if !has {
+		t.Fatal("the node has a # Citations list")
+	}
+	t.Logf("lost=%q", lost)
+	if len(lost) != 1 || !strings.Contains(lost[0], "https://a.example/ is not a source") {
+		t.Fatalf("§5.1: report must name the missing first resource, got %q", lost)
+	}
+}

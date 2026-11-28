@@ -27,11 +27,22 @@ import "strconv"
 // prose. A body `[k]` that cites the entry becomes one footnote per part
 // (`[^12][^12-2]`, §4.2), so per-claim attribution reaches every part.
 //
-// An entry is split only when no part is named by another entry of the same
-// list: a source holds one id, so a shared part would need two. Such an entry
-// stays a prose-citation item. A part already in frontmatter `sources` (an
-// earlier run, or the author) is not added again (§12); it keeps its id when
-// it has one.
+// A resource that two entries name is still one source with one id (§5.1).
+// Its owner is the first entry that names it alone (a single-resource entry
+// that converts), or, when none does, the first splittable entry that names
+// it. A split entry adds a source only for the parts it owns, in the order
+// it names them; its first owned part is its primary source and holds its
+// full text. A part another entry owns is borrowed: the entry's body `[k]`
+// also cites the owner's id (`[^5][^2-2]`), so the claim stays attributed to
+// every resource the entry names. The name an entry marks titles its primary
+// only when the primary is the entry's first resource: a borrowed first
+// resource takes the name with it, and the owned part is titled by its own
+// link text or not at all. An entry that owns no part names nothing of its
+// own (every resource it names is another entry's work) and stays a
+// prose-citation item, read through the §12.1 fallback. A part already in
+// frontmatter `sources` (an earlier run, or the author) is not added again
+// (§12); it keeps its id when it has one. Ownership is read from the body
+// list alone, so a re-plan agrees.
 
 // splitPart is a later part (the second onward) of a split entry: its
 // resource, the id its source already carries ("" when none), and the text of
@@ -40,6 +51,19 @@ type splitPart struct {
 	resource   string
 	existingID string
 	def        string
+}
+
+// partRef names the source a borrowed part cites: the owner entry's index and
+// the owned part's position in it (0 is the owner's primary source).
+type partRef struct {
+	entry, part int
+}
+
+// citationSplit is the split of one entry: the sources it owns, in the order
+// it names them, and the sources of other entries it borrows.
+type citationSplit struct {
+	parts    []SourceEdit
+	borrowed []partRef
 }
 
 // splitPartID is the id of the n-th part (n >= 2) of the entry whose id is id.
@@ -56,15 +80,26 @@ func (a entryAttachment) partResources() []string {
 	return out
 }
 
+// partLink is the `[text](target)` span that names the j-th resource of a
+// citation entry, or "" when that resource is a bare URL.
+func partLink(entry string, j int) string {
+	parts, _, _ := citationResources(entryText(entry))
+	if j < len(parts) {
+		return parts[j].link
+	}
+	return ""
+}
+
 // planSplitEntry plans the sources of one split entry and returns its
-// attachment. Each part not yet in `sources` is added (§5.1); a part already
-// there is not added again (§12). The first part's title is handled as for a
-// single-resource entry: a missing one is filled with the name the entry
-// marks, and an unnamed first part is a source-title-unnamed item. A later
+// attachment. Each owned part not yet in `sources` is added (§5.1); a part
+// already there is not added again (§12). The first owned part's title is
+// handled as for a single-resource entry: a missing one is filled with its
+// name, and an unnamed first part is a source-title-unnamed item. A later
 // part already in `sources` gets its link text as title only when it has
 // none. srcIDs are the ids the node's sources carry, so a re-plan keeps them.
-func planSplitEntry(plan *MigratePlan, nm *NodeMigration, rel, item string, parts []SourceEdit,
+func planSplitEntry(plan *MigratePlan, nm *NodeMigration, rel, item string, split *citationSplit,
 	existing map[string]sourceTitle, srcIDs map[string]string, added map[string]bool) entryAttachment {
+	parts := split.parts
 	for k, p := range parts {
 		if cur, found := lookupSourceTitle(existing, p.Resource); found {
 			parts[k].Resource = cur.resource
@@ -88,50 +123,98 @@ func planSplitEntry(plan *MigratePlan, nm *NodeMigration, rel, item string, part
 		added[p.Resource] = true
 		added[canonicalResource(p.Resource)] = true
 	}
-	att := entryAttachment{resource: parts[0].Resource, existingID: srcIDs[parts[0].Resource]}
+	att := entryAttachment{resource: parts[0].Resource, existingID: srcIDs[parts[0].Resource], borrowed: split.borrowed}
 	for _, p := range parts[1:] {
 		att.parts = append(att.parts, splitPart{resource: p.Resource, existingID: srcIDs[p.Resource], def: p.Title})
 	}
 	return att
 }
 
-// planCitationSplits returns, for each entry, the sources it splits into, or
-// nil when it is not split: it names fewer than two resources outside code,
-// or a part is also named by another entry in the list. rooted maps a bare
-// bundle path to the `/`-rooted form it is written in (§6.2, §12.1).
-func planCitationSplits(entries []string, rooted func(string) string) [][]SourceEdit {
-	out := make([][]SourceEdit, len(entries))
-	owners := map[string]int{} // canonical resource -> entries naming it
-	named := make([][]string, len(entries))
+// planCitationSplits returns, for each entry, the split it becomes, or nil
+// when it is not split: it names fewer than two resources outside code, it
+// owns none of them, or it borrows a part from an entry that carries no id
+// (a link reference definition). rooted maps a bare bundle path to the
+// `/`-rooted form it is written in (§6.2, §12.1).
+func planCitationSplits(entries []string, rooted func(string) string) []*citationSplit {
+	out := make([]*citationSplit, len(entries))
+	names := make([]map[string]bool, len(entries))
 	for i, e := range entries {
-		parts, _, _ := citationResources(entryText(e))
-		for _, p := range parts {
-			k := canonicalResource(rooted(p.resource))
-			named[i] = append(named[i], k)
-			owners[k]++
+		names[i] = citationNames(e)
+	}
+	type owner struct {
+		entry, part int
+		noID        bool
+	}
+	owners := map[string]owner{}
+	// A single-resource entry that converts owns its resource. An
+	// identifier another entry also names is a cross-reference, not the
+	// entry's own document (planMigration), so it owns nothing.
+	for i, e := range entries {
+		src, ok, fromID := citationSourceFrom(e)
+		if !ok || fromID && citedElsewhere(names, i, canonicalResource(src.Resource)) {
+			continue
+		}
+		k := canonicalResource(rooted(src.Resource))
+		if _, taken := owners[k]; !taken {
+			owners[k] = owner{entry: i, noID: linkRefDefRe.MatchString(e)}
 		}
 	}
+	all := make([][]SourceEdit, len(entries))
 	for i, e := range entries {
 		if linkRefDefRe.MatchString(e) {
 			continue
 		}
-		srcs, ok := citationSourcesFrom(e)
-		if !ok {
-			continue
+		if parts, ok := citationSourcesFrom(e); ok {
+			all[i] = parts
 		}
-		shared := false
-		for _, k := range named[i] {
-			if owners[k] > 1 {
-				shared = true
+	}
+	// A splittable entry owns, in list order, each part no earlier entry
+	// owns.
+	own := make([][]SourceEdit, len(entries))
+	for i, parts := range all {
+		// An entry that names a link reference definition's resource
+		// cannot cite it (that source carries no id, §5.1), so it does not
+		// split. It is rejected before it claims a part: a part it claimed
+		// would be borrowed by a later entry from an entry that never
+		// converts, citing an id no source carries.
+		for _, p := range parts {
+			if o, taken := owners[canonicalResource(rooted(p.Resource))]; taken && o.noID {
+				all[i] = nil
+				break
 			}
 		}
-		if shared {
-			continue
+		for j, p := range all[i] {
+			p.Resource = rooted(p.Resource)
+			k := canonicalResource(p.Resource)
+			if _, taken := owners[k]; taken {
+				continue
+			}
+			if j > 0 && len(own[i]) == 0 {
+				// The first resource is borrowed and carries the name the
+				// entry marks; the first owned part keeps only its own
+				// link text (citationName of its link), or no title.
+				p.Title = ""
+				if l := partLink(entries[i], j); l != "" {
+					p.Title, _ = citationName(l)
+				}
+			}
+			owners[k] = owner{entry: i, part: len(own[i])}
+			own[i] = append(own[i], p)
 		}
-		for k := range srcs {
-			srcs[k].Resource = rooted(srcs[k].Resource)
+	}
+	for i, parts := range all {
+		if len(own[i]) == 0 {
+			continue // owns nothing: kept for judgment
 		}
-		out[i] = srcs
+		split := &citationSplit{parts: own[i]}
+		for _, p := range parts {
+			o := owners[canonicalResource(rooted(p.Resource))]
+			if o.entry == i {
+				continue
+			}
+			split.borrowed = append(split.borrowed, partRef{entry: o.entry, part: o.part})
+		}
+		out[i] = split
 	}
 	return out
 }
