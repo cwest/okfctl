@@ -172,7 +172,18 @@ func planCitationSplits(entries []string, rooted func(string) string) []*citatio
 	// owns.
 	own := make([][]SourceEdit, len(entries))
 	for i, parts := range all {
-		for j, p := range parts {
+		// An entry that names a link reference definition's resource
+		// cannot cite it (that source carries no id, §5.1), so it does not
+		// split. It is rejected before it claims a part: a part it claimed
+		// would be borrowed by a later entry from an entry that never
+		// converts, citing an id no source carries.
+		for _, p := range parts {
+			if o, taken := owners[canonicalResource(rooted(p.Resource))]; taken && o.noID {
+				all[i] = nil
+				break
+			}
+		}
+		for j, p := range all[i] {
 			p.Resource = rooted(p.Resource)
 			k := canonicalResource(p.Resource)
 			if _, taken := owners[k]; taken {
@@ -200,10 +211,6 @@ func planCitationSplits(entries []string, rooted func(string) string) []*citatio
 			o := owners[canonicalResource(rooted(p.Resource))]
 			if o.entry == i {
 				continue
-			}
-			if o.noID {
-				split = nil
-				break
 			}
 			split.borrowed = append(split.borrowed, partRef{entry: o.entry, part: o.part})
 		}

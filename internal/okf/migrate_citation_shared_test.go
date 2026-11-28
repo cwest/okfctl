@@ -263,3 +263,55 @@ func TestConformance_MigrateSplitShared_Section12_RerunPlansZeroEdits(t *testing
 		t.Fatalf("§12: re-applying the same plan changed the tree:\n%s", readRel(t, dir, "a.md"))
 	}
 }
+
+// Regression: [1] is a link reference definition, so its resource gets no id
+// (planSourceIDs) and no entry may borrow it. [2] names that resource, so it
+// cannot split, and it must not claim its other part either: [3] then owns
+// b.example itself instead of citing an id no source carries (§5.1 one id
+// per source; §4.2 every footnote reference has a definition).
+func TestConformance_MigrateSplitShared_Section5_1_RejectedSplitClaimsNoPart(t *testing.T) {
+	node := "---\ntype: Concept\n---\n\n# Def\n\nOne [2]. Two [3].\n\n# Citations\n\n" +
+		"[1]: https://a.example/\n" +
+		"[2] VERIFIED — https://a.example/ and https://b.example/\n" +
+		"[3] VERIFIED — https://b.example/ and https://c.example/\n"
+	dir, plan := migrateOnce(t, kb(node))
+	out := readRel(t, dir, "a.md")
+	if strings.Contains(out, "[^2]") {
+		t.Errorf("§5.1: [2] borrows a no-id resource and must not convert:\n%s", out)
+	}
+	nm := findNodeMigration(t, plan, "a.md")
+	got := map[string]bool{}
+	for _, s := range nm.Sources {
+		got[s.Resource] = true
+	}
+	if !got["https://b.example/"] || !got["https://c.example/"] {
+		t.Errorf("§5.1: [3] owns b.example and c.example, got %+v", nm.Sources)
+	}
+	wantIn(t, out, "One [2].", "Two [^3]")
+	mustValidate(t, dir)
+}
+
+// Regression, the r.part >= 1 shape: [2] would own b.example as its second
+// claimed part before being rejected; [3] borrowing it must not index a part
+// list [2] never got.
+func TestConformance_MigrateSplitShared_Section5_1_RejectedSplitLaterPartNotBorrowed(t *testing.T) {
+	node := "---\ntype: Concept\n---\n\n# Def\n\nOne [2]. Two [3].\n\n# Citations\n\n" +
+		"[1]: https://a.example/\n" +
+		"[2] VERIFIED — https://x.example/ and https://b.example/ and https://a.example/\n" +
+		"[3] VERIFIED — https://b.example/ and https://c.example/\n"
+	dir, _ := migrateOnce(t, kb(node))
+	out := readRel(t, dir, "a.md")
+	if strings.Contains(out, "[^2]") {
+		t.Errorf("§5.1: [2] must not convert:\n%s", out)
+	}
+	wantIn(t, out, "Two [^3]", "[^3]: VERIFIED — https://b.example/ and https://c.example/")
+	splits := planCitationSplits(strings.Split(strings.TrimSpace(node[strings.Index(node, "[1]:"):]), "\n"),
+		func(s string) string { return s })
+	if splits[1] != nil {
+		t.Errorf("§5.1: [2] must not split: %+v", splits[1])
+	}
+	if s := splits[2]; s == nil || len(s.parts) != 2 || len(s.borrowed) != 0 {
+		t.Errorf("§5.1: [3] owns both its parts and borrows none, got %+v", s)
+	}
+	mustValidate(t, dir)
+}

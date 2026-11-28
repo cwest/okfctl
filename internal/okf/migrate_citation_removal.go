@@ -223,8 +223,11 @@ func citationListLoss(b *Bundle, rel string, raw []byte) (lost []string, has boo
 		case !holdsEntry(def, collapse(footnoteText(entry, src.id))):
 			lost = append(lost, fmt.Sprintf("%s: footnote [^%s] does not hold the entry's text", name, src.id))
 		}
+		// The switch reports a missing first resource only when no other
+		// part holds the text; once one does, first is checked here with
+		// the rest, so every resource the entry names stays a source.
 		for _, p := range parts {
-			if _, ok := matchSource(p.resource); !ok && p.resource != first {
+			if _, ok := matchSource(p.resource); !ok && (held || p.resource != first) {
 				lost = append(lost, fmt.Sprintf("%s: %s is not a source's resource", name, p.resource))
 			}
 		}
