@@ -96,7 +96,9 @@ func newLintCmd() *cobra.Command {
 			"                             with an offset nor a plain date\n" +
 			"    verified-event           a verified event missing by or at (§5.2)\n" +
 			"    superseded-by            a superseded_by that finds no concept, or sits on a\n" +
-			"                             node that isn't deprecated\n\n" +
+			"                             node that isn't deprecated\n" +
+			"    footnote-definition      a footnote label defined twice, or a definition with\n" +
+			"                             no text (§4.2)\n\n" +
 			"A link to a file that exists nowhere isn't a finding. The spec treats it as " +
 			"knowledge no one has written (§6.1). analyze lists it under coverage. The two " +
 			"hygiene checks group spellings that look alike, but two tags can look alike and " +

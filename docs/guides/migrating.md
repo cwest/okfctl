@@ -434,7 +434,9 @@ present, is bumped too.
 - a body `[k]` that names an entry of the node but sits within 60 characters
   of the word "brief", "citation", or "node" (plurals too, not "inode" or
   "briefing"), or of a link, in the same paragraph, list item, or table row; or
-  is the label of an undefined `[text][k]` reference (`citation-ref-unclear`).
+  is the label of an undefined `[text][k]` reference; or opens a line and is
+  followed by a colon, since `[^k]:` there is a footnote definition, not a
+  reference (`citation-ref-unclear`).
   It may point at another document's list, so it stays as written. A heading
   or the next paragraph doesn't count, and a `[k]` in code is never a
   reference.

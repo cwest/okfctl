@@ -670,6 +670,10 @@ func scanCitationRefs(body string, nodeKeys map[string]bool, refKeys map[string]
 			unclear = append(unclear, ctx) // label of an undefined `[text][k]`
 			continue
 		}
+		if opensFootnoteDef(body, s, e) {
+			unclear = append(unclear, ctx) // `[^k]:` would be a definition
+			continue
+		}
 		bs, be := refBlock(masked, s, e)
 		if refNearRe.MatchString(masked[max(bs, s-refWindow):s]) || refNearRe.MatchString(masked[e:min(be, e+refWindow)]) {
 			unclear = append(unclear, ctx)
@@ -694,6 +698,23 @@ func scanCitationRefs(body string, nodeKeys map[string]bool, refKeys map[string]
 		rewrites = append(rewrites, refRewrite{start: s, end: e, old: old, new: nb.String()})
 	}
 	return rewrites, unclear
+}
+
+// defLinePrefixRe matches the text a footnote definition may follow on its
+// line: block quote and list markers, then up to three spaces. It is read
+// leniently, so a reference it holds back by mistake is only reported.
+var defLinePrefixRe = regexp.MustCompile(`^(?:[ \t]*(?:>|[-*+]|\d{1,9}[.)])[ \t]*)*[ \t]{0,3}$`)
+
+// opensFootnoteDef reports whether the reference body[s:e] opens its line and
+// is followed by `:`. Rewritten, it would read `[^k]:`, which GFM parses as a
+// footnote definition (§4.2), not a reference: the node would get a second,
+// empty definition for k.
+func opensFootnoteDef(body string, s, e int) bool {
+	if e >= len(body) || body[e] != ':' {
+		return false
+	}
+	ls := strings.LastIndexByte(body[:s], '\n') + 1
+	return defLinePrefixRe.MatchString(body[ls:s])
 }
 
 // refContext is the judgment context for a reference: the reference and the

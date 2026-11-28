@@ -164,6 +164,7 @@ for it to be reported (the default is 3).
 | `timestamp-form` | a §5 timestamp (`generated.at`, `verified[].at`, `stale_after`, `sources[].last_modified`, `usage_window.from`/`to`) isn't an RFC 3339 date-time with an offset or a plain date; an unparseable `stale_after` reads as stale | add the offset (`2026-06-20T10:00:00Z`) or use a date |
 | `verified-event` | a `verified` event lacks `by` or `at`, so consumers ignore it (§5.2) | add the missing field, or delete the event |
 | `superseded-by` | `superseded_by` points at no concept, or sits on a concept whose `status` isn't `deprecated` (§5.4) | fix the target, or set `status: deprecated` |
+| `footnote-definition` | a footnote label is defined more than once (labels match case-insensitively), or a definition has no text (§4.2) | keep one definition per label, holding the citation text |
 | `status-lifecycle` | `status` holds a value §5.4 doesn't define, so the concept isn't treated as stable | use `draft`, `stable`, or `deprecated`; move an epistemic grade to `epistemic` |
 
 None of these will make `validate` fail, as OKF v0.3 §11 leaves such a bundle

@@ -91,7 +91,8 @@ func newMigrateCmd() *cobra.Command {
 			"holds its text. " +
 			"citation-ref-unclear marks a body [k] near the word \"brief\", \"citation\", or " +
 			"\"node\", or a link, in the same paragraph, list item, or table row, or the label of " +
-			"an undefined [text][k]; citation-unattached a second entry for one resource, and " +
+			"an undefined [text][k], or a [k] that opens a line before a colon ([^k]: would be a " +
+			"footnote definition); citation-unattached a second entry for one resource, and " +
 			"source-id-collision a node whose ids would collide. citations-kept marks a " +
 			"# Citations list that removing would lose something from, and names each entry " +
 			"and what it would lose. " +

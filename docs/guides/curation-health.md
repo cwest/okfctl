@@ -96,7 +96,7 @@ probably meant:
   `sources[].last_modified`, and `usage_window` the same way. If `stale_after`
   won't parse, the node counts as stale.
 
-This bundle doesn't trip six more checks:
+This bundle doesn't trip seven more checks:
 
 - `orphan` is a node nothing links to. A directory's `index.md` counts as a
   link.
@@ -110,6 +110,8 @@ This bundle doesn't trip six more checks:
   requires one, and consumers skip the entry.
 - `spec-version` is a node with its own `okf_spec_version`. The version
   belongs only on the root `index.md` (§12).
+- `footnote-definition` is a footnote label defined twice in one node, or a
+  definition with no text. A reference finds only one definition (§4.2).
 
 ## `eval transparency`: can a reader tell where this came from?
 
