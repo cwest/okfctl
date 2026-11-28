@@ -49,9 +49,9 @@ const (
 	// case folding. The node gets no ids, footnotes or reference rewrites.
 	JudgmentSourceIDCollision JudgmentKind = "source-id-collision"
 	// JudgmentCitationRef: a body `[k]` that names an entry of this node but
-	// sits near "brief", "citation", "node", or a link, or is the label of
-	// an undefined `[text][k]` reference. It may name another document's
-	// list, so it is left as written.
+	// sits near the word "brief", "citation", or "node", or a link, in its
+	// own block, or is the label of an undefined `[text][k]` reference. It
+	// may name another document's list, so it is left as written.
 	JudgmentCitationRef JudgmentKind = "citation-ref-unclear"
 	// JudgmentCitationUnattached: a second entry for a resource another
 	// entry already holds. A source carries one id, so this entry gets no
@@ -450,15 +450,62 @@ var (
 	// inlineCodeSpanRe matches a one-line inline code span.
 	inlineCodeSpanRe = regexp.MustCompile("`+[^`\n]*`+")
 	// refNearRe is the text near a reference that may mean it names another
-	// document's list: "brief", "citation", "node", or a link.
-	refNearRe = regexp.MustCompile(`(?i)brief|citation|node|\]\(|https?://`)
+	// document's list: the words "brief", "citation", or "node" (plurals
+	// too, but not "inode" or "briefing"), or a link.
+	refNearRe = regexp.MustCompile(`(?i)\b(?:brief|citation|node)s?\b|\]\(|https?://`)
+	// blockOpenRe matches a line that opens its own block: an ATX heading,
+	// a list item, or a table row. A line before it is in another block.
+	blockOpenRe = regexp.MustCompile(`^ {0,3}(?:#{1,6}(?:[ 	]|$)|[-*+][ 	]|\d{1,9}[.)][ 	]|\|)`)
+	// headingLineRe matches an ATX heading line, a block of one line.
+	headingLineRe = regexp.MustCompile(`^ {0,3}#{1,6}(?:[ 	]|$)`)
 	// keyShapedRe is a bracket that reads as a citation: one or more keys
 	// (`3`, `1, 2`, `S1`) or a footnote reference (`^3`).
 	keyShapedRe = regexp.MustCompile(`^\^?[A-Za-z0-9-]+(?:, ?[A-Za-z0-9-]+)*$`)
 )
 
-// refWindow is how far from a reference refNearRe looks, in bytes.
+// refWindow is how far from a reference refNearRe looks, in bytes. The window
+// never leaves the reference's block (refBlock).
 const refWindow = 60
+
+// refBlock returns the span of the block that holds masked[s:e]: its
+// paragraph, list item, table row, or heading line. A blank line (masked
+// code counts as blank) ends a block, and a heading, list item, or table row
+// line starts a new one. Words in another block do not qualify a reference
+// (§4.2): a heading after it or the next list item is not what it cites.
+func refBlock(masked string, s, e int) (int, int) {
+	lineAt := func(i int) (int, int) {
+		a := strings.LastIndexByte(masked[:i], '\n') + 1
+		z := strings.IndexByte(masked[i:], '\n')
+		if z < 0 {
+			return a, len(masked)
+		}
+		return a, i + z
+	}
+	blank := func(l string) bool { return strings.TrimSpace(l) == "" }
+	start, _ := lineAt(s)
+	_, end := lineAt(max(s, e-1))
+	first := masked[start:end]
+	if headingLineRe.MatchString(first) {
+		return start, end
+	}
+	for !blockOpenRe.MatchString(masked[start:]) && start > 0 {
+		pa, pz := lineAt(start - 1)
+		prev := masked[pa:pz]
+		if blank(prev) || headingLineRe.MatchString(prev) {
+			break
+		}
+		start = pa
+	}
+	for end < len(masked) {
+		na, nz := lineAt(end + 1)
+		next := masked[na:nz]
+		if blank(next) || blockOpenRe.MatchString(next) {
+			break
+		}
+		end = nz
+	}
+	return start, end
+}
 
 // maskBody returns body with every region a citation reference cannot be in
 // replaced by spaces of the same length, so offsets still line up: code
@@ -602,7 +649,8 @@ func scanCitationRefs(body string, nodeKeys map[string]bool, refKeys map[string]
 			unclear = append(unclear, ctx) // label of an undefined `[text][k]`
 			continue
 		}
-		if refNearRe.MatchString(masked[max(0, s-refWindow):s]) || refNearRe.MatchString(masked[e:min(len(masked), e+refWindow)]) {
+		bs, be := refBlock(masked, s, e)
+		if refNearRe.MatchString(masked[max(bs, s-refWindow):s]) || refNearRe.MatchString(masked[e:min(be, e+refWindow)]) {
 			unclear = append(unclear, ctx)
 			continue
 		}

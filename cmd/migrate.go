@@ -84,8 +84,9 @@ func newMigrateCmd() *cobra.Command {
 			"source-title-conflict one that names a different work than its source's title, " +
 			"and source-title-unpreserved a whole-entry title kept because no footnote " +
 			"holds its text. " +
-			"citation-ref-unclear marks a body [k] near \"brief\", \"citation\", \"node\", or a " +
-			"link, citation-unattached a second entry for one resource, and " +
+			"citation-ref-unclear marks a body [k] near the word \"brief\", \"citation\", or " +
+			"\"node\", or a link, in the same paragraph, list item, or table row, or the label of " +
+			"an undefined [text][k]; citation-unattached a second entry for one resource, and " +
 			"source-id-collision a node whose ids would collide. citations-kept marks a " +
 			"# Citations list that removing would lose something from, and names each entry " +
 			"and what it would lose. " +

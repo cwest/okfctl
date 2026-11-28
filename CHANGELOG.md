@@ -11,6 +11,18 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ## [Unreleased]
 
+### Changed
+
+- `migrate` holds back fewer body `[k]` references as `citation-ref-unclear`
+  (§4.2, §5.1). The words that may point at another document's list
+  ("brief", "citation", "node", or a link) now count only in the reference's
+  own paragraph, list item, or table row, so a heading or the next paragraph
+  after `[1]` no longer blocks it. They also match only as whole words, so
+  "inode", "node2vec", "briefing", and "elicitation" no longer do. On a real
+  knowledge base this rewrote 141 more references to footnotes and
+  removed 7 more `# Citations` lists, with nothing lost: `citation-ref-unclear`
+  went from 567 to 396 and `citations-kept` from 324 to 317.
+
 ## [0.8.0] - 2026-11-27
 
 `migrate` now deletes a node's body `# Citations` list (§4.2) when the
