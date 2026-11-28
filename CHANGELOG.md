@@ -13,6 +13,18 @@ tagged release, goreleaser generates the release notes from the commit log
 
 ### Changed
 
+- `migrate` now splits a `# Citations` entry when one of its resources is
+  also named by another entry (§5.1, §6.2). That resource stays one source
+  with one id. The first entry that names it alone owns it, or else the
+  first entry that splits. Every other entry's body `[k]` also cites that
+  source's id. The entry gets sources only for the parts it owns, and its
+  first owned part holds its full text as the footnote. The shared resource
+  can be a bundle-path link, an `<a> · <b>` autolink list, or a DOI. An entry
+  whose every resource is owned by another entry names no work of its own and
+  stays a `prose-citation` item. On a real knowledge base, `prose-citation`
+  fell from 720 to 669 and 110 more sources were added (180, up from 70).
+  Nothing was lost: no source removed, every URL, link, and entry text still
+  in its node. A re-plan makes 0 edits.
 - `migrate` holds back fewer body `[k]` references as `citation-ref-unclear`
   (§4.2, §5.1). The words that may point at another document's list
   ("brief", "citation", "node", or a link) now count only in the reference's

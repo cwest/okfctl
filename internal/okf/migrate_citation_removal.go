@@ -29,8 +29,10 @@ import (
 //     leading `[id]` dropped only when it became the id: footnoteText) is,
 //     whitespace collapsed, the text of a footnote definition whose label is
 //     a `sources[].id`, or the start of it followed by a space (holdsEntry:
-//     a moved title annotation comes after the entry's text). A split
-//     entry's first part holds it.
+//     a moved title annotation comes after the entry's text). The footnote
+//     belongs to one of the entry's own sources: a split entry's first owned
+//     part holds it, which is its first part unless another entry owns that
+//     one (planCitationSplits).
 //   - every resource the entry names (citationResources: link targets and
 //     URLs outside code) is some source's `resource`.
 //   - the section holds nothing but entries: a status-key line or group
@@ -177,20 +179,41 @@ func citationListLoss(b *Bundle, rel string, raw []byte) (lost []string, has boo
 			lost = append(lost, fmt.Sprintf("line %q is a link reference definition, not a citation", collapse(entry)))
 			continue
 		}
-		// The entry's first source: its first resource, or the one built
-		// from its identifier (identifierResource) when it names none.
+		// The entry's sources: its resources, or the one built from its
+		// identifier (identifierResource) when it names none. Its text must
+		// open the footnote of one of them: the first, or, when another
+		// entry owns that one, the part this entry owns
+		// (planCitationSplits).
 		parts, rest, _ := citationResources(entryText(entry))
+		var cands []string
+		for _, p := range parts {
+			cands = append(cands, p.resource)
+		}
+		if len(cands) == 0 {
+			if res, ok := identifierResource(rest); ok {
+				cands = []string{res}
+			}
+		}
 		first := ""
-		if len(parts) > 0 {
-			first = parts[0].resource
-		} else if res, ok := identifierResource(rest); ok {
-			first = res
+		if len(cands) > 0 {
+			first = cands[0]
+		}
+		held := false
+		for _, c := range cands {
+			if s, ok := matchSource(c); ok && s.id != "" {
+				if d, ok := defs[strings.ToLower(s.id)]; ok && holdsEntry(d, collapse(footnoteText(entry, s.id))) {
+					held = true
+					break
+				}
+			}
 		}
 		src, found := matchSource(first)
 		def, defined := defs[strings.ToLower(src.id)]
 		switch {
 		case first == "":
 			lost = append(lost, name+": names no resource, so no source holds it")
+		case held:
+			// The text opens the footnote of one of the entry's sources.
 		case !found:
 			lost = append(lost, fmt.Sprintf("%s: %s is not a source's resource", name, first))
 		case src.id == "":

@@ -214,6 +214,9 @@ type entryAttachment struct {
 	existingID string
 	// parts are the second and later sources of a split entry, in order.
 	parts []splitPart
+	// borrowed are the sources of other entries this entry also names
+	// (planCitationSplits); its body references cite their ids too.
+	borrowed []partRef
 }
 
 // existingSourceIDs maps each source resource in a node's frontmatter to its
@@ -380,6 +383,16 @@ func planSourceIDs(plan *MigratePlan, nm *NodeMigration, n *Node, rel string, en
 					text = p.resource
 				}
 				nm.Footnotes = append(nm.Footnotes, FootnoteEdit{ID: pid, Text: text})
+			}
+		}
+		// A part this entry names but another entry owns is cited by the
+		// owner's id: one source per resource (§5.1), and the claim still
+		// reaches it (§4.2).
+		for _, r := range a.borrowed {
+			if r.part == 0 {
+				cite = append(cite, final[r.entry])
+			} else {
+				cite = append(cite, partIDs[r.entry][r.part-1])
 			}
 		}
 		if ids[i].RefKey != "" {

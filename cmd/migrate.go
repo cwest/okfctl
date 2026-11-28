@@ -69,15 +69,18 @@ func newMigrateCmd() *cobra.Command {
 			"two or more resources (code spans aside) is split into one source per resource, " +
 			"with ids <id>, <id>-2, <id>-3; the first holds the full entry text as its " +
 			"footnote, a later one its link text or resource, and each body [k] becomes " +
-			"[^id][^id-2]... Once every entry's text opens the footnote definition of its " +
-			"source (alone, or followed by a moved title annotation) and every resource it names is a source's resource, the body # Citations " +
+			"[^id][^id-2]... A resource that two entries name stays one source: the first " +
+			"entry that names it alone owns it (else the first that splits), and every " +
+			"other entry's [k] cites that source's id too; an entry splits into the parts " +
+			"it owns, and its first owned part holds its text. Once every entry's text opens the footnote definition of one of its " +
+			"sources (alone, or followed by a moved title annotation) and every resource it names is a source's resource, the body # Citations " +
 			"list is removed (§4.2); otherwise it stays. The v0.2 changes " +
 			"(§13.1) give a leading / to any link or path field that resolves only from the " +
 			"bundle root (§12.1). It then points at the same file under v0.3 (§6). They " +
 			"also respell a §5 timestamp that has an offset but isn't in RFC 3339 form.\n\n" +
 			"Judgment items are the cases no rule can settle. prose-citation marks a " +
-			"citation with no resource, or with several when one of them is also named by " +
-			"another entry, so it cannot be split (§5.1). missing-actor marks a timestamp " +
+			"citation with no resource, or whose every resource another entry owns, so it " +
+			"names no work of its own (§5.1). missing-actor marks a timestamp " +
 			"rename with no actor (§7). timestamp-no-offset is a date-time with no offset " +
 			"(§5, §13.2), and timestamp-invalid is a §5 value where no date can be found. " +
 			"source-title-unnamed marks an entry whose untitled source gets no name, " +
